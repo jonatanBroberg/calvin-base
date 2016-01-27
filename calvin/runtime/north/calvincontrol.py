@@ -238,23 +238,21 @@ control_api_doc += \
     POST /actor/{actor-id}/migrate
     Migrate actor to (other) node, either explicit node_id or by updated requirements
     Body: {"peer_node_id": <node-id>}
-    Alternative body:
-    Body:
-    {
-        "requirements": [ {"op": "<matching rule name>",
-                          "kwargs": {<rule param key>: <rule param value>, ...},
-                          "type": "+" or "-" for set intersection or set removal, respectively
-                          }, ...
-                        ],
-        "extend": True or False  # defaults to False, i.e. replace current requirements
-        "move": True or False  # defaults to False, i.e. when possible stay on the current node
-    }
-    
-    For further details about requirements see application deploy.
-    Response status code: OK, BAD_REQUEST, INTERNAL_ERROR or NOT_FOUND
+    Response status code: OK, INTERNAL_ERROR or NOT_FOUND
     Response: none
 """
 re_post_actor_migrate = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/migrate\sHTTP/1")
+
+control_api_doc += \
+"""
+    POST /actor/{actor-id}/replicate
+    Replicate actor to (other) node
+    Body: {"peer_node_id": <node-id>}
+    Response status code: OK, INTERNAL_ERROR or NOT_FOUND
+    Response: none
+"""
+re_post_actor_replicate = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/replicate\sHTTP/1")
+
 
 control_api_doc += \
     """
@@ -344,14 +342,14 @@ control_api_doc += \
            }
     }
     Note that either a script or app_info must be supplied.
-    
+
     The matching rules are implemented as plug-ins, intended to be extended.
     The type "+" is "and"-ing rules together (actually the intersection of all
     possible nodes returned by the rules.) The type "-" is explicitly removing
     the nodes returned by this rule from the set of possible nodes. Note that
     only negative rules will result in no possible nodes, i.e. there is no
     implied "all but these."
-    
+
     A special matching rule exist, to first form a union between matching
     rules, i.e. alternative matches. This is useful for e.g. alternative
     namings, ownerships or specifying either of two specific nodes.
@@ -460,7 +458,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
             [
                 [<seconds since epoch>, <name of action>],
                 ...
@@ -479,7 +477,7 @@ control_api_doc += \
     {
         'activity':
         {
-            <actor-id>: 
+            <actor-id>:
             {
                 <action-name>: <total fire count>,
                 ...
@@ -502,7 +500,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
         {
             <action-name>:
             {
@@ -660,6 +658,7 @@ class CalvinControl(object):
             (re_del_actor, self.handle_del_actor),
             (re_get_actor_report, self.handle_get_actor_report),
             (re_post_actor_migrate, self.handle_actor_migrate),
+            (re_post_actor_replicate, self.handle_actor_replicate),
             (re_post_actor_disable, self.handle_actor_disable),
             (re_get_port, self.handle_get_port),
             (re_get_port_state, self.handle_get_port_state),
@@ -990,10 +989,40 @@ class CalvinControl(object):
                                None, status=status)
 
     def actor_migrate_cb(self, handle, connection, status, *args, **kwargs):
-        """ Migrate actor respons
+        """ Migrate actor response
         """
         self.send_response(handle, connection,
                            None, status=status.status)
+
+    def handle_actor_replicate(self, handle, connection, match, data, hdr):
+        """ Replicate actor
+        """
+        self.node.am.replicate(match.group(1), data['peer_node_id'],
+                               callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+
+    def actor_replicate_cb(self, handle, connection, status, *args, **kwargs):
+        """ Replicate actor response
+        """
+        app_id = kwargs.get('app_id')
+        actor_id = status.data.get('actor_id') if status.data else None
+        if app_id and actor_id:
+            app = self.node.app_manager.applications[app_id]
+            self.node.app_manager.add(app.id, app.name, actor_id)
+
+        self.send_response(handle, connection,
+                           None, status=status.status)
+
+    def handle_application_requirements(self, handle, connection, match, data, hdr):
+        """ Apply application deployment requirements
+            to actors of an application and initiate migration of actors accordingly
+        """
+        self.node.app_manager.deployment_add_requirements(match.group(1), data['reqs'],
+                        cb=CalvinCB(func=self.handle_application_requirements_cb, handle=handle, connection=connection))
+
+    def handle_application_requirements_cb(self, handle, connection, *args, **kwargs):
+        self.send_response(handle, connection,
+                           json.dumps({'placement': kwargs['placement'] if 'placement' in kwargs else {}}),
+                                       status=kwargs['status'].status)
 
     def handle_actor_disable(self, handle, connection, match, data, hdr):
         try:
@@ -1167,7 +1196,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_timed_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_aggregated_meter(self, handle, connection, match, data, hdr):
@@ -1177,7 +1206,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_aggregated_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_metainfo_meter(self, handle, connection, match, data, hdr):
@@ -1187,7 +1216,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_metainfo_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_post_index(self, handle, connection, match, data, hdr):
