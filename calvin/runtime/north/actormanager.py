@@ -40,7 +40,7 @@ class ActorManager(object):
         self.node = node
 
     def new(self, actor_type, args, state=None, prev_connections=None, connection_list=None, callback=None,
-            signature=None):
+            signature=None, is_replicating=False):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -77,16 +77,43 @@ class ActorManager(object):
             connection_list = self._prev_connections_to_connection_list(prev_connections)
 
         self.node.control.log_actor_new(a.id, a.name, actor_type, isinstance(a, ShadowActor))
+        if is_replicating:
+            prev_connections['actor_name'] = a.name
+            prev_connections['actor_id'] = a.id
+            connection_list = self._translate_connection_list(a, prev_connections, connection_list)
 
         if connection_list:
-            # Migrated actor
+            # Migrated or replicated actor
             self.connect(a.id, connection_list, callback=callback)
+
+        if callback:
+            callback(status=response.CalvinResponse(True), actor_id=a.id)
         else:
-            # Nothing to connect then we are OK
-            if callback:
-                callback(status=response.CalvinResponse(True), actor_id=a.id)
-            else:
-                return a.id
+            return a.id
+
+    def _translate_connection_list(self, actor, prev_connections, connection_list):
+        """After replicating an actor, the list of previous connections
+        contains port_ids for the original actor and must be updated.
+
+        Args:
+            connection_list: [(_, port_id, _, _), ...]
+        Returns:
+            [(_, updated_port_id, _, _), ...]
+        """
+        if not prev_connections or not connection_list:
+            return []
+
+        port_id_translations = {}
+        port_names = prev_connections['port_names']
+        for (port_id, port_name) in port_names.iteritems():
+            port_id_translations[port_id] = actor.inports[port_name].id if port_name in actor.inports else actor.outports[port_name].id
+
+        translated_connection_list = []
+        if port_id_translations:
+            for node_id, port_id, peer_node_id, peer_port_id in connection_list:
+                translated_connection_list.append((node_id, port_id_translations[port_id], peer_node_id, peer_port_id))
+
+        return translated_connection_list
 
     def _new_actor(self, actor_type, actor_id=None):
         """Return a 'bare' actor of actor_type, raises an exception on failure."""
@@ -235,7 +262,7 @@ class ActorManager(object):
             # This is a temporary fix by keep trying
             delay = 0.0 if actor._collect_placement_counter > actor._collect_placement_last_value + 100 else 0.2
             actor._collect_placement_counter += 1
-            actor._collect_placement_cb = async.DelayedCall(delay, self._update_requirements_placements, 
+            actor._collect_placement_cb = async.DelayedCall(delay, self._update_requirements_placements,
                                                     node_iter, actor_id, possible_placements, done=done,
                                                      move=move, cb=cb)
             return
@@ -259,7 +286,7 @@ class ActorManager(object):
             _log.analyze(self.node.id, "+ END", {})
         except:
             _log.exception("actormanager:_update_requirements_placements")
-        
+
 
     def migrate(self, actor_id, node_id, callback = None):
         """ Migrate an actor actor_id to peer node node_id """
@@ -279,17 +306,17 @@ class ActorManager(object):
         actor.will_migrate()
         actor_type = actor._type
         ports = actor.connections(self.node.id)
-        # Disconnect ports and continue in _migrate_disconnect
-        self.node.pm.disconnect(callback=CalvinCB(self._migrate_disconnected,
-                                                  actor=actor,
-                                                  actor_type=actor_type,
-                                                  ports=ports,
-                                                  node_id=node_id,
-                                                  callback=callback),
-                                actor_id=actor_id)
-        self.node.control.log_actor_migrate(actor_id, node_id)
 
-    def _migrate_disconnected(self, actor, actor_type, ports, node_id, status, callback = None, **state):
+        # Disconnect ports and continue in _migrate_disconnect
+        callback = CalvinCB(self._migrate_disconnected,
+                            actor=actor,
+                            actor_type=actor_type,
+                            ports=ports,
+                            node_id=node_id,
+                            callback=callback)
+        self.node.pm.disconnect(callback=callback, actor_id=actor_id)
+
+    def _migrate_disconnected(self, actor, actor_type, ports, node_id, status, callback=None, **state):
         """ Actor disconnected, continue migration """
         if status:
             state = actor.state()
@@ -299,6 +326,24 @@ class ActorManager(object):
             # FIXME handle errors!!!
             if callback:
                 callback(status=status)
+
+    def replicate(self, actor_id, node_id, callback=None):
+        """Replicate an actor actor_id to peer node node_id """
+        if actor_id not in self.actors:
+            # Can only replicate actors from our node
+            if callback:
+                callback(status=response.CalvinResponse(False))
+            return
+
+        actor = self.actors[actor_id]
+        actor_type = actor._type
+        ports = actor.connections(self.node.id)
+        ports['port_names'] = actor.port_names()
+
+        app = self.node.app_manager.get_actor_app(actor_id)
+
+        callback.kwargs_update(app_id=app.id)
+        self.node.proto.actor_new(node_id, callback, actor_type, None, ports, args=actor.replication_args(), is_replicating=True)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
