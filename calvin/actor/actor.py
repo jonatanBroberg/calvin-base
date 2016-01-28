@@ -18,6 +18,7 @@ import wrapt
 import functools
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
+from calvin.actor.connection import Connection
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.utils import enum
 from calvin.runtime.north.calvin_token import Token, ExceptionToken
@@ -574,19 +575,27 @@ class Actor(object):
     @verify_status([STATUS.ENABLED, STATUS.READY, STATUS.PENDING])
     def connections(self, node_id):
         c = {'actor_id': self.id, 'actor_name': self.name}
-        inports = {}
+
+        inports = []
         for port in self.inports.values():
             peer = port.get_peer()
-            if peer[0] == 'local':
-                peer = (node_id, peer[1])
-            inports[port.id] = peer
+            if peer.is_local:
+                peer.node_id = node_id
+            #inports[port.id] = (peer.node_id, peer.port_id)
+            inports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
         c['inports'] = inports
-        outports = {}
+
+        outports = []
         for port in self.outports.values():
-            peers = [
-                (node_id, p[1]) if p[0] == 'local' else p for p in port.get_peers()]
-            outports[port.id] = peers
+            #peers = [
+            #    (node_id, p.port_id) if p.is_local else (p.node_id, p.port_id) for p in port.get_peers()]
+            #outports[port.id] = peers
+            for peer in port.get_peers():
+                if peer.is_local:
+                    peer.node_id = node_id
+                outports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
         c['outports'] = outports
+
         return c
 
     def serialize(self):

@@ -22,6 +22,7 @@ class ActorFactory(object):
 
         # Store the actor signature to enable GlobalStore lookup
         a.signature_set(signature)
+        self.node.storage.add_actor(a, self.node.id)
 
         return a
 

@@ -58,7 +58,7 @@ class ActorManager(object):
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
         a = self._new(actor_type, args, state, signature)
         self.node.control.log_actor_new(a.id, a.name, actor_type)
-        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list)
+        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
 
         if callback:
             callback(status=response.CalvinResponse(True), actor_id=a.id)
@@ -74,9 +74,7 @@ class ActorManager(object):
         _log.analyze(self.node.id, "+", {'actor_type': actor_type, 'state': state})
 
         a = self.factory.create_actor(actor_type=actor_type, state=state, args=args, signature=signature)
-
         self.actors[a.id] = a
-        self.node.storage.add_actor(a, self.node.id)
 
         return a
 
@@ -252,7 +250,7 @@ class ActorManager(object):
 
     def connections(self, actor_id):
         if actor_id not in self.actors:
-            return []
+            return
 
         return self.connection_handler.connections(self.actors[actor_id])
 
