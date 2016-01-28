@@ -545,12 +545,13 @@ class Storage(object):
         ), "node_id": node_id, "actor_id": actor_id, "direction": direction}
         if direction == "out":
             if port.is_connected():
-                data["peers"] = port.get_peers()
+                data["peers"] = [(peer.node_id, peer.port_id) for peer in port.get_peers()]
             else:
                 data["peers"] = []
         elif direction == "in":
             if port.is_connected():
-                data["peer"] = port.get_peer()
+                peer = port.get_peer()
+                data["peer"] = (peer.node_id, peer.port_id)
             else:
                 data["peer"] = None
         self.set(prefix="port-", key=port.id, value=data, cb=cb)

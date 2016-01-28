@@ -231,12 +231,12 @@ class CalvinProto(CalvinCBClass):
         """ Peer request new actor with state and connections """
         _log.analyze(self.rt_id, "+", payload, tb=True)
         self.node.am.new(payload['state']['actor_type'],
-                         args=None,
-                         state=payload['state']['actor_state'],
-                         prev_connections=payload['state']['prev_connections'],
+                         None,
+                         payload['state']['actor_state'],
+                         payload['state']['prev_connections'],
                          callback=CalvinCB(self._actor_new_handler, payload))
 
-    def _actor_new_handler(self, payload, status, *args, **kwargs):
+    def _actor_new_handler(self, payload, status, **kwargs):
         """ Potentially created actor, reply to requesting node """
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)

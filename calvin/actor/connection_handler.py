@@ -63,11 +63,10 @@ class ConnectionHandler(object):
     def _prev_connections_to_connection_list(self, prev_connections):
         """Convert prev_connection format to connection_list format"""
         cl = []
-        for in_port_id, out_id in prev_connections['inports'].iteritems():
-            cl.append((self.node.id, in_port_id, out_id[0], out_id[1]))
-        for out_port_id, in_list in prev_connections['outports'].iteritems():
-            for in_id in in_list:
-                cl.append((self.node.id, out_port_id, in_id[0], in_id[1]))
+        for conn in prev_connections['inports']:
+            cl.append((conn['node_id'], conn['port_id'], conn['peer_node_id'], conn['peer_port_id']))
+        for conn in prev_connections['outports']:
+            cl.append((conn['node_id'], conn['port_id'], conn['peer_node_id'], conn['peer_port_id']))
         return cl
 
     def _translate_connection_list(self, actor, prev_connections, connection_list):
