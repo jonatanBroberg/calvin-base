@@ -39,7 +39,7 @@ class ActorManager(object):
         self.node = node
 
     def new(self, actor_type, args, state=None, prev_connections=None, connection_list=None, callback=None,
-            signature=None, is_replicating=False):
+            signature=None):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -53,13 +53,35 @@ class ActorManager(object):
              connection_list
         """
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
+        a = self._new(actor_type, args, state, signature)
+
+        if prev_connections:
+            # Convert prev_connections to connection_list format
+            connection_list = self._prev_connections_to_connection_list(prev_connections)
+
+        self.node.control.log_actor_new(a.id, a.name, actor_type)
+        if connection_list:
+            # Migrated actor
+            self.connect(a.id, connection_list, callback=callback)
+
+        if callback:
+            callback(status=response.CalvinResponse(True), actor_id=a.id)
+        else:
+            return a.id
+
+    def _new(self, actor_type, args, state=None, signature=None):
+        """
+        Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
+        'name' is an optional parameter in 'args', specifying a human readable name.
+        Returns actor id on success and raises an exception if anything goes wrong.
+        """
         _log.analyze(self.node.id, "+", {'actor_type': actor_type, 'state': state})
 
         try:
             if state:
-                a = self._new_from_state(actor_type, state)
+                a = self._create_from_state(actor_type, state)
             else:
-                a = self._new(actor_type, args)
+                a = self._create_new(actor_type, args)
         except Exception as e:
             _log.exception("Actor creation failed")
             raise(e)
@@ -70,25 +92,17 @@ class ActorManager(object):
         self.actors[a.id] = a
 
         self.node.storage.add_actor(a, self.node.id)
+        return a
 
-        if prev_connections:
-            # Convert prev_connections to connection_list format
-            connection_list = self._prev_connections_to_connection_list(prev_connections)
+    def new_replica(self, actor_type, args, prev_connections, callback):
+        """Creates a new replica"""
+        a = self._new(actor_type, args)
 
-        self.node.control.log_actor_new(a.id, a.name, actor_type)
-        if is_replicating:
-            prev_connections['actor_name'] = a.name
-            prev_connections['actor_id'] = a.id
-            connection_list = self._translate_connection_list(a, prev_connections, connection_list)
+        connection_list = self._prev_connections_to_connection_list(prev_connections)
+        connection_list = self._translate_connection_list(a, prev_connections, connection_list)
 
-        if connection_list:
-            # Migrated or replicated actor
-            self.connect(a.id, connection_list, callback=callback)
-
-        if callback:
-            callback(status=response.CalvinResponse(True), actor_id=a.id)
-        else:
-            return a.id
+        self.connect(a.id, connection_list, callback=callback)
+        callback(status=response.CalvinResponse(True), actor_id=a.id)
 
     def _translate_connection_list(self, actor, prev_connections, connection_list):
         """After replicating an actor, the list of previous connections
@@ -143,8 +157,7 @@ class ActorManager(object):
             a._calvinsys = self.node.calvinsys()
         return a
 
-
-    def _new(self, actor_type, args):
+    def _create_new(self, actor_type, args):
         """Return an initialized actor in PENDING state, raises an exception on failure."""
         try:
             a = self._new_actor(actor_type)
@@ -159,8 +172,7 @@ class ActorManager(object):
             raise(e)
         return a
 
-
-    def _new_from_state(self, actor_type, state):
+    def _create_from_state(self, actor_type, state):
         """Return a restored actor in PENDING state, raises an exception on failure."""
         try:
             _log.analyze(self.node.id, "+", state)
@@ -184,7 +196,6 @@ class ActorManager(object):
             _log.exception("Catched new from state %s %s" % (a, dir(a)))
             raise(e)
         return a
-
 
     def destroy(self, actor_id):
         # @TOOD - check order here
@@ -322,13 +333,13 @@ class ActorManager(object):
 
         actor = self.actors[actor_id]
         actor_type = actor._type
-        ports = actor.connections(self.node.id)
-        ports['port_names'] = actor.port_names()
+        prev_connections = actor.connections(self.node.id)
+        prev_connections['port_names'] = actor.port_names()
 
         app = self.node.app_manager.get_actor_app(actor_id)
 
         callback.kwargs_update(app_id=app.id)
-        self.node.proto.actor_new(node_id, callback, actor_type, None, ports, args=actor.replication_args(), is_replicating=True)
+        self.node.proto.actor_replication(node_id, callback, actor_type, prev_connections, actor.replication_args())
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:

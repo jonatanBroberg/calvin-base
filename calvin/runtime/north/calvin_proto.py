@@ -150,6 +150,7 @@ class CalvinProto(CalvinCBClass):
             # or using the callback_register method.
             'ACTOR_NEW': [CalvinCB(self.actor_new_handler)],
             'ACTOR_MIGRATE': [CalvinCB(self.actor_migrate_handler)],
+            'ACTOR_REPLICATE': [CalvinCB(self.actor_replication_handler)],
             'APP_DESTROY': [CalvinCB(self.app_destroy_handler)],
             'PORT_CONNECT': [CalvinCB(self.port_connect_handler)],
             'PORT_DISCONNECT': [CalvinCB(self.port_disconnect_handler)],
@@ -201,7 +202,7 @@ class CalvinProto(CalvinCBClass):
 
     #### ACTORS ####
 
-    def actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, is_replicating=False, args={}):
+    def actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections):
         """ Creates a new actor on to_rt_uuid node, but is only intended for migrating actors
             callback: called when finished with the peers respons as argument
             actor_type: see actor manager
@@ -216,17 +217,14 @@ class CalvinProto(CalvinCBClass):
                                                         prev_connections=prev_connections)):
             # Already have link just continue in _actor_new
                 self._actor_new(to_rt_uuid, callback, actor_type, state,
-                                prev_connections, args=args,
-                                is_replicating=is_replicating,
+                                prev_connections,
                                 status=response.CalvinResponse(True))
 
-    def _actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, status, peer_node_id=None, uri=None, args={}, is_replicating=False):
+    def _actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, status, peer_node_id=None, uri=None):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'ACTOR_NEW',
-                   'state': {'actor_type': actor_type, 'actor_state': state, 'prev_connections': prev_connections},
-                   'args': args,
-                   'is_replicating': is_replicating}
+                   'state': {'actor_type': actor_type, 'actor_state': state, 'prev_connections': prev_connections}}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
@@ -235,20 +233,56 @@ class CalvinProto(CalvinCBClass):
         """ Peer request new actor with state and connections """
         _log.analyze(self.rt_id, "+", payload, tb=True)
         self.node.am.new(payload['state']['actor_type'],
-                         args=payload['args'],
+                         args=None,
                          state=payload['state']['actor_state'],
                          prev_connections=payload['state']['prev_connections'],
-                         is_replicating=payload.get('is_replicating'),
                          callback=CalvinCB(self._actor_new_handler, payload))
 
     def _actor_new_handler(self, payload, status, *args, **kwargs):
+        """ Potentially created actor, reply to requesting node """
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
+    def actor_replication(self, to_rt_uuid, callback, actor_type, prev_connections, args):
+        """ Replicates a new actor on to_rt_uuid node, but is only intended for migrating actors
+            callback: called when finished with the peers respons as argument
+            actor_type: see actor manager
+            state: see actor manager
+            prev_connections: see actor manager
+        """
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_replication,
+                                                               to_rt_uuid=to_rt_uuid,
+                                                               callback=callback,
+                                                               actor_type=actor_type,
+                                                               prev_connections=prev_connections)):
+            # Already have link just continue in _actor_new
+                self._actor_replication(to_rt_uuid, callback, actor_type, prev_connections, args, response.CalvinResponse(True))
+
+    def _actor_replication(self, to_rt_uuid, callback, actor_type, prev_connections, args, status):
+        """ Got link? continue actor replication """
+        if status:
+            msg = {'cmd': 'ACTOR_REPLICATE',
+                   'state': {'actor_type': actor_type, 'prev_connections': prev_connections},
+                   'args': args}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def actor_replication_handler(self, payload):
+        """ Peer request new actor with state and connections """
+        self.node.am.new_replica(payload['state']['actor_type'],
+                                 payload['args'],
+                                 prev_connections=payload['state']['prev_connections'],
+                                 callback=CalvinCB(self._actor_replication_handler, payload))
+
+    def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
         resp = response.CalvinResponse(status=status.status, data={'actor_id': kwargs['actor_id']})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
     def actor_migrate(self, to_rt_uuid, callback, actor_id, requirements, extend=False, move=False):
-        """ Request actor on to_rt_uuid node to migrate accoring to new deployment requirements 
+        """ Request actor on to_rt_uuid node to migrate accoring to new deployment requirements
             callback: called when finished with the status respons as argument
             actor_id: actor_id to migrate
             requirements: see app manager
@@ -263,7 +297,7 @@ class CalvinProto(CalvinCBClass):
                                                         extend=extend,
                                                         move=move)):
             # Already have link just continue in _actor_new
-                self._actor_migrate(to_rt_uuid, callback, actor_id, requirements, 
+                self._actor_migrate(to_rt_uuid, callback, actor_id, requirements,
                                     extend, move, status=response.CalvinResponse(True))
 
     def _actor_migrate(self, to_rt_uuid, callback, actor_id, requirements, extend, move, status,
@@ -479,7 +513,7 @@ class CalvinProto(CalvinCBClass):
             tunnel.recv_handler(payload['value'])
         except Exception as e:
             _log.exception("Check error in tunnel recv handler")
-            _log.analyze(self.rt_id, "+ EXCEPTION TUNNEL RECV HANDLER", {'payload': payload, 'exception': str(e)}, 
+            _log.analyze(self.rt_id, "+ EXCEPTION TUNNEL RECV HANDLER", {'payload': payload, 'exception': str(e)},
                                                                 peer_node_id=payload['from_rt_uuid'], tb=True)
 
     #### PORTS ####
