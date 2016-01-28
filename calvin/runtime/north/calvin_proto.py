@@ -216,9 +216,7 @@ class CalvinProto(CalvinCBClass):
                                                         state=state,
                                                         prev_connections=prev_connections)):
             # Already have link just continue in _actor_new
-                self._actor_new(to_rt_uuid, callback, actor_type, state,
-                                prev_connections,
-                                status=response.CalvinResponse(True))
+                self._actor_new(to_rt_uuid, callback, actor_type, state, prev_connections, status=response.CalvinResponse(True))
 
     def _actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, status, peer_node_id=None, uri=None):
         """ Got link? continue actor new """
