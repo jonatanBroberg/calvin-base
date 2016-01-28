@@ -19,6 +19,7 @@ from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
 from calvin.actor.actor_factory import ActorFactory
+from calvin.actor.connection_handler import ConnectionHandler
 
 _log = get_logger(__name__)
 
@@ -32,11 +33,12 @@ class ActorManager(object):
 
     """docstring for ActorManager"""
 
-    def __init__(self, node, factory=None):
+    def __init__(self, node, factory=None, connection_handler=None):
         super(ActorManager, self).__init__()
         self.actors = {}
         self.node = node
         self.factory = factory if factory else ActorFactory(node)
+        self.connection_handler = connection_handler if connection_handler else ConnectionHandler(node)
 
     def new(self, actor_type, args, state=None, prev_connections=None, connection_list=None, callback=None,
             signature=None):
@@ -55,7 +57,7 @@ class ActorManager(object):
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
         a = self._new(actor_type, args, state, signature)
         self.node.control.log_actor_new(a.id, a.name, actor_type)
-        self._setup_connections(a, prev_connections=prev_connections, connection_list=connection_list)
+        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list)
 
         if callback:
             callback(status=response.CalvinResponse(True), actor_id=a.id)
@@ -80,36 +82,8 @@ class ActorManager(object):
     def new_replica(self, actor_type, args, prev_connections, callback):
         """Creates a new replica"""
         a = self._new(actor_type, args)
-
-        connection_list = self._prev_connections_to_connection_list(prev_connections)
-        connection_list = self._translate_connection_list(a, prev_connections, connection_list)
-
-        self.connect(a.id, connection_list, callback=callback)
+        self.connection_handler.setup_replica_connections(a, prev_connections, callback=callback)
         callback(status=response.CalvinResponse(True), actor_id=a.id)
-
-    def _translate_connection_list(self, actor, prev_connections, connection_list):
-        """After replicating an actor, the list of previous connections
-        contains port_ids for the original actor and must be updated.
-
-        Args:
-            connection_list: [(_, port_id, _, _), ...]
-        Returns:
-            [(_, updated_port_id, _, _), ...]
-        """
-        if not prev_connections or not connection_list:
-            return []
-
-        port_id_translations = {}
-        port_names = prev_connections['port_names']
-        for (port_id, port_name) in port_names.iteritems():
-            port_id_translations[port_id] = actor.inports[port_name].id if port_name in actor.inports else actor.outports[port_name].id
-
-        translated_connection_list = []
-        if port_id_translations:
-            for node_id, port_id, peer_node_id, peer_port_id in connection_list:
-                translated_connection_list.append((node_id, port_id_translations[port_id], peer_node_id, peer_port_id))
-
-        return translated_connection_list
 
     def destroy(self, actor_id):
         # @TOOD - check order here
@@ -261,67 +235,11 @@ class ActorManager(object):
             # Just pass on new cmd reply if it failed
             self.node.set_local_reply(kwargs['lmsg_id'], reply)
 
-    def _prev_connections_to_connection_list(self, prev_connections):
-        """Convert prev_connection format to connection_list format"""
-        cl = []
-        for in_port_id, out_id in prev_connections['inports'].iteritems():
-            cl.append((self.node.id, in_port_id, out_id[0], out_id[1]))
-        for out_port_id, in_list in prev_connections['outports'].iteritems():
-            for in_id in in_list:
-                cl.append((self.node.id, out_port_id, in_id[0], in_id[1]))
-        return cl
-
-    def _setup_connections(self, actor, prev_connections=None, connection_list=None, callback=None):
-        if prev_connections:
-            # Convert prev_connections to connection_list format
-            connection_list = self._prev_connections_to_connection_list(prev_connections)
-
-        if connection_list:
-            # Migrated actor
-            self.connect(actor.id, connection_list, callback=callback)
-
-    def connect(self, actor_id, connection_list, callback=None):
-        """
-        Reconnecting the ports can be done using a connection_list
-        of tuples (node_id i.e. our id, port_id, peer_node_id, peer_port_id)
-        """
-        if actor_id not in self.actors:
-            return
-
-        peer_port_ids = [c[3] for c in connection_list]
-
-        for node_id, port_id, peer_node_id, peer_port_id in connection_list:
-            self.node.pm.connect(port_id=port_id,
-                                 peer_node_id=peer_node_id,
-                                 peer_port_id=peer_port_id,
-                                 callback=CalvinCB(self._actor_connected,
-                                                   peer_port_id=peer_port_id,
-                                                   actor_id=actor_id,
-                                                   peer_port_ids=peer_port_ids,
-                                                   _callback=callback))
-
-    def _actor_connected(self, status, peer_port_id, actor_id, peer_port_ids, _callback, **kwargs):
-        """ Get called for each of the actor's ports when connecting, but callback should only be called once
-            status: success or not
-            _callback: original callback
-            peer_port_ids: list of port ids kept in context between calls when *changed* by this function,
-                           do not replace it
-        """
-        # Send negative response if not already done it
-        if not status and peer_port_ids:
-            if _callback:
-                del peer_port_ids[:]
-                _callback(status=response.CalvinResponse(False), actor_id=actor_id)
-        if peer_port_id in peer_port_ids:
-            # Remove this port from list
-            peer_port_ids.remove(peer_port_id)
-            # If all ports done send OK
-            if not peer_port_ids:
-                if _callback:
-                    _callback(status=response.CalvinResponse(True), actor_id=actor_id)
-
     def connections(self, actor_id):
-        return self.actors.get(actor_id, None).connections(self.node.id)
+        if actor_id not in self.actors:
+            return []
+
+        return self.connection_handler.connections(self.actors[actor_id])
 
     def dump(self, actor_id):
         actor = self.actors.get(actor_id, None)
@@ -367,4 +285,3 @@ class ActorManager(object):
 
     def list_actors(self):
         return self.actors.keys()
-

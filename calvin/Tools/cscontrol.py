@@ -18,10 +18,7 @@
 import argparse
 import json
 import calvin.utilities.utils as utils
-import os
 from calvin.utilities.calvinlogger import get_logger
-from calvin.utilities import calvinresponse
-import logging
 
 _log = get_logger(__name__)
 

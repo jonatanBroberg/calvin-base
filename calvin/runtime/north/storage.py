@@ -170,9 +170,8 @@ class Storage(object):
 
         if self.started:
             self.storage.set(key=prefix + key, value=value, cb=CalvinCB(func=self.set_cb, org_key=key, org_value=value, org_cb=cb))
-        else:
-            if cb:
-                async.DelayedCall(0, cb, key=key, value=True)
+        elif cb:
+            async.DelayedCall(0, cb, key=key, value=True)
 
     def get_cb(self, key, value, org_cb, org_key):
         """ get callback
@@ -293,7 +292,7 @@ class Storage(object):
         it = dynops.List(local_list)
         try:
             self.storage.get_concat(key=prefix + key,
-                            cb=CalvinCB(func=self.get_concat_iter_cb, org_key=key, 
+                            cb=CalvinCB(func=self.get_concat_iter_cb, org_key=key,
                                         include_key=include_key, it=it))
         except:
             if self.started:
@@ -392,9 +391,8 @@ class Storage(object):
             del self.localstore_sets[prefix + key]
         if self.started:
             self.set(prefix, key, None, cb)
-        else:
-            if cb:
-                cb(key, True)
+        elif cb:
+            cb(key, True)
 
     ### Calvin object handling ###
 
@@ -719,7 +717,7 @@ class Storage(object):
         return self.get_concat_iter(prefix="index-", key=index, include_key=include_key)
 
     ### Storage proxy server ###
-    
+
     def tunnel_request_handles(self, tunnel):
         """ Incoming tunnel request for storage proxy server"""
         # TODO check if we want a tunnel first
@@ -760,14 +758,14 @@ class Storage(object):
                 else:
                     # Normal set op, but it will be encoded again in the set func when external storage, hence decode
                     payload['value']=self.coder.decode(payload['value'])
-            # Call this nodes storage methods, which could be local or DHT, 
+            # Call this nodes storage methods, which could be local or DHT,
             # prefix is empty since that is already in the key (due to these calls come from the storage plugin level).
             # If we are doing a get or get_concat then the result needs to be encoded, to correspond with what the
             # client's higher level expect from storage plugin level.
-            self._proxy_cmds[payload['cmd']](cb=CalvinCB(self._proxy_send_reply, tunnel=tunnel, 
+            self._proxy_cmds[payload['cmd']](cb=CalvinCB(self._proxy_send_reply, tunnel=tunnel,
                                                         encode=True if payload['cmd'] in ('GET', 'GET_CONCAT') else False,
                                                         msgid=payload['msg_uuid']),
-                                             prefix="", 
+                                             prefix="",
                                              **{k: v for k, v in payload.iteritems() if k in ('key', 'value')})
         else:
             _log.error("Unknown storage proxy request %s" % payload['cmd'] if 'cmd' in payload else "")
