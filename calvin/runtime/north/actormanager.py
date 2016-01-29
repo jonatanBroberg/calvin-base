@@ -17,7 +17,7 @@
 from calvin.actorstore.store import ActorStore
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
-import calvin.utilities.calvinresponse as response
+import calvin.requests.calvinresponse as response
 from calvin.actor.actor import ShadowActor
 
 _log = get_logger(__name__)

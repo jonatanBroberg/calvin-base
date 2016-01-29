@@ -17,7 +17,7 @@
 from calvin.utilities import calvinuuid
 from calvin.utilities.utils import enum
 from calvin.utilities.calvin_callback import CalvinCB, CalvinCBClass
-import calvin.utilities.calvinresponse as response
+import calvin.requests.calvinresponse as response
 from calvin.runtime.north.calvin_network import CalvinLink
 
 from calvin.utilities import calvinlogger
@@ -53,7 +53,7 @@ class CalvinTunnel(object):
                 self.tunnels[self.peer_node_id][self.id]=self
             else:
                 self.tunnels[self.peer_node_id] = {self.id: self}
-        # The callbacks recv for incoming message, down for tunnel failed or died, up for tunnel working 
+        # The callbacks recv for incoming message, down for tunnel failed or died, up for tunnel working
         self.recv_handler = None
         self.down_handler = None
         self.up_handler = None
@@ -100,7 +100,7 @@ class CalvinTunnel(object):
             raise Exception("Got none ack on destruction of tunnel!\n%s" % reply)
 
     def send(self, payload):
-        """ Send a payload over the tunnel 
+        """ Send a payload over the tunnel
             payload must be serializable, i.e. only built-in types such as:
             dict, list, tuple, string, numbers, booleans, etc
         """
@@ -127,7 +127,7 @@ class CalvinTunnel(object):
     def close(self, local_only=False):
         """ Removes the tunnel but does not inform
             other end when local_only.
-            
+
             Currently does not support local_only == False
         """
         self.status = CalvinTunnel.STATUS.TERMINATED
@@ -139,7 +139,7 @@ class CalvinTunnel(object):
 class CalvinProto(CalvinCBClass):
     """ CalvinProto class is the interface between runtimes for all runtime
         subsystem that need to interact. It uses the links in network.
-        
+
         Besides handling tunnel setup etc, it mainly formats commands uniformerly.
     """
 
@@ -202,7 +202,7 @@ class CalvinProto(CalvinCBClass):
     #### ACTORS ####
 
     def actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections):
-        """ Creates a new actor on to_rt_uuid node, but is only intended for migrating actors 
+        """ Creates a new actor on to_rt_uuid node, but is only intended for migrating actors
             callback: called when finished with the peers respons as argument
             actor_type: see actor manager
             state: see actor manager
@@ -267,7 +267,7 @@ class CalvinProto(CalvinCBClass):
 
     def app_destroy_handler(self, payload):
         """ Peer request destruction of app and its actors """
-        reply = self.node.app_manager.destroy_request(payload['app_uuid'], 
+        reply = self.node.app_manager.destroy_request(payload['app_uuid'],
                                                       payload['actor_uuids'] if 'actor_uuids' in payload else [])
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
@@ -297,7 +297,7 @@ class CalvinProto(CalvinCBClass):
             tunnel = CalvinTunnel(self.network.links, self.tunnels, None, tunnel_type, policy, rt_id=self.node.id)
             self.network.link_request(to_rt_uuid, CalvinCB(self._tunnel_link_request_finished, tunnel=tunnel, to_rt_uuid=to_rt_uuid, tunnel_type=tunnel_type, policy=policy))
             return tunnel
-        
+
         # Do we have a tunnel already?
         tunnel = self._get_tunnel(to_rt_uuid, tunnel_type = tunnel_type)
         if tunnel != None:

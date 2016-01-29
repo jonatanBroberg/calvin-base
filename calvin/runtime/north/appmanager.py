@@ -20,7 +20,7 @@ from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import calvinlogger
 _log = calvinlogger.get_logger(__name__)
 from calvin.runtime.north.plugins.requirements import req_operations
-import calvin.utilities.calvinresponse as response
+import calvin.requests.calvinresponse as response
 
 
 
@@ -62,7 +62,7 @@ class Application(object):
         actors = {v: [k] for k, v in self.actors.items() if v is not None}
         # Collect all actors under top component name
         components = {}
-        l = (len(ns)+1) if ns else 0 
+        l = (len(ns)+1) if ns else 0
         for name, _id in actors.iteritems():
              if name.find(':',l)> -1:
                 # This is a component
@@ -112,7 +112,7 @@ class AppManager(object):
         if application_id in self.applications:
             self.applications[application_id].add_actor(actor_id)
         else:
-            self.applications[application_id] = Application(application_id, application_name, actor_id, 
+            self.applications[application_id] = Application(application_id, application_name, actor_id,
                                                             self._node.id, self._node.am)
         self.storage.add_application(self.applications[application_id])
 
@@ -216,7 +216,7 @@ class AppManager(object):
 
 
     ### DEPLOYMENT ###
-    
+
     def deployment_add_requirements(self, application_id, reqs, cb):
         app = None
         try:
@@ -281,7 +281,7 @@ class AppManager(object):
                                             reqs=reqs)
             else:
                 try:
-                    req_operations[req['op']].req_op(self._node, 
+                    req_operations[req['op']].req_op(self._node,
                                            CalvinCB(self._actor_requirements_cb,
                                                     req=req,
                                                     app=app,
@@ -306,7 +306,7 @@ class AppManager(object):
         union_reqs = state['req']['requirements'][:]
         for union_req in state['req']['requirements']:
             try:
-                req_operations[union_req['op']].req_op(self._node, 
+                req_operations[union_req['op']].req_op(self._node,
                                        CalvinCB(self._union_requirements_cb,
                                                 union_reqs=union_reqs,
                                                 union_req=union_req,
@@ -319,8 +319,8 @@ class AppManager(object):
                 union_reqs.remove(union_req)
         if not union_reqs:
             _log.error("union_requirements all req failed for %s!!!" % state['actor_id'])
-            self._actor_requirements_cb(node_ids=state['union_nodes'], 
-                                        app=state['app'], 
+            self._actor_requirements_cb(node_ids=state['union_nodes'],
+                                        app=state['app'],
                                         req=state['req'],
                                         actor_id=state['actor_id'],
                                         possible_nodes=state['possible_nodes'],
@@ -335,8 +335,8 @@ class AppManager(object):
         if not state['union_reqs']:
             state['union_reqs'].append(None)  # To prevent _union_requirements from also calling _actor_requirements_cb
             _log.debug("_union_requirements_cb req done union nodes: %s" % (state['union_nodes'],))
-            self._actor_requirements_cb(node_ids=state['union_nodes'], 
-                                        app=state['app'], 
+            self._actor_requirements_cb(node_ids=state['union_nodes'],
+                                        app=state['app'],
                                         req=state['req'],
                                         actor_id=state['actor_id'],
                                         possible_nodes=state['possible_nodes'],
@@ -368,7 +368,7 @@ class AppManager(object):
         reqs.remove(req)
         if not reqs:
             _log.debug("_actor_requirements_cb req done possible: %s, impossible: %s" % (possible_nodes, impossible_nodes))
-            # Collected all rules for actor, 
+            # Collected all rules for actor,
             app._track_actor_cb.remove(actor_id)
             self._actor_requirements_combined(app, actor_id, possible_nodes, impossible_nodes)
         _log.analyze(self._node.id, "+ DONE", {'node_ids': list(node_ids) if isinstance(node_ids, set) else node_ids}, tb=True)
@@ -435,7 +435,7 @@ class AppManager(object):
         """ Matrix of weights between actors how close they want to be
             0 = don't care
             1 = same node
-            
+
             Currently any nodes that are connected gets 0.5, and
             diagonal is 1:s
         """

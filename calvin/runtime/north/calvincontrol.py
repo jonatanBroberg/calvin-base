@@ -24,7 +24,7 @@ from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.runtime.south.plugins.async import server_connection, async
 from urlparse import urlparse
-from calvin.utilities import calvinresponse
+from calvin.requests import calvinresponse
 from calvin.actorstore.store import DocumentationStore
 
 _log = get_logger(__name__)
@@ -212,14 +212,14 @@ control_api_doc += \
                             }
            }
     }
-    
+
     The matching rules are implemented as plug-ins, intended to be extended.
     The type "+" is "and"-ing rules together (actually the intersection of all
     possible nodes returned by the rules.) The type "-" is explicitly removing
     the nodes returned by this rule from the set of possible nodes. Note that
     only negative rules will result in no possible nodes, i.e. there is no
     implied "all but these."
-    
+
     A special matching rule exist, to first form a union between matching
     rules, i.e. alternative matches. This is useful for e.g. alternative
     namings, ownerships or specifying either of two specific nodes.
