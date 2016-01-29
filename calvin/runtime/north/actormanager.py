@@ -20,6 +20,7 @@ from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
 from calvin.actor.actor_factory import ActorFactory
+from calvin.actor.actor import ShadowActor
 from calvin.actor.connection_handler import ConnectionHandler
 
 _log = get_logger(__name__)
@@ -57,7 +58,7 @@ class ActorManager(object):
         """
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
         a = self._new(actor_type, args, state, signature)
-        self.node.control.log_actor_new(a.id, a.name, actor_type)
+        self.node.control.log_actor_new(a.id, a.name, actor_type, isinstance(a, ShadowActor))
         self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
 
         if callback:
