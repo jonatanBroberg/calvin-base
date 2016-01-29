@@ -1046,7 +1046,15 @@ function showActor()
         btnMigrate.id = actor.id;
         btnMigrate.value = 'Migrate';
         btnMigrate.setAttribute("onclick", "migrate(this.id)");
-        AddTableItem(tableRef, selectNode, btnMigrate);
+
+        var btnReplicate = document.createElement('input');
+        btnReplicate.type = 'button';
+        btnReplicate.id = actor.id;
+        btnReplicate.value = 'Replicate';
+        btnReplicate.setAttribute("onclick", "replicate(this.id)");
+
+        AddTableItem(tableRef, selectNode);
+        AddTableItem(tableRef, btnMigrate, btnReplicate);
 
         // Add ports
         var portSelector = document.getElementById("portSelector");
@@ -1143,6 +1151,47 @@ function migrate(actor_id)
                     });
                 } else {
                     console.log("migrate - No node with id: " + actor.peer_id);
+                }
+            }
+        }
+    }
+}
+
+// Replicate actor with "actor_id" to selected runtime in combobox in actorsTable
+function replicate(actor_id)
+{
+    var combo = document.getElementById('selectRuntime');
+    var peer_control_uri = combo.options[combo.selectedIndex].text;
+    var index;
+    for (index in peers) {
+        if (peers[index].control_uri == peer_control_uri) {
+            var actor = findActor(actor_id);
+            if (actor) {
+                var node = findRuntime(actor.peer_id);
+                if (node) {
+                    var url = node.control_uri + '/actor/' + actor.id + '/replicate';
+                    var data = JSON.stringify({'peer_node_id': peers[index].id});
+                    console.log("replicate - url: " + url + " data: " + data);
+                    $.ajax({
+                        timeout: 20000,
+                        beforeSend: function() {
+                            startSpin();
+                        },
+                        complete: function() {
+                            stopSpin();
+                        },
+                        url: url,
+                        type: 'POST',
+                        data: data,
+                        success: function() {
+                            getActor(actor_id, true);
+                        },
+                        error: function() {
+                            console.log("Failed to replicate");
+                        }
+                    });
+                } else {
+                    console.log("replicate - No node with id: " + actor.peer_id);
                 }
             }
         }
