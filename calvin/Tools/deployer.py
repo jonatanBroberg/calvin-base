@@ -15,10 +15,9 @@
 # limitations under the License.
 
 from calvin.actorstore.store import ActorStore
-from calvin.utilities import utils
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities import calvinuuid
-import json
+from calvin.requests.request_handler import RequestHandler
 
 _log = get_logger(__name__)
 
@@ -44,6 +43,7 @@ class Deployer(object):
             self.name = self.deployable["name"]
         else:
             self.name = self.app_id
+        self.poster = RequestHandler()
 
     def instantiate(self, actor_name, actor_type, argd, signature=None):
         """
@@ -76,7 +76,7 @@ class Deployer(object):
                 args=args,
                 deploy_args={'app_id': self.app_id, 'app_name': self.name, 'signature': signature})
         else:
-            instance_id = utils.new_actor_wargs(
+            instance_id = self.poster.new_actor_wargs(
                 rt=self.runtime,
                 actor_type=actor_type,
                 actor_name=actor_name,
@@ -103,14 +103,14 @@ class Deployer(object):
                 peer_port_dir='out')
         else:
             src_node = self.node_info.get(src_actor, self.runtime.id)
-            result = utils.connect(self.runtime, dst_actor_id, dst_port, src_node, src_actor_id, src_port)
+            result = self.poster.connect(self.runtime, dst_actor_id, dst_port, src_node, src_actor_id, src_port)
         return result
 
     def set_port_property(self, actor, port_type, port_name, port_property, value):
         if self.node is not None:
             self.node.am.set_port_property(self.actor_map[actor], port_type, port_name, port_property, value)
         else:
-            utils.set_port_property(
+            self.poster.set_port_property(
                 rt=self.runtime,
                 actor_id=self.actor_map[actor],
                 port_type=port_type,
@@ -147,6 +147,6 @@ class Deployer(object):
         if self.node is not None:
             result = self.node.app_manager.destroy(self.app_id)
         else:
-            result = utils.delete_application(self.runtime, self.app_id)
+            result = self.poster.delete_application(self.runtime, self.app_id)
         return result
 
