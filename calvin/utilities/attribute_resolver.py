@@ -14,31 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import re
 
 # The order of the address fields
 address_keys = ['country', 'stateOrProvince', 'locality', 'street', 'streetNumber', 'building', 'floor', 'room']
-address_help = {'country': "ISO 3166-1 alpha2 coded country name string", 
+address_help = {'country': "ISO 3166-1 alpha2 coded country name string",
                 'stateOrProvince': "ISO 3166-2 coded sub-country name string",
                 'locality': "Name of e.g. city",
                 'street': "Street name",
-                'streetNumber': "String or number for street number", 
-                'building': "Some buildings have names (maybe instead of number)", 
-                'floor': "String or number specifying floor of building", 
+                'streetNumber': "String or number for street number",
+                'building': "Some buildings have names (maybe instead of number)",
+                'floor': "String or number specifying floor of building",
                 'room': "String or number specifying room or flat name"}
 # The order of the owner fields
 owner_keys = ['organization', 'organizationalUnit', 'role', 'personOrGroup']
-owner_help = {'organization': "(reversed DNS) name of organisation", 
-              'organizationalUnit': "Sub-unit name", 
-              'role': "The title of owner e.g. 'Site owner', 'admin'", 
+owner_help = {'organization': "(reversed DNS) name of organisation",
+              'organizationalUnit': "Sub-unit name",
+              'role': "The title of owner e.g. 'Site owner', 'admin'",
               'personOrGroup': "The name of the owner(s), e.g. person name or responsible group name"}
 # The order of the node name fields, purpose field could take values such as test, production, etc
 node_name_keys = ['organization', 'organizationalUnit', 'purpose', 'group', 'name']
-node_name_help = {'organization': "(reversed DNS) name of organisation", 
+node_name_help = {'organization': "(reversed DNS) name of organisation",
                   'organizationalUnit': "Sub-unit name",
                   'purpose': "If specific purpose of node, e.g. test, production",
-                  'group': "Name of node group e.g. 'project' name", 
+                  'group': "Name of node group e.g. 'project' name",
                   'name': "Name of node"}
 
 attribute_docs = """
@@ -66,24 +65,24 @@ The data structure is as follows:
 """
 _indent_index = 20
 _indent_index2 = _indent_index + 4
-attribute_docs += " "*_indent_index + "'owner': {# The node's affilation\n"
-attribute_docs += (",\n").join([" "*_indent_index2 + "'" + a + "': " + owner_help[a] for a in owner_keys]) + "\n" + " "*_indent_index + "},\n"
-attribute_docs += " "*_indent_index + "'address': # The node's (static) address\n"
-attribute_docs += (",\n").join([" "*_indent_index2 + "'" + a + "': " + address_help[a] for a in address_keys]) + "\n" + " "*_indent_index + "},\n"
-attribute_docs += " "*_indent_index + "'node_name': # The node's static easy identification\n"
-attribute_docs += (",\n").join([" "*_indent_index2 + "'" + a + "': " + node_name_help[a] for a in node_name_keys]) + "\n" + " "*_indent_index + "},\n"
-attribute_docs += " "*_indent_index + """'user_extra': # Any user specific extra attributes, as a list of list with index words, not possible to skip levels
+attribute_docs += " " * _indent_index + "'owner': {# The node's affilation\n"
+attribute_docs += (",\n").join([" " * _indent_index2 + "'" + a + "': " + owner_help[a] for a in owner_keys]) + "\n" + " " * _indent_index + "},\n"
+attribute_docs += " " * _indent_index + "'address': # The node's (static) address\n"
+attribute_docs += (",\n").join([" " * _indent_index2 + "'" + a + "': " + address_help[a] for a in address_keys]) + "\n" + " " * _indent_index + "},\n"
+attribute_docs += " " * _indent_index + "'node_name': # The node's static easy identification\n"
+attribute_docs += (",\n").join([" " * _indent_index2 + "'" + a + "': " + node_name_help[a] for a in node_name_keys]) + "\n" + " " * _indent_index + "},\n"
+attribute_docs += " " * _indent_index + """'user_extra': # Any user specific extra attributes, as a list of list with index words, not possible to skip levels
                 }
     }
-    
+
 The public indexed values can be obtained by get_index function or the corresponding control API.
 
 To format the index search string an attribute resolver function needs to be used:
 
     from calvin.utilities.attribute_resolver import format_index_string
     format_index_string(attr_obj, trim=True)
-    
-where the attr_obj should only contain ONE attribute e.g. 
+
+where the attr_obj should only contain ONE attribute e.g.
 
     {'owner': {'organization': 'org.testorg', 'role':'admin'}}
 
@@ -95,7 +94,7 @@ The trim parameter when true will remove trailing empty keys instead of leaving 
 prefix search to find nodes based only on the included higher level keys.
 """
 
-#Country codes
+#  Country codes
 countries = ['AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ', 'BA',
              'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BV',
              'BW', 'BY', 'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN', 'CO', 'CR', 'CU',
@@ -111,6 +110,7 @@ countries = ['AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', '
              'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SX', 'SY', 'SZ', 'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL',
              'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'UM', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE',
              'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'YT', 'ZA', 'ZM', 'ZW']
+
 
 class AttributeResolverHelper(object):
     """Resolves attributes"""
@@ -167,7 +167,7 @@ class AttributeResolverHelper(object):
                 a = ""
             else:
                 # Replace \ with \\, looks funny due to \ is used to escape characters in python also
-                a = a.replace("\\","\\\\")
+                a = a.replace("\\", "\\\\")
                 # Replace / with \/
                 a = a.replace("/", "\\/")
             attr_str += "/" + a
@@ -178,7 +178,7 @@ class AttributeResolverHelper(object):
     def decode_index(attr_str):
         if not attr_str.startswith("/node/attribute"):
             raise Exception("Index %s not a node attribute" % attr_str)
-        attr_str = attr_str[len("/node/attribute")+1:]
+        attr_str = attr_str[len("/node/attribute") + 1:]
         attr = re.split(r'(?<![^\\]\\)/', attr_str)
         attr2 = []
         for a in attr:
@@ -196,9 +196,10 @@ attr_resolver = {'owner': AttributeResolverHelper.owner_resolver,
                  'address': AttributeResolverHelper.address_resolver,
                  'user_extra': AttributeResolverHelper.extra_resolver}
 
+
 def format_index_string(attr, trim=True):
     """ To format the index search string an attribute resolver function needs to be used:
-        where the attr should only contain ONE attribute e.g. 
+        where the attr should only contain ONE attribute e.g.
             {'owner': {'organization': 'org.testorg', 'role':'admin'}}
         alternatively the attr is a tuple e.g.:
             ('owner', {'organization': 'org.testorg', 'role':'admin'})
@@ -215,6 +216,7 @@ def format_index_string(attr, trim=True):
     if trim:
         _attr = [_attr[i] for i in range(len(_attr)) if any(_attr[i:])]
     return AttributeResolverHelper.encode_index([attr_type] + _attr)
+
 
 class AttributeResolver(object):
     """Resolves incoming attributes for a node and verify it"""
@@ -260,6 +262,7 @@ class AttributeResolver(object):
         # Return all indexes encoded for storage as a list of lists
         return [AttributeResolverHelper.encode_index([AttributeResolverHelper._to_unicode(k)] + v, as_list=as_list) for k, v in self.attr['indexed_public'].items()]
 
+
 if __name__ == '__main__':
     ar = AttributeResolver({'indexed_public': {
                             'address': {'country': 'SE', 'locality': 'Lund', 'street': u'Sölvegatan', 'streetNumber': 53},
@@ -281,8 +284,8 @@ if __name__ == '__main__':
     ar = AttributeResolver(None)
     aa = ar.get_indexed_public(as_list=True)
     print aa
-    print ar.resolve_indexed_public({'owner':{'organization': 'org.testexample', 'personOrGroup': 'testOwner1'}})
-    print format_index_string({'owner':{'organization': 'org.testexample', 'personOrGroup': 'testOwner1'}})
-    print ar.resolve_indexed_public({'owner':{'organization': 'org.testexample'}})
-    print format_index_string({'owner':{'organization': 'org.testexample'}})
-    print format_index_string({'owner':{}})
+    print ar.resolve_indexed_public({'owner': {'organization': 'org.testexample', 'personOrGroup': 'testOwner1'}})
+    print format_index_string({'owner': {'organization': 'org.testexample', 'personOrGroup': 'testOwner1'}})
+    print ar.resolve_indexed_public({'owner': {'organization': 'org.testexample'}})
+    print format_index_string({'owner': {'organization': 'org.testexample'}})
+    print format_index_string({'owner': {}})
