@@ -1010,7 +1010,7 @@ class CalvinControl(object):
             self.node.app_manager.add(app.id, app.name, actor_id)
 
         self.send_response(handle, connection,
-                           None, status=status.status)
+                           json.dumps({'actor_id': actor_id}), status=status.status)
 
     def handle_application_requirements(self, handle, connection, match, data, hdr):
         """ Apply application deployment requirements

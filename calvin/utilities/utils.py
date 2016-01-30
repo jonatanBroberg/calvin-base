@@ -233,7 +233,7 @@ def replicate(rt, actor_id, dst_id, timeout=TIMEOUT, async=False):
     req = session if async else requests
     r = req.post(
         rt.control_uri + '/actor/' + actor_id + "/replicate", data=json.dumps(data), timeout=timeout)
-    return check_response(r)
+    return check_response(r, key='actor_id')
 
 
 def migrate_use_req(rt, actor_id, requirements, extend=False, move=False, timeout=TIMEOUT, async=False):
