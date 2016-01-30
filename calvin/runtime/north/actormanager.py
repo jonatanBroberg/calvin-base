@@ -81,9 +81,20 @@ class ActorManager(object):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
-        a = self._new(actor_type, args)
+
+        prev_actor_id = state['id']
+        state['id'] = args.pop('id')
+        state['name'] = args.pop('name')
+        state['set_ports'] = False
+
+        a = self._new(actor_type, args, state)
+        self.node.control.log_actor_new(a.id, a.name, actor_type)
+
         self.connection_handler.setup_replica_connections(a, state, prev_connections)
-        callback(status=response.CalvinResponse(True), actor_id=a.id)
+        if callback:
+            callback(status=response.CalvinResponse(True), actor_id=a.id, prev_actor_id=prev_actor_id)
+
+        return a
 
     def destroy(self, actor_id):
         # @TOOD - check order here
@@ -221,11 +232,9 @@ class ActorManager(object):
         actor_type = actor._type
         prev_connections = actor.connections(self.node.id)
         prev_connections['port_names'] = actor.port_names()
-        prev_connections['outports'] = []  # TODO remove when we allow multiple inports
+        prev_connections['outports'] = []  # TODO update when (if) we allow multiple inports
 
-        app = self.node.app_manager.get_actor_app(actor_id)
-        if app:
-            callback.kwargs_update(app_id=app.id)
+        callback.kwargs_update(prev_actor_id=actor_id)
 
         self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, actor.replication_args())
 

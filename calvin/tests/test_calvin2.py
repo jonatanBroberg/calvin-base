@@ -182,16 +182,14 @@ class CalvinTestBase(unittest.TestCase):
         l = min([len(expected), len(actual)])
         self.assertListEqual(expected[:l], actual[:l])
 
-    def assert_list_postfix(self, expected, actual):
-        assert expected
+    def assert_list_prefix(self, expected, actual):
         assert actual
-        if len(actual) > len(expected):
-            return False
-        if len(actual) == len(expected):
-            return actual == expected
-
-        index = expected.index(actual[0])
-        return self.assertListEqual(expected[index:], actual)
+        if len(expected) > len(actual):
+            self.assertListEqual(expected[:len(actual)], actual)
+        elif len(expected) < len(actual):
+            self.assertListEqual(expected, actual[:len(expected)])
+        else :
+            self.assertListEqual(expected, actual)
 
 
 @pytest.mark.slow
@@ -704,7 +702,7 @@ class TestStateReplication(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.Sum')
         actual = utils.report(self.rt2, replica_id)
 
-        self.assert_list_postfix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         d.destroy()
 

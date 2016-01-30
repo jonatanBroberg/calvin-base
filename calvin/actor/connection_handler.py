@@ -115,29 +115,27 @@ class ConnectionHandler(object):
         replica.
         """
         inports = state['inports']
-        new_state = {'inports': {}}
+        new_inports = {}
         for port_name in inports:
             port = inports[port_name]
             if not port:
                 continue
+
             fifo = port['fifo']
 
-            readers = state['inports'][port_name]['fifo']['readers']
-            new_readers = [port_id_translations[reader] for reader in readers]
+            new_readers = [port_id_translations[reader] for reader in fifo['readers']]
 
             new_tentative_read_pos = {}
-            for port_id in state['inports'][port_name]['fifo']['tentative_read_pos']:
+            for port_id in fifo['tentative_read_pos']:
                 val = fifo['tentative_read_pos'][port_id]
                 new_tentative_read_pos[port_id_translations[port_id]] = val
-
-            state['inports'][port_name]['fifo']['tentative_read_pos'] = new_tentative_read_pos
 
             new_read_pos = {}
             for port_id in fifo['read_pos']:
                 val = fifo['read_pos'][port_id]
                 new_read_pos[port_id_translations[port_id]] = val
 
-            new_state['inports'][port_name] = {
+            new_inports[port_name] = {
                 'name': port['name'],
                 'fifo': {
                     'readers': new_readers,
@@ -150,4 +148,5 @@ class ConnectionHandler(object):
                 'id': port_id_translations[port['id']]
             }
 
-        return new_state
+        state['inports'] = new_inports
+        return state

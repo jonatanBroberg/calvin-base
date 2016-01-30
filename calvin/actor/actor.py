@@ -16,9 +16,7 @@
 
 import wrapt
 import functools
-import inspect
 
-from calvin.actorstore.store import ActorStore
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
 from calvin.actor.connection import Connection
@@ -561,7 +559,9 @@ class Actor(object):
         # with the recorded state
         self._managed.update(set(state['_managed']))
 
-        for key in state['_managed']:
+        set_ports = state.get('set_ports', True)
+
+        for key in self._managed:
             if key not in self.__dict__:
                 self.__dict__[key] = state.pop(key)
             elif key in state:
@@ -571,14 +571,15 @@ class Actor(object):
                 else:
                     self.__dict__[key] = state.pop(key)
 
-        # Manual state handling
-        for port in state['inports']:
-            # Uses setdefault to support shadow actor
-            self.inports.setdefault(port, actorport.InPort(port, self))._set_state(state['inports'][port])
-        for port in state['outports']:
-            # Uses setdefault to support shadow actor
-            self.outports.setdefault(port, actorport.OutPort(port, self))._set_state(state['outports'][port])
-        self._component_members= set(state['_component_members'])
+        if set_ports:
+            # Manual state handling
+            for port in state['inports']:
+                # Uses setdefault to support shadow actor
+                self.inports.setdefault(port, actorport.InPort(port, self))._set_state(state['inports'][port])
+            for port in state['outports']:
+                # Uses setdefault to support shadow actor
+                self.outports.setdefault(port, actorport.OutPort(port, self))._set_state(state['outports'][port])
+        self._component_members = set(state['_component_members'])
 
     # TODO verify status should only allow reading connections when and after being fully connected (enabled)
     @verify_status([STATUS.ENABLED, STATUS.READY, STATUS.PENDING])
@@ -660,13 +661,9 @@ class Actor(object):
 
         The name must not contain '-', this will break the web interface
         """
-        (_, _, actor_class) = ActorStore().lookup(self._type)
-        managed = self._get_managed()
-        args = {}
-        arg_names = inspect.getargspec(actor_class.init).args[1:]
-        for arg in arg_names:
-            args[arg] = managed[arg]
+        args = self._get_managed()
         args['name'] = self.name + calvinuuid.uuid("REPLICA").replace("-", ":")
+        args['id'] = calvinuuid.uuid("ACTOR")
 
         return args
 
