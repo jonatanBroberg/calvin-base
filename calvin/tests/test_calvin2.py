@@ -17,25 +17,30 @@
 import os
 import unittest
 import time
+import pytest
 import multiprocessing
-from calvin.runtime.north import calvin_node
+
+from calvin.tests.test_calvin import expected_tokens
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
-import pytest
 from calvin.utilities import utils
 from calvin.utilities.nodecontrol import dispatch_node
 from calvin.utilities.attribute_resolver import format_index_string
 from calvin.utilities import calvinlogger
+
 _log = calvinlogger.get_logger(__name__)
+
 
 def absolute_filename(filename):
     import os.path
     return os.path.join(os.path.dirname(__file__), filename)
 
+
 rt1 = None
 rt2 = None
 rt3 = None
 kill_peers = True
+
 
 def setup_module(module):
     global rt1
@@ -164,6 +169,7 @@ def teardown_module(module):
         p.terminate()
     time.sleep(0.4)
 
+
 class CalvinTestBase(unittest.TestCase):
 
     def setUp(self):
@@ -175,6 +181,17 @@ class CalvinTestBase(unittest.TestCase):
         self.assertTrue(len(actual) >= min_length, "Received data too short (%d), need at least %d" % (len(actual), min_length))
         l = min([len(expected), len(actual)])
         self.assertListEqual(expected[:l], actual[:l])
+
+    def assert_list_postfix(self, expected, actual):
+        assert expected
+        assert actual
+        if len(actual) > len(expected):
+            return False
+        if len(actual) == len(expected):
+            return actual == expected
+
+        index = expected.index(actual[0])
+        return self.assertListEqual(expected[index:], actual)
 
 
 @pytest.mark.slow
@@ -655,9 +672,39 @@ class TestStateMigration(CalvinTestBase):
         time.sleep(1)
 
         actual = utils.report(self.rt1, snk)
-        expected = [sum(range(i+1)) for i in range(1,10)]
+        expected = [sum(range(i + 1)) for i in range(1, 10)]
 
         self.assert_lists_equal(expected, actual)
+
+        d.destroy()
+
+
+@pytest.mark.essential
+class TestStateReplication(CalvinTestBase):
+    def testSimpleState(self):
+        _log.analyze("TESTRUN", "+", {})
+        script = """
+          src : std.CountTimer()
+          sum : std.Sum()
+          snk : io.StandardOut(store_tokens=1, quiet=1)
+          src.integer > sum.integer
+          sum.integer > snk.token
+          """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(self.rt1, app_info)
+        d.deploy()
+        time.sleep(.3)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        replica_id = utils.replicate(self.rt1, snk, self.rt2.id)
+        time.sleep(.3)
+
+        expected = expected_tokens(self.rt1, src, 'std.Sum')
+        actual = utils.report(self.rt2, replica_id)
+
+        self.assert_list_postfix(expected, actual)
 
         d.destroy()
 

@@ -31,11 +31,14 @@ from calvin.utilities import calvinlogger
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
 
+
 def actual_tokens(rt, actor_id):
     return utils.report(rt, actor_id)
 
+
 def expected_counter(n):
     return [i for i in range(1, n + 1)]
+
 
 def cumsum(l):
     s = 0
@@ -43,8 +46,10 @@ def cumsum(l):
         s = s + n
         yield s
 
+
 def expected_sum(n):
     return list(cumsum(range(1, n + 1)))
+
 
 def expected_tokens(rt, actor_id, src_actor_type):
     tokens = utils.report(rt, actor_id)
@@ -57,10 +62,12 @@ def expected_tokens(rt, actor_id, src_actor_type):
 
     return None
 
+
 runtime = None
 runtimes = []
 peerlist = []
 kill_peers = True
+
 
 def setup_module(module):
     global runtime
@@ -215,7 +222,7 @@ def teardown_module(module):
 
 class CalvinTestBase(unittest.TestCase):
 
-    def assertListPrefix(self, expected, actual, allow_empty=False):
+    def assert_list_prefix(self, expected, actual, allow_empty=False):
         assert actual
         if len(expected) > len(actual):
             self.assertListEqual(expected[:len(actual)], actual)
@@ -223,6 +230,17 @@ class CalvinTestBase(unittest.TestCase):
             self.assertListEqual(expected, actual[:len(expected)])
         else :
             self.assertListEqual(expected, actual)
+
+    def assert_list_postfix(self, expected, actual):
+        assert expected
+        assert actual
+        if len(actual) > len(expected):
+            return False
+        if len(actual) == len(expected):
+            return actual == expected
+
+        index = expected.index(actual[0])
+        return self.assertListEqual(expected[index:], actual)
 
     def setUp(self):
         self.runtime = runtime
@@ -269,7 +287,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -292,7 +310,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -316,7 +334,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         expected = expected_tokens(rt, src, "std.CountTimer")
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -347,7 +365,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         expected = expected_tokens(rt, src, "std.Sum")
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, sum_)
@@ -371,7 +389,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         self.assertTrue(len(actual) > 0)
 
         utils.delete_actor(rt, src)
@@ -405,7 +423,7 @@ class TestRemoteConnection(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.Sum')
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
@@ -441,7 +459,7 @@ class TestRemoteConnection(CalvinTestBase):
         expected = list(_d())
         actual = actual_tokens(rt, snk1)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk1)
         utils.delete_actor(peer, alt)
@@ -480,12 +498,12 @@ class TestRemoteConnection(CalvinTestBase):
         expected = list(_d())
         actual = actual_tokens(rt, snk1)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         expected = range(1, 100)
         actual = actual_tokens(peer, snk2)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk1)
         utils.delete_actor(peer, snk2)
@@ -522,7 +540,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(peer, src)
@@ -551,7 +569,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -587,7 +605,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -616,7 +634,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(rt, sum_)
         utils.delete_actor(rt, src)
@@ -652,7 +670,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -681,7 +699,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -714,7 +732,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer1, sum_)
         utils.delete_actor(rt, src)
@@ -745,7 +763,7 @@ class TestActorMigration(CalvinTestBase):
         expected = [u'((( 1 )))', u'((( 2 )))', u'((( 3 )))', u'((( 4 )))', u'((( 5 )))', u'((( 6 )))', u'((( 7 )))', u'((( 8 )))']
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(peer0, snk)
         utils.delete_actor(peer0, wrapper)
         utils.delete_actor(rt, src)
@@ -815,18 +833,18 @@ class TestActorReplication(CalvinTestBase):
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
 
         utils.connect(rt, snk, 'token', rt.id, src, 'integer')
-        time.sleep(0.27)
+        time.sleep(.3)
 
         snk_replica = utils.replicate(rt, snk, peer.id)
-        time.sleep(0.27)
+        time.sleep(.3)
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig = actual_tokens(rt, snk)
         actual_replica = actual_tokens(peer, snk_replica)
 
         assert(len(actual_orig) > 1)
-        self.assertListPrefix(expected, actual_replica)
-        self.assertListPrefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_postfix(expected, actual_replica)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -850,8 +868,8 @@ class TestActorReplication(CalvinTestBase):
         actual_replica = actual_tokens(rt, snk_replica)
 
         assert(len(actual_orig) > 1)
-        self.assertListPrefix(expected, actual_replica)
-        self.assertListPrefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_postfix(expected, actual_replica)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -882,7 +900,7 @@ class TestCalvinScript(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         expected = expected_tokens(rt, src, 'std.CountTimer')
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         d.destroy()
 
