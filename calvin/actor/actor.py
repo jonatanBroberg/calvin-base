@@ -16,6 +16,9 @@
 
 import wrapt
 import functools
+import inspect
+
+from calvin.actorstore.store import ActorStore
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
 from calvin.actor.connection import Connection
@@ -533,7 +536,13 @@ class Actor(object):
             port: self.outports[port]._state() for port in self.outports}
         state['_component_members'] = list(self._component_members)
 
+        state.update(self._get_managed())
+
+        return state
+
+    def _get_managed(self):
         # Managed state handling
+        state = {}
         for key in self._managed:
             obj = self.__dict__[key]
             if _implements_state(obj):
@@ -651,7 +660,14 @@ class Actor(object):
 
         The name must not contain '-', this will break the web interface
         """
-        return {'name': self.name + calvinuuid.uuid("REPLICA").replace("-", ":")}
+        (_, _, actor_class) = ActorStore().lookup(self._type)
+        managed = self._get_managed()
+        args = {}
+        arg_names = inspect.getargspec(actor_class.init).args[1:]
+        for arg in arg_names:
+            args[arg] = managed[arg]
+        args['name'] = self.name + calvinuuid.uuid("REPLICA").replace("-", ":")
+        return args
 
     def port_names(self):
         """Returns a dict mapping port_id to port_name"""
