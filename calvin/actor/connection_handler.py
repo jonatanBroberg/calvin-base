@@ -20,12 +20,18 @@ class ConnectionHandler(object):
             # Migrated actor
             self.connect(actor, connection_list, callback=callback)
 
-    def setup_replica_connections(self, actor, prev_connections, callback=None):
+    def setup_replica_connections(self, actor, state, prev_connections, callback=None):
         _log.debug("Setting up replica connections for actor {}, prev_connections {}".format(
             actor, prev_connections))
         connection_list = self._prev_connections_to_connection_list(prev_connections)
-        connection_list = self._translate_connection_list(actor, prev_connections, connection_list)
+
+        port_id_translations = self._translate_port_ids(actor, prev_connections)
+        connection_list = self._translate_connection_list(actor, connection_list, port_id_translations)
+        state = self._translate_state(actor, state, port_id_translations)
         self.connect(actor, connection_list, callback=callback)
+
+        for port in state['inports']:
+            actor.inports[port]._set_state(state['inports'][port])
 
     def connections(self, actor):
         return actor.connections(self.node.id)
@@ -77,7 +83,15 @@ class ConnectionHandler(object):
             cl.append((conn['node_id'], conn['port_id'], conn['peer_node_id'], conn['peer_port_id']))
         return cl
 
-    def _translate_connection_list(self, actor, prev_connections, connection_list):
+    def _translate_port_ids(self, actor, prev_connections):
+        port_id_translations = {}
+        port_names = prev_connections['port_names']
+        for (port_id, port_name) in port_names.iteritems():
+            port_id_translations[port_id] = actor.inports[port_name].id if port_name in actor.inports else actor.outports[port_name].id
+
+        return port_id_translations
+
+    def _translate_connection_list(self, actor, connection_list, port_id_translations):
         """After replicating an actor, the list of previous connections
         contains port_ids for the original actor and must be updated.
 
@@ -86,13 +100,8 @@ class ConnectionHandler(object):
         Returns:
             [(_, updated_port_id, _, _), ...]
         """
-        if not prev_connections or not connection_list:
+        if not connection_list:
             return []
-
-        port_id_translations = {}
-        port_names = prev_connections['port_names']
-        for (port_id, port_name) in port_names.iteritems():
-            port_id_translations[port_id] = actor.inports[port_name].id if port_name in actor.inports else actor.outports[port_name].id
 
         translated_connection_list = []
         if port_id_translations:
@@ -100,3 +109,45 @@ class ConnectionHandler(object):
                 translated_connection_list.append((node_id, port_id_translations[port_id], peer_node_id, peer_port_id))
 
         return translated_connection_list
+
+    def _translate_state(self, actor, state, port_id_translations):
+        """Translates the port IDs in state inports to match IDs for the new
+        replica.
+        """
+        inports = state['inports']
+        new_state = {'inports': {}}
+        for port_name in inports:
+            port = inports[port_name]
+            if not port:
+                continue
+            fifo = port['fifo']
+
+            readers = state['inports'][port_name]['fifo']['readers']
+            new_readers = [port_id_translations[reader] for reader in readers]
+
+            new_tentative_read_pos = {}
+            for port_id in state['inports'][port_name]['fifo']['tentative_read_pos']:
+                val = fifo['tentative_read_pos'][port_id]
+                new_tentative_read_pos[port_id_translations[port_id]] = val
+
+            state['inports'][port_name]['fifo']['tentative_read_pos'] = new_tentative_read_pos
+
+            new_read_pos = {}
+            for port_id in fifo['read_pos']:
+                val = fifo['read_pos'][port_id]
+                new_read_pos[port_id_translations[port_id]] = val
+
+            new_state['inports'][port_name] = {
+                'name': port['name'],
+                'fifo': {
+                    'readers': new_readers,
+                    'write_pos': fifo['write_pos'],
+                    'N': fifo['N'],
+                    'tentative_read_pos': new_tentative_read_pos,
+                    'read_pos': new_read_pos,
+                    'fifo': fifo['fifo']
+                },
+                'id': port_id_translations[port['id']]
+            }
+
+        return new_state

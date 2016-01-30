@@ -564,7 +564,7 @@ class Actor(object):
         for key in state['_managed']:
             if key not in self.__dict__:
                 self.__dict__[key] = state.pop(key)
-            else:
+            elif key in state:
                 obj = self.__dict__[key]
                 if _implements_state(obj):
                     obj.set_state(state.pop(key))
@@ -667,6 +667,7 @@ class Actor(object):
         for arg in arg_names:
             args[arg] = managed[arg]
         args['name'] = self.name + calvinuuid.uuid("REPLICA").replace("-", ":")
+
         return args
 
     def port_names(self):

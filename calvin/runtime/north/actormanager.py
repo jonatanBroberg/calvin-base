@@ -77,12 +77,12 @@ class ActorManager(object):
 
         return a
 
-    def new_replica(self, actor_type, args, prev_connections, callback):
+    def new_replica(self, actor_type, args, state, prev_connections, callback):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
         a = self._new(actor_type, args)
-        self.connection_handler.setup_replica_connections(a, prev_connections)
+        self.connection_handler.setup_replica_connections(a, state, prev_connections)
         callback(status=response.CalvinResponse(True), actor_id=a.id)
 
     def destroy(self, actor_id):
@@ -227,7 +227,7 @@ class ActorManager(object):
         if app:
             callback.kwargs_update(app_id=app.id)
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, prev_connections, actor.replication_args())
+        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, actor.replication_args())
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
