@@ -1,5 +1,8 @@
-from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
+from calvin.utilities.calvin_callback import CalvinCB
+from calvin.utilities.calvinlogger import get_logger
+
+_log = get_logger(__name__)
 
 
 class ConnectionHandler(object):
@@ -7,6 +10,8 @@ class ConnectionHandler(object):
         self.node = node
 
     def setup_connections(self, actor, prev_connections=None, connection_list=None, callback=None):
+        _log.debug("Setting up connections for actor {}, prev_connections {}, connection_list {}".format(
+            actor, prev_connections, connection_list))
         if prev_connections:
             # Convert prev_connections to connection_list format
             connection_list = self._prev_connections_to_connection_list(prev_connections)
@@ -16,6 +21,8 @@ class ConnectionHandler(object):
             self.connect(actor, connection_list, callback=callback)
 
     def setup_replica_connections(self, actor, prev_connections, callback=None):
+        _log.debug("Setting up replica connections for actor {}, prev_connections {}".format(
+            actor, prev_connections))
         connection_list = self._prev_connections_to_connection_list(prev_connections)
         connection_list = self._translate_connection_list(actor, prev_connections, connection_list)
         self.connect(actor, connection_list, callback=callback)
@@ -28,6 +35,7 @@ class ConnectionHandler(object):
         Reconnecting the ports can be done using a connection_list
         of tuples (node_id i.e. our id, port_id, peer_node_id, peer_port_id)
         """
+        _log.debug("Connecting actor {}, connection_list {}".format(actor, connection_list))
         peer_port_ids = [c[3] for c in connection_list]
 
         for node_id, port_id, peer_node_id, peer_port_id in connection_list:

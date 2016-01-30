@@ -81,6 +81,8 @@ class ActorManager(object):
 
     def new_replica(self, actor_type, args, prev_connections, callback):
         """Creates a new replica"""
+        _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
+            actor_type, args, prev_connections))
         a = self._new(actor_type, args)
         self.connection_handler.setup_replica_connections(a, prev_connections)
         callback(status=response.CalvinResponse(True), actor_id=a.id)
@@ -235,6 +237,7 @@ class ActorManager(object):
         actor_type = actor._type
         prev_connections = actor.connections(self.node.id)
         prev_connections['port_names'] = actor.port_names()
+        prev_connections['outports'] = []  # TODO remove when we allow multiple inports
 
         app = self.node.app_manager.get_actor_app(actor_id)
         if app:

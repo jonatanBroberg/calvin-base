@@ -248,6 +248,7 @@ class CalvinProto(CalvinCBClass):
             state: see actor manager
             prev_connections: see actor manager
         """
+        _log.analyze(self.rt_id, "+", "Replicate actor of type {} to {}".format(actor_type, to_rt_uuid))
         if self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_replication,
                                                                to_rt_uuid=to_rt_uuid,
                                                                callback=callback,
@@ -268,6 +269,7 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_handler(self, payload):
         """ Peer request new actor with state and connections """
+        _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
                                  prev_connections=payload['state']['prev_connections'],
