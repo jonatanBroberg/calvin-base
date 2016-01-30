@@ -823,7 +823,6 @@ class TestActorReplication(CalvinTestBase):
 
         d.destroy()
 
-
     def testLocalToRemoteReplication(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -844,7 +843,7 @@ class TestActorReplication(CalvinTestBase):
 
         assert(len(actual_orig) > 1)
         self.assert_list_prefix(expected, actual_orig)
-        self.assert_list_postfix(expected, actual_replica)
+        self.assert_list_prefix(expected, actual_replica)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -869,7 +868,7 @@ class TestActorReplication(CalvinTestBase):
 
         assert(len(actual_orig) > 1)
         self.assert_list_prefix(expected, actual_orig)
-        self.assert_list_postfix(expected, actual_replica)
+        self.assert_list_prefix(expected, actual_replica)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)

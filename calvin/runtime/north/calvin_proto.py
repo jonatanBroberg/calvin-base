@@ -255,7 +255,7 @@ class CalvinProto(CalvinCBClass):
                                                                actor_type=actor_type,
                                                                state=state,
                                                                prev_connections=prev_connections,
-                                                               args=args)):
+                                                               actor_args=args)):
             # Already have link just continue in _actor_new
                 self._actor_replication(to_rt_uuid, callback, actor_type, state, prev_connections, args,
                                         response.CalvinResponse(True))
