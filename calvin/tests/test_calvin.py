@@ -212,6 +212,7 @@ def teardown_module(module):
         p.terminate()
         time.sleep(0.2)
 
+
 class CalvinTestBase(unittest.TestCase):
 
     def assertListPrefix(self, expected, actual, allow_empty=False):
@@ -227,6 +228,7 @@ class CalvinTestBase(unittest.TestCase):
         self.runtime = runtime
         self.runtimes = runtimes
         self.peerlist = peerlist
+
 
 @pytest.mark.slow
 @pytest.mark.essential
@@ -491,6 +493,7 @@ class TestRemoteConnection(CalvinTestBase):
         utils.delete_actor(rt, src1)
         utils.delete_actor(rt, src2)
 
+
 @pytest.mark.essential
 @pytest.mark.slow
 class TestActorMigration(CalvinTestBase):
@@ -683,7 +686,6 @@ class TestActorMigration(CalvinTestBase):
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
 
-
     def testInOutPortRemoteToRemoteMigration(self):
         """Testing out- and inport remote to remote migration"""
 
@@ -747,6 +749,113 @@ class TestActorMigration(CalvinTestBase):
         utils.delete_actor(peer0, snk)
         utils.delete_actor(peer0, wrapper)
         utils.delete_actor(rt, src)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestActorReplication(CalvinTestBase):
+
+    def testReplicationGetsNewName(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=123, quiet=True)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        time.sleep(0.27)
+
+        original = utils.get_actor(rt, snk)
+        replica = utils.get_actor(peer, snk_replica)
+
+        assert original['name'] != replica['name']
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(peer, snk_replica)
+
+    def testReplicaIsAddedToApplicationActors(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt, snk, peer.id)
+
+        time.sleep(0.2)
+
+        app = utils.get_application(rt, app_id)
+
+        assert replica in app['actors']
+        assert replica in app['actors_name_map']
+
+        d.destroy()
+
+
+    def testLocalToRemoteReplication(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        time.sleep(0.27)
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(peer, snk_replica)
+
+        assert(len(actual_orig) > 1)
+        self.assertListPrefix(expected, actual_replica)
+        self.assertListPrefix(expected, actual_orig)
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(peer, snk_replica)
+
+    def testLocalToLocalReplication(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src, 'integer')
+        time.sleep(0.3)
+
+        snk_replica = utils.replicate(rt, snk, rt.id)
+        time.sleep(0.3)
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(rt, snk_replica)
+
+        assert(len(actual_orig) > 1)
+        self.assertListPrefix(expected, actual_replica)
+        self.assertListPrefix(expected, actual_orig)
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, snk_replica)
 
 
 @pytest.mark.essential
