@@ -32,6 +32,8 @@ class ConnectionHandler(object):
 
         for port in state['inports']:
             actor.inports[port]._set_state(state['inports'][port])
+        for port in state['outports']:
+            actor.outports[port]._set_state(state['outports'][port])
 
     def connections(self, actor):
         return actor.connections(self.node.id)
@@ -45,7 +47,8 @@ class ConnectionHandler(object):
         peer_port_ids = [c[3] for c in connection_list]
 
         for node_id, port_id, peer_node_id, peer_port_id in connection_list:
-            self.node.pm.connect(port_id=port_id,
+            self.node.pm.connect(actor_id=actor.id,
+                                 port_id=port_id,
                                  peer_node_id=peer_node_id,
                                  peer_port_id=peer_port_id,
                                  callback=CalvinCB(self._actor_connected,
@@ -106,47 +109,143 @@ class ConnectionHandler(object):
         translated_connection_list = []
         if port_id_translations:
             for node_id, port_id, peer_node_id, peer_port_id in connection_list:
-                translated_connection_list.append((node_id, port_id_translations[port_id], peer_node_id, peer_port_id))
+                translated_connection_list.append((self.node.id, port_id_translations[port_id], peer_node_id, peer_port_id))
 
         return translated_connection_list
 
     def _translate_state(self, actor, state, port_id_translations):
-        """Translates the port IDs in state inports to match IDs for the new
+        """Translates the port IDs in state inports and outports to match IDs for the new
         replica.
         """
         inports = state['inports']
-        new_inports = {}
-        for port_name in inports:
-            port = inports[port_name]
+        outports = state['outports']
+
+        new_inports = self._translate_inports(port_id_translations, inports)
+        new_outports = self._translate_outports(port_id_translations, outports)
+        state['inports'] = new_inports
+        state['outports'] = new_outports
+
+        return state
+
+    def _translate_inports(self, port_id_translations, ports):
+        new_ports = {}
+        for port_name in ports:
+            port = ports[port_name]
             if not port:
                 continue
 
             fifo = port['fifo']
 
-            new_readers = [port_id_translations[reader] for reader in fifo['readers']]
+            new_readers = []
+            for reader in fifo['readers']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[0]
+                new_readers.append("_".join([port_id_translations[port_id], reader_parts[1]]))
 
             new_tentative_read_pos = {}
-            for port_id in fifo['tentative_read_pos']:
-                val = fifo['tentative_read_pos'][port_id]
-                new_tentative_read_pos[port_id_translations[port_id]] = val
+            for reader in fifo['tentative_read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[0]
+                val = fifo['tentative_read_pos'][reader]
+                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                new_tentative_read_pos[new_key] = val
 
             new_read_pos = {}
-            for port_id in fifo['read_pos']:
-                val = fifo['read_pos'][port_id]
-                new_read_pos[port_id_translations[port_id]] = val
+            for reader in fifo['read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[0]
+                val = fifo['read_pos'][reader]
+                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                new_read_pos[new_key] = val
 
-            new_inports[port_name] = {
+            new_fifo = {}
+            for reader in fifo['fifo']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[0]
+                val = fifo['fifo'][reader]
+                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                new_fifo[new_key] = val
+
+            new_write_pos = {}
+            for reader in fifo['write_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[0]
+                val = fifo['write_pos'][reader]
+                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                new_write_pos[new_key] = val
+
+            new_ports[port_name] = {
                 'name': port['name'],
                 'fifo': {
                     'readers': new_readers,
-                    'write_pos': fifo['write_pos'],
+                    'write_pos': new_write_pos,
                     'N': fifo['N'],
                     'tentative_read_pos': new_tentative_read_pos,
                     'read_pos': new_read_pos,
-                    'fifo': fifo['fifo']
+                    'fifo': new_fifo
                 },
                 'id': port_id_translations[port['id']]
             }
 
-        state['inports'] = new_inports
-        return state
+        return new_ports
+
+    def _translate_outports(self, port_id_translations, ports):
+        new_ports = {}
+        for port_name in ports:
+            port = ports[port_name]
+            if not port:
+                continue
+
+            fifo = port['fifo']
+
+            new_readers = []
+            for reader in fifo['readers']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                new_readers.append("_".join([reader_parts[0], port_id_translations[port_id]]))
+
+            new_tentative_read_pos = {}
+            for reader in fifo['tentative_read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                new_tentative_read_pos[new_key] = 0
+
+            new_read_pos = {}
+            for reader in fifo['read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                new_read_pos[new_key] = 0
+
+            new_write_pos = {}
+            for reader in fifo['write_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                val = fifo['write_pos'][reader]
+                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                new_write_pos[new_key] = val
+
+            new_fifo = {}
+            for reader in fifo['fifo']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                val = fifo['fifo'][reader]
+                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                new_fifo[new_key] = val
+
+            new_ports[port_name] = {
+                'name': port['name'],
+                'fanout': port['fanout'],
+                'fifo': {
+                    'readers': new_readers,
+                    'write_pos': new_write_pos,
+                    'N': fifo['N'],
+                    'tentative_read_pos': new_tentative_read_pos,
+                    'read_pos': new_read_pos,
+                    'fifo': new_fifo
+                },
+                'id': port_id_translations[port['id']]
+            }
+
+        return new_ports

@@ -24,10 +24,9 @@ from calvin.runtime.north import metering
 
 
 def fwrite(port, value):
-    if isinstance(value, Token):
-        port.fifo.write(value)
-    else:
-        port.fifo.write(Token(value=value))
+    token = value if isinstance(value, Token) else Token(value=value)
+    for ep in port.endpoints:
+        port.fifo.write(token, ep.fifo_key)
 
 
 def pwrite(actor, portname, value):
@@ -51,15 +50,20 @@ def pread(actor, portname, number=1):
         if pavailable(actor, portname) > number:
             raise AssertionError("Too many tokens available, %d, expected %d" % (pavailable(actor, portname), number))
 
-    values = [port.fifo.read(actor.id).value for _ in range(number)]
-    port.fifo.commit_reads(actor.id), True
+    values = []
+    for ep in port.endpoints:
+        values.extend([port.fifo.read(ep.fifo_key).value for _ in range(number)])
+        port.fifo.commit_reads(ep.fifo_key), True
     return values
 
 
 def pavailable(actor, portname):
     port = actor.outports.get(portname, None)
     assert port
-    return port.fifo.available_tokens(actor.id)
+    if not port.endpoints:
+        return 0
+    available_tokens = sum([port.fifo.available_tokens(ep.fifo_key) for ep in port.endpoints])
+    return available_tokens
 
 
 class DummyInEndpoint(Endpoint):
@@ -68,31 +72,48 @@ class DummyInEndpoint(Endpoint):
     Dummy in endpoint for actor test
     """
 
-    def __init__(self, port):
+    def __init__(self, port, actor):
         super(DummyInEndpoint, self).__init__(port)
+        self.peer_id = actor.id
+        self.fifo_key = port.id # actor.id
 
     def is_connected(self):
         return True
 
     def read_token(self):
-        token = self.port.fifo.read(self.port.id)
+        token = self.port.fifo.read(self.fifo_key)
         if token:
-            self.port.fifo.commit_reads(self.port.id, True)
+            self.port.fifo.commit_reads(self.fifo_key, True)
         return token
 
     def available_tokens(self):
         tokens = 0
-        tokens += self.port.fifo.available_tokens(self.port.id)
+        tokens += self.port.fifo.available_tokens(self.fifo_key)
         return tokens
 
     def peek_token(self):
-        return self.port.fifo.read(self.port.id)
+        return self.port.fifo.read(self.fifo_key)
 
     def commit_peek_as_read(self):
-        self.port.fifo.commit_reads(self.port.id)
+        self.port.fifo.commit_reads(self.fifo_key)
 
     def peek_rewind(self):
-        self.port.fifo.rollback_reads(self.port.id)
+        self.port.fifo.rollback_reads(self.fifo_key)
+
+
+class DummyOutEndpoint(Endpoint):
+
+    """
+    Dummy in endpoint for actor test
+    """
+
+    def __init__(self, port, actor):
+        super(DummyOutEndpoint, self).__init__(port)
+        self.peer_id = actor.id
+        self.fifo_key = self.port.id
+
+    def is_connected(self):
+        return True
 
 
 class FDMock(object):
@@ -193,6 +214,9 @@ class CalvinSysMock(dict):
     def use_requirement(self, actor, requirement):
         return requirements[requirement]()
 
+    def scheduler_wakeup(self):
+        pass
+
 
 class ActorTester(object):
 
@@ -231,9 +255,11 @@ class ActorTester(object):
             raise e
 
         for inport in actor.inports.values():
-            inport.endpoint = DummyInEndpoint(inport)
+            endpoint = DummyInEndpoint(inport, actor)
+            inport.attach_endpoint(endpoint)
+
         for outport in actor.outports.values():
-            outport.fifo.add_reader(actor.id)
+            outport.attach_endpoint(DummyOutEndpoint(outport, actor))
 
         self.actors[actorname] = actor
 
@@ -273,7 +299,6 @@ class ActorTester(object):
 
             for port, values in inputs.iteritems():
                 pwrite(aut, port, values)
-
             aut.fire()
 
             for port, values in outputs.iteritems():

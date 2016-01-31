@@ -1,0 +1,11 @@
+src1:std.CountTimer(sleep=0.3)
+src2:std.CountTimer(sleep=0.3)
+
+snk1:io.Print()
+snk2:io.Print()
+
+src1.integer > snk1.token
+src2.integer > snk1.token
+
+src1.integer > snk2.token
+src2.integer > snk2.token
