@@ -50,7 +50,10 @@ class StandardOut(Actor):
     @condition(action_input=['token'])
     def log(self, token):
         if self.store_tokens:
-            self.tokens.append(token)
+            if isinstance(token, list):
+                self.tokens.extend(token)
+            else:
+                self.tokens.append(token)
         self.logger("%s<%s>: %s" % (self.__class__.__name__, self.id, str(token).strip()))
         return ActionResult()
 

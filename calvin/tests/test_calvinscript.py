@@ -160,13 +160,14 @@ class CalvinScriptCheckerTest(CalvinTestBase):
         self.assertEqual(errors[0]['reason'], "Actor b (std.CountTimer) is missing connection to outport 'integer'")
         self.assertFalse(warnings)
 
-    def testCheckInportConnections(self):
+    def testCheckMissingInportConnections(self):
         script = """
         c:io.StandardOut()
         """
         result = self.invoke_parser_assert_syntax('inline', script)
         errors, warnings = check(result)
-        self.assertEqual(errors[0]['reason'], "Missing connection to inport 'c.token'")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]['reason'], "Actor c (io.StandardOut) is missing connection to inport 'token'")
         self.assertFalse(warnings)
 
     def testCheckInportConnections(self):
@@ -179,26 +180,20 @@ class CalvinScriptCheckerTest(CalvinTestBase):
         """
         result = self.invoke_parser_assert_syntax('inline', script)
         errors, warnings = check(result)
-        self.assertEqual(len(errors), 2)
-        self.assertEqual(errors[0]['reason'], "Actor c (io.StandardOut) has multiple connections to inport 'token'")
+        self.assertEqual(len(errors), 0)
         self.assertFalse(warnings)
 
-    def testBadComponent1(self):
+    def testMultipleOutports(self):
         script = """
-        component Foo() -> out {
-            a:std.CountTimer()
-            b:std.CountTimer()
-            a.integer > .out
-        }
-        a:Foo()
+        a:std.CountTimer()
         b:io.StandardOut()
-        a.out > b.token
+        c:io.StandardOut()
+        a.integer > b.token
+        a.integer > c.token
         """
         result = self.invoke_parser_assert_syntax('inline', script)
         errors, warnings = check(result)
-        self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0]['reason'], "Actor b (std.CountTimer) is missing connection to outport 'integer'")
-        self.assertFalse(warnings)
+        self.assertEqual(len(errors), 0)
 
     def testBadComponent2(self):
         script = """
@@ -417,6 +412,9 @@ class CalvinScriptCheckerTest(CalvinTestBase):
         """
         result = self.invoke_parser_assert_syntax('inline', script)
         errors, warnings = check(result)
+        print errors
+        for e in errors:
+            print e
         self.assertEqual(len(errors), 4)
         self.assertEqual(errors[0]['reason'], "Actor i (std.Identity) has no inport 'foo'")
         self.assertEqual(errors[1]['reason'], "Actor i (std.Identity) has no outport 'bar'")

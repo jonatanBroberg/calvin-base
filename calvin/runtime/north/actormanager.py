@@ -198,15 +198,16 @@ class ActorManager(object):
         except:
             _log.exception("actormanager:_update_requirements_placements")
 
-
-    def migrate(self, actor_id, node_id, callback = None):
+    def migrate(self, actor_id, node_id, callback=None):
         """ Migrate an actor actor_id to peer node node_id """
         if actor_id not in self.actors:
+            _log.warning("Trying to migrate non-local actor {}, aborting".format(actor_id))
             # Can only migrate actors from our node
             if callback:
                 callback(status=response.CalvinResponse(False))
             return
         if node_id == self.node.id:
+            _log.warning("Trying to migrate actor {} to same node, aborting".format(actor_id))
             # No need to migrate to ourself
             if callback:
                 callback(status=response.CalvinResponse(True))
@@ -248,7 +249,6 @@ class ActorManager(object):
         actor_type = actor._type
         prev_connections = actor.connections(self.node.id)
         prev_connections['port_names'] = actor.port_names()
-        prev_connections['outports'] = []  # TODO update when (if) we allow multiple inports
         state = actor.state()
 
         args = actor.replication_args()
@@ -311,7 +311,12 @@ class ActorManager(object):
         return actor._type if actor else 'BAD ACTOR'
 
     def report(self, actor_id):
-        return self.actors.get(actor_id, None).report()
+        actor = self.actors.get(actor_id)
+        if not actor:
+            _log.warning("Did not find actor with id {}".format(actor_id))
+            return []
+
+        return actor.report()
 
     def enabled_actors(self):
         return [actor for actor in self.actors.values() if actor.enabled()]
