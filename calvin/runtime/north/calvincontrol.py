@@ -1004,18 +1004,7 @@ class CalvinControl(object):
     def actor_replicate_cb(self, handle, connection, status, *args, **kwargs):
         """ Replicate actor response
         """
-        app_id = kwargs.get('app_id')
-        prev_actor_id = kwargs.get('prev_actor_id')
         actor_id = status.data.get('actor_id') if status.data else None
-        if app_id:
-            app = self.node.app_manager.applications[app_id]
-        else:
-            app = self.node.app_manager.get_actor_app(actor_id)
-
-        if app_id and actor_id:
-            app = self.node.app_manager.get_actor_app(prev_actor_id)  # applications[app_id]
-            self.node.app_manager.add(app.id, actor_id)
-
         self.send_response(handle, connection,
                            json.dumps({'actor_id': actor_id}), status=status.status)
 

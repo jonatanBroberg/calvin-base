@@ -252,7 +252,13 @@ class ActorManager(object):
 
         callback.kwargs_update(prev_actor_id=actor_id)
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, actor.replication_args())
+        args = actor.replication_args()
+        app = self.node.app_manager.get_actor_app(actor_id)
+        if app:
+            app.actors[args['id']] = args['name']
+            self.node.storage.add_application(app)
+
+        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, args)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
