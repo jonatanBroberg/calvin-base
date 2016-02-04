@@ -249,7 +249,7 @@ control_api_doc += \
         "extend": True or False  # defaults to False, i.e. replace current requirements
         "move": True or False  # defaults to False, i.e. when possible stay on the current node
     }
-    
+
     For further details about requirements see application deploy.
     Response status code: OK, BAD_REQUEST, INTERNAL_ERROR or NOT_FOUND
     Response: none
@@ -344,14 +344,14 @@ control_api_doc += \
            }
     }
     Note that either a script or app_info must be supplied.
-    
+
     The matching rules are implemented as plug-ins, intended to be extended.
     The type "+" is "and"-ing rules together (actually the intersection of all
     possible nodes returned by the rules.) The type "-" is explicitly removing
     the nodes returned by this rule from the set of possible nodes. Note that
     only negative rules will result in no possible nodes, i.e. there is no
     implied "all but these."
-    
+
     A special matching rule exist, to first form a union between matching
     rules, i.e. alternative matches. This is useful for e.g. alternative
     namings, ownerships or specifying either of two specific nodes.
@@ -460,7 +460,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
             [
                 [<seconds since epoch>, <name of action>],
                 ...
@@ -479,7 +479,7 @@ control_api_doc += \
     {
         'activity':
         {
-            <actor-id>: 
+            <actor-id>:
             {
                 <action-name>: <total fire count>,
                 ...
@@ -502,7 +502,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
         {
             <action-name>:
             {
@@ -765,7 +765,8 @@ class CalvinControl(object):
                 if data:
                     connection.send(data)
                 connection.close()
-            del self.connections[handle]
+            if handle in self.connections:
+                del self.connections[handle]
 
     def send_streamheader(self, handle, connection):
         """ Send response header for text/event-stream
@@ -904,9 +905,9 @@ class CalvinControl(object):
         """
         try:
             self.node.app_manager.destroy(match.group(1), cb=CalvinCB(self.handle_del_application_cb,
-                                                                        handle, connection))
-        except:
-            _log.exception("Destroy application failed")
+                                                                      handle, connection))
+        except Exception as e:
+            _log.exception("Destroy application failed {}".format(e))
             self.send_response(handle, connection, None, status=calvinresponse.INTERNAL_ERROR)
 
     def handle_del_application_cb(self, handle, connection, status=None):
@@ -942,7 +943,7 @@ class CalvinControl(object):
         """ Delete actor from id
         """
         try:
-            self.node.am.destroy(match.group(1))
+            self.node.am.delete_actor(match.group(1), delete_from_app=True)
             status = calvinresponse.OK
         except:
             _log.exception("Destroy actor failed")
@@ -1167,7 +1168,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_timed_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_aggregated_meter(self, handle, connection, match, data, hdr):
@@ -1177,7 +1178,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_aggregated_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_metainfo_meter(self, handle, connection, match, data, hdr):
@@ -1187,7 +1188,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_metainfo_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_post_index(self, handle, connection, match, data, hdr):
