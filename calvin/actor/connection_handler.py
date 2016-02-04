@@ -30,10 +30,10 @@ class ConnectionHandler(object):
         state = self._translate_state(actor, state, port_id_translations)
         self.connect(actor, connection_list, callback=callback)
 
-        for port in state['inports']:
-            actor.inports[port]._set_state(state['inports'][port])
-        for port in state['outports']:
-            actor.outports[port]._set_state(state['outports'][port])
+        for port_name in state['inports']:
+            actor.inports[port_name]._set_state(state['inports'][port_name])
+        for port_name in state['outports']:
+            actor.outports[port_name]._set_state(state['outports'][port_name])
 
     def connections(self, actor):
         return actor.connections(self.node.id)
