@@ -255,8 +255,8 @@ function drawApplication(application_id)
                         if (port) {
                             digraphActors += "<TR><TD bgcolor=\"lightgrey\" PORT=\"" + port.name + "_in\" align=\"left\">" + port.name + "</TD><TD ROWSPAN=\"1\">    </TD><TD align=\"right\"></TD></TR>\n";
                             // add connection
-                            if (port.peer) {
-                                var peer_port = findPort(port.peer[1]);
+                            for (peer_index in port.peers) {
+                                var peer_port = findPort(port.peers[peer_index][1]);
                                 if (peer_port) {
                                     var peer_actor = findActor(peer_port.actor_id);
                                     if (peer_actor) {
@@ -266,7 +266,7 @@ function drawApplication(application_id)
                                         console.log("No actor with id: " + peer_port.actor_id);
                                     }
                                 } else {
-                                    console.log("No port with id: " + port.peer[1])
+                                    console.log("No port with id: " + port.peers[peer_index][1])
                                 }
                             }
                         }
@@ -799,14 +799,9 @@ function getPort(actor_id, port_id)
                 port.connected = data.connected;
                 port.peer_id = data.node_id;
                 port.peers = []
-                if (port.direction == "out") {
-                    var index;
-                    for (index in data.peers) {
-                        port.peers[port.peers.length] = data.peers[index];
-                    }
-                }
-                if (port.direction == "in") {
-                    port.peer = data.peer;
+                var index;
+                for (index in data.peers) {
+                    port.peers[port.peers.length] = data.peers[index];
                 }
                 ports[ports.length] = port;
 
