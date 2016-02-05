@@ -239,7 +239,20 @@ control_api_doc += \
     POST /actor/{actor-id}/migrate
     Migrate actor to (other) node, either explicit node_id or by updated requirements
     Body: {"peer_node_id": <node-id>}
-    Response status code: OK, INTERNAL_ERROR or NOT_FOUND
+    Alternative body:
+    Body:
+    {
+        "requirements": [ {"op": "<matching rule name>",
+                          "kwargs": {<rule param key>: <rule param value>, ...},
+                          "type": "+" or "-" for set intersection or set removal, respectively
+                          }, ...
+                        ],
+        "extend": True or False  # defaults to False, i.e. replace current requirements
+        "move": True or False  # defaults to False, i.e. when possible stay on the current node
+    }
+
+    For further details about requirements see application deploy.
+    Response status code: OK, BAD_REQUEST, INTERNAL_ERROR or NOT_FOUND
     Response: none
 """
 re_post_actor_migrate = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/migrate\sHTTP/1")
