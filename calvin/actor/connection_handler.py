@@ -89,8 +89,10 @@ class ConnectionHandler(object):
     def _translate_port_ids(self, actor, prev_connections):
         port_id_translations = {}
         port_names = prev_connections['port_names']
-        for (port_id, port_name) in port_names.iteritems():
-            port_id_translations[port_id] = actor.inports[port_name].id if port_name in actor.inports else actor.outports[port_name].id
+        for (port_id, port_name) in port_names['inports'].iteritems():
+            port_id_translations[port_id] = actor.inports[port_name].id
+        for (port_id, port_name) in port_names['outports'].iteritems():
+            port_id_translations[port_id] = actor.outports[port_name].id
 
         return port_id_translations
 

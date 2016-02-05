@@ -1350,6 +1350,37 @@ class TestActorReplication(CalvinTestBase):
         utils.delete_actor(rt, snk)
         utils.delete_actor(rt, snk_replica)
 
+    def testReplicateActorWithBothInportAndOutports(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        actual = utils.report(rt, snk)
+
+        replica = utils.replicate(rt, ity, rt.id)
+        time.sleep(0.3)
+
+        expected_1 = expected_tokens(rt, src, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src, 'std.CountTimer')
+        actual = actual_tokens(rt, snk)
+
+        assert(len(actual) > 1)
+        assert(len(expected_2) > 1)
+        self.assert_list_prefix(sorted(expected_1 + expected_2), sorted(actual))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(rt, replica)
+        utils.delete_actor(rt, snk)
+
 
 @pytest.mark.essential
 @pytest.mark.slow

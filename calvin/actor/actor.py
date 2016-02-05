@@ -670,11 +670,11 @@ class Actor(object):
 
     def port_names(self):
         """Returns a dict mapping port_id to port_name"""
-        port_names = {}
+        port_names = {'inports': {}, 'outports': {}}
         for port_name in self.inports:
-            port_names[self.inports[port_name].id] = port_name
+            port_names['inports'][self.inports[port_name].id] = port_name
         for port_name in self.outports:
-            port_names[self.outports[port_name].id] = port_name
+            port_names['outports'][self.outports[port_name].id] = port_name
         return port_names
 
 
