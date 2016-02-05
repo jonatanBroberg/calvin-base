@@ -778,7 +778,8 @@ class CalvinControl(object):
                 if data:
                     connection.send(data)
                 connection.close()
-            del self.connections[handle]
+            if handle in self.connections:
+                del self.connections[handle]
 
     def send_streamheader(self, handle, connection):
         """ Send response header for text/event-stream
@@ -917,7 +918,7 @@ class CalvinControl(object):
         """
         try:
             self.node.app_manager.destroy(match.group(1), cb=CalvinCB(self.handle_del_application_cb,
-                                                                        handle, connection))
+                                                                      handle, connection))
         except Exception as e:
             _log.exception("Destroy application failed {}".format(e))
             self.send_response(handle, connection, None, status=calvinresponse.INTERNAL_ERROR)

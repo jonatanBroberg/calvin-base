@@ -183,18 +183,20 @@ class Storage(object):
     def get(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore
         """
-        if cb:
-            if prefix + key in self.localstore:
-                value = self.localstore[prefix + key]
-                if value:
-                    value = self.coder.decode(value)
-                async.DelayedCall(0, cb, key=key, value=value)
-            else:
-                try:
-                    self.storage.get(key=prefix + key, cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
-                except:
-                    _log.error("Failed to get: %s" % key)
-                    async.DelayedCall(0, cb, key=key, value=False)
+        if not cb:
+            return
+
+        if prefix + key in self.localstore:
+            value = self.localstore[prefix + key]
+            if value:
+                value = self.coder.decode(value)
+            async.DelayedCall(0, cb, key=key, value=value)
+        else:
+            try:
+                self.storage.get(key=prefix + key, cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
+            except:
+                _log.error("Failed to get: %s" % key)
+                async.DelayedCall(0, cb, key=key, value=False)
 
     def get_iter_cb(self, key, value, it, org_key, include_key=False):
         """ get callback
@@ -494,12 +496,14 @@ class Storage(object):
         _log.debug("Delete application %s" % application_id)
         self.delete(prefix="application-", key=application_id, cb=cb)
 
-    def add_actor(self, actor, node_id, cb=None):
+    def add_actor(self, actor, node_id, app_id, cb=None):
         """
         Add actor and its ports to storage
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
-        data = {"name": actor.name, "type": actor._type, "node_id": node_id}
+
+        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id}
+
         inports = []
         for p in actor.inports.values():
             port = {"id": p.id, "name": p.name}
@@ -507,6 +511,7 @@ class Storage(object):
             self.add_port(p, node_id, actor.id, "in")
         data["inports"] = inports
         outports = []
+
         for p in actor.outports.values():
             port = {"id": p.id, "name": p.name}
             outports.append(port)

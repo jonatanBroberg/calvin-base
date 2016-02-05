@@ -202,7 +202,7 @@ class CalvinProto(CalvinCBClass):
 
     #### ACTORS ####
 
-    def actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections):
+    def actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, app_id):
         """ Creates a new actor on to_rt_uuid node, but is only intended for migrating actors
             callback: called when finished with the peers respons as argument
             actor_type: see actor manager
@@ -214,15 +214,21 @@ class CalvinProto(CalvinCBClass):
                                                         callback=callback,
                                                         actor_type=actor_type,
                                                         state=state,
-                                                        prev_connections=prev_connections)):
+                                                        prev_connections=prev_connections,
+                                                        app_id=app_id)):
             # Already have link just continue in _actor_new
-                self._actor_new(to_rt_uuid, callback, actor_type, state, prev_connections, status=response.CalvinResponse(True))
+                self._actor_new(to_rt_uuid, callback, actor_type, state, prev_connections, app_id=app_id, status=response.CalvinResponse(True))
 
-    def _actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, status, peer_node_id=None, uri=None):
+    def _actor_new(self, to_rt_uuid, callback, actor_type, state, prev_connections, status, app_id, peer_node_id=None, uri=None):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'ACTOR_NEW',
-                   'state': {'actor_type': actor_type, 'actor_state': state, 'prev_connections': prev_connections}}
+                   'state': {
+                       'actor_type': actor_type,
+                       'actor_state': state,
+                       'prev_connections': prev_connections,
+                       'app_id': app_id
+                   }}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
@@ -234,6 +240,7 @@ class CalvinProto(CalvinCBClass):
                          None,
                          payload['state']['actor_state'],
                          payload['state']['prev_connections'],
+                         app_id=payload['state']['app_id'],
                          callback=CalvinCB(self._actor_new_handler, payload))
 
     def _actor_new_handler(self, payload, status, **kwargs):
@@ -241,7 +248,7 @@ class CalvinProto(CalvinCBClass):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
-    def actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, args):
+    def actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, args, app_id):
         """ Replicates a new actor on to_rt_uuid node, but is only intended for migrating actors
             callback: called when finished with the peers respons as argument
             actor_type: see actor manager
@@ -255,12 +262,13 @@ class CalvinProto(CalvinCBClass):
                                                                actor_type=actor_type,
                                                                state=state,
                                                                prev_connections=prev_connections,
-                                                               actor_args=args)):
+                                                               actor_args=args,
+                                                               app_id=app_id)):
             # Already have link just continue in _actor_new
-                self._actor_replication(to_rt_uuid, callback, actor_type, state, prev_connections, args,
+                self._actor_replication(to_rt_uuid, callback, actor_type, state, prev_connections, args, app_id,
                                         response.CalvinResponse(True))
 
-    def _actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, actor_args, status,
+    def _actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, actor_args, app_id, status,
                            *args, **kwargs):
         """ Got link? continue actor replication """
         if status:
@@ -268,7 +276,8 @@ class CalvinProto(CalvinCBClass):
                    'state': {
                        'actor_type': actor_type,
                        'prev_connections': prev_connections,
-                       'actor_state': state
+                       'actor_state': state,
+                       'app_id': app_id
                    },
                    'args': actor_args}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
@@ -282,6 +291,7 @@ class CalvinProto(CalvinCBClass):
                                  payload['args'],
                                  state=payload['state']['actor_state'],
                                  prev_connections=payload['state']['prev_connections'],
+                                 app_id=payload['state']['app_id'],
                                  callback=CalvinCB(self._actor_replication_handler, payload))
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):

@@ -43,7 +43,7 @@ class ActorManager(object):
         self.connection_handler = connection_handler if connection_handler else ConnectionHandler(node)
 
     def new(self, actor_type, args, state=None, prev_connections=None, connection_list=None, callback=None,
-            signature=None):
+            signature=None, app_id=None):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -57,8 +57,8 @@ class ActorManager(object):
              connection_list
         """
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
-        a = self._new(actor_type, args, state, signature)
-        self.node.control.log_actor_new(a.id, a.name, actor_type, isinstance(a, ShadowActor))
+        a = self._new(actor_type, args, state, signature, app_id)
+
         self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
 
         if callback:
@@ -66,7 +66,7 @@ class ActorManager(object):
         else:
             return a.id
 
-    def _new(self, actor_type, args, state=None, signature=None):
+    def _new(self, actor_type, args, state=None, signature=None, app_id=None):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -74,12 +74,13 @@ class ActorManager(object):
         """
         _log.analyze(self.node.id, "+", {'actor_type': actor_type, 'state': state})
 
-        a = self.factory.create_actor(actor_type=actor_type, state=state, args=args, signature=signature)
+        a = self.factory.create_actor(actor_type=actor_type, state=state, args=args, signature=signature, app_id=app_id)
+        self.node.control.log_actor_new(a.id, a.name, actor_type, isinstance(a, ShadowActor))
         self.actors[a.id] = a
 
         return a
 
-    def new_replica(self, actor_type, args, state, prev_connections, callback):
+    def new_replica(self, actor_type, args, state, prev_connections, callback, app_id=None):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
@@ -89,8 +90,7 @@ class ActorManager(object):
         state['name'] = args.pop('name')
         state['set_ports'] = False
 
-        a = self._new(actor_type, args, state)
-        self.node.control.log_actor_new(a.id, a.name, actor_type)
+        a = self._new(actor_type, args, state, app_id=app_id)
 
         self.connection_handler.setup_replica_connections(a, state, prev_connections)
         if callback:
@@ -232,7 +232,7 @@ class ActorManager(object):
         if status:
             state = actor.state()
             self.destroy(actor.id)
-            self.node.proto.actor_new(node_id, callback, actor_type, state, ports)
+            self.node.proto.actor_new(node_id, callback, actor_type, state, ports, app_id=actor.app_id)
         elif callback:  # FIXME handle errors!!!
             callback(status=status)
 
@@ -254,11 +254,12 @@ class ActorManager(object):
 
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
+        app_id = app.id if app else None
         if app:
             app.actors[args['id']] = args['name']
             self.node.storage.add_application(app)
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, args)
+        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, args, app_id)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:

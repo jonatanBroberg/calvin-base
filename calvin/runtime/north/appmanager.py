@@ -67,7 +67,7 @@ class Application(object):
         components = {}
         l = (len(ns)+1) if ns else 0
         for name, _id in actors.iteritems():
-             if name.find(':',l)> -1:
+             if name.find(':', l) > -1:
                 # This is a component
                 # component name including optional namespace
                 component = ':'.join(name.split(':')[0:(2 if ns else 1)])
@@ -194,7 +194,7 @@ class AppManager(object):
         for actor_id in application.actors.keys()[:]:
             if actor_id in self._node.am.list_actors():
                 _log.analyze(self._node.id, "+ LOCAL ACTOR", {'actor_id': actor_id})
-                # TODO: Check if it went ok
+                # TODO: Check if it whent ok
                 self._node.am.destroy(actor_id)
                 application.remove_actor(actor_id)
             else:
@@ -636,7 +636,7 @@ class Deployer(object):
         # args is a **dictionary** of key-value arguments for this instance
         # signature is the GlobalStore actor-signature to lookup the actor
         args['name'] = actor_name
-        actor_id = self.node.am.new(actor_type=actor_type, args=args, signature=signature)
+        actor_id = self.node.am.new(actor_type=actor_type, args=args, signature=signature, app_id=self.app_id)
         if req:
             self.node.am.actors[actor_id].requirements_add(req, extend=False)
         return actor_id

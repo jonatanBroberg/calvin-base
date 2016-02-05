@@ -10,23 +10,23 @@ class ActorFactory(object):
     def __init__(self, node):
         self.node = node
 
-    def create_actor(self, actor_type, state=None, args={}, signature=None):
+    def create_actor(self, actor_type, state=None, args={}, signature=None, app_id=None):
         try:
             if state:
-                a = self._create_from_state(actor_type, state)
+                a = self._create_from_state(actor_type, state, app_id)
             else:
-                a = self._create_new(actor_type, args)
+                a = self._create_new(actor_type, args, app_id)
         except Exception as e:
             _log.exception("Actor creation failed")
             raise(e)
 
         # Store the actor signature to enable GlobalStore lookup
         a.signature_set(signature)
-        self.node.storage.add_actor(a, self.node.id)
+        self.node.storage.add_actor(a, self.node.id, app_id)
 
         return a
 
-    def _new_actor(self, actor_type, actor_id=None):
+    def _new_actor(self, actor_type, app_id, actor_id=None):
         """Return a 'bare' actor of actor_type, raises an exception on failure."""
         (found, is_primitive, class_) = ActorStore().lookup(actor_type)
         if not found:
@@ -40,7 +40,7 @@ class ActorFactory(object):
             raise Exception("ERROR_NOT_FOUND")
         try:
             # Create a 'bare' instance of the actor
-            a = class_(actor_type, actor_id=actor_id)
+            a = class_(actor_type, actor_id=actor_id, app_id=app_id)
         except Exception as e:
             _log.exception("")
             _log.error("The actor %s(%s) can't be instantiated." % (actor_type, class_.__init__))
@@ -50,14 +50,14 @@ class ActorFactory(object):
             a.check_requirements()
         except Exception as e:
             _log.analyze(self.node.id, "+ FAILED REQS CREATE SHADOW ACTOR", {'class': class_})
-            a = ShadowActor(actor_type, actor_id=actor_id)
+            a = ShadowActor(actor_type, actor_id=actor_id, app_id=app_id)
             a._calvinsys = self.node.calvinsys()
         return a
 
-    def _create_new(self, actor_type, args):
+    def _create_new(self, actor_type, args, app_id):
         """Return an initialized actor in PENDING state, raises an exception on failure."""
         try:
-            a = self._new_actor(actor_type)
+            a = self._new_actor(actor_type, app_id)
             # Now that required APIs are attached we can call init() which may use the APIs
             human_readable_name = args.pop('name', '')
             a.name = human_readable_name
@@ -69,11 +69,11 @@ class ActorFactory(object):
             raise(e)
         return a
 
-    def _create_from_state(self, actor_type, state):
+    def _create_from_state(self, actor_type, state, app_id):
         """Return a restored actor in PENDING state, raises an exception on failure."""
         try:
             _log.analyze(self.node.id, "+", state)
-            a = self._new_actor(actor_type, actor_id=state['id'])
+            a = self._new_actor(actor_type, app_id, actor_id=state['id'])
             if '_shadow_args' in state:
                 # We were a shadow, do a full init
                 args = state.pop('_shadow_args')

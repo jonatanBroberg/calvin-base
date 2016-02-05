@@ -41,8 +41,8 @@ class ActorManagerTests(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def _new_actor(self, a_type, a_args, **kwargs):
-        a_id = self.am.new(a_type, a_args, **kwargs)
+    def _new_actor(self, a_type, a_args, app_id=None, **kwargs):
+        a_id = self.am.new(a_type, a_args, app_id=app_id, **kwargs)
         a = self.am.actors.get(a_id, None)
         self.assertTrue(a)
         return a, a_id
