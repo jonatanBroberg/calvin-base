@@ -1008,18 +1008,6 @@ class CalvinControl(object):
         self.send_response(handle, connection,
                            json.dumps({'actor_id': actor_id}), status=status.status)
 
-    def handle_application_requirements(self, handle, connection, match, data, hdr):
-        """ Apply application deployment requirements
-            to actors of an application and initiate migration of actors accordingly
-        """
-        self.node.app_manager.deployment_add_requirements(match.group(1), data['reqs'],
-                        cb=CalvinCB(func=self.handle_application_requirements_cb, handle=handle, connection=connection))
-
-    def handle_application_requirements_cb(self, handle, connection, *args, **kwargs):
-        self.send_response(handle, connection,
-                           json.dumps({'placement': kwargs['placement'] if 'placement' in kwargs else {}}),
-                                       status=kwargs['status'].status)
-
     def handle_actor_disable(self, handle, connection, match, data, hdr):
         try:
             self.node.am.disable(match.group(1))
