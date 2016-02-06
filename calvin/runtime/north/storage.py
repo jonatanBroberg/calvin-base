@@ -183,6 +183,7 @@ class Storage(object):
     def get(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore
         """
+        _log.debug("Getting from storage: {}{}".format(prefix, key))
         if not cb:
             return
 
@@ -518,7 +519,27 @@ class Storage(object):
             self.add_port(p, node_id, actor.id, "out")
         data["outports"] = outports
         data["is_shadow"] = isinstance(actor, ShadowActor)
+
+        self.add_actor_to_app(app_id, actor.id, actor.name)
         self.set(prefix="actor-", key=actor.id, value=data, cb=cb)
+
+    def add_actor_to_app(self, app_id, actor_id, actor_name):
+        if not app_id:
+            _log.warning("No app_id given, cannot add actor_id to application's actors")
+            return
+
+        callback = CalvinCB(self._add_actor_to_app, actor_id=actor_id, actor_name=actor_name)
+        self.get(prefix="application-", key=app_id, cb=callback)
+
+    def _add_actor_to_app(self, key, value, actor_id, actor_name):
+        _log.debug("Adding actor {} to application {} list of actors".format(actor_id, key))
+        if not value or actor_id in value['actors']:
+            _log.debug("Actor {} already in app {} actors".format(actor_id, key))
+            return
+
+        value['actors'].append(actor_id)
+        value['actors_name_map'][actor_id] = actor_name
+        self.set(prefix="application-", key=key, value=value, cb=None)
 
     def get_actor(self, actor_id, cb=None):
         """

@@ -59,7 +59,8 @@ class ActorManager(object):
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
         a = self._new(actor_type, args, state, signature, app_id)
 
-        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
+        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list,
+                                                  callback=callback)
 
         if callback:
             callback(status=response.CalvinResponse(True), actor_id=a.id)
@@ -80,12 +81,11 @@ class ActorManager(object):
 
         return a
 
-    def new_replica(self, actor_type, args, state, prev_connections, callback, app_id=None):
+    def new_replica(self, actor_type, args, state, prev_connections, app_id, callback):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
 
-        prev_actor_id = state['id']
         state['id'] = args.pop('id')
         state['name'] = args.pop('name')
         state['set_ports'] = False
@@ -94,7 +94,7 @@ class ActorManager(object):
 
         self.connection_handler.setup_replica_connections(a, state, prev_connections)
         if callback:
-            callback(status=response.CalvinResponse(True), actor_id=a.id, prev_actor_id=prev_actor_id)
+            callback(status=response.CalvinResponse(True), actor_id=a.id)
 
         return a
 
@@ -249,17 +249,16 @@ class ActorManager(object):
         prev_connections = actor.connections(self.node.id)
         prev_connections['port_names'] = actor.port_names()
         prev_connections['outports'] = []  # TODO update when (if) we allow multiple inports
-
-        callback.kwargs_update(prev_actor_id=actor_id)
+        state = actor.state()
 
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
-        app_id = app.id if app else None
+        app_id = app.id if app else state['app_id']
         if app:
             app.actors[args['id']] = args['name']
             self.node.storage.add_application(app)
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, actor.state(), prev_connections, args, app_id)
+        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
