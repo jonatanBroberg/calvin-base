@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+import re
+import random
+
 from calvin.runtime.north.plugins.storage import storage_factory
 from calvin.runtime.north.plugins.coders.messages import message_coder_factory
 from calvin.runtime.south.plugins.async import async
@@ -24,10 +28,10 @@ from calvin.actor.actor import ShadowActor
 from calvin.utilities import calvinconfig
 from calvin.actorstore.store import GlobalStore
 from calvin.utilities import dynops
-import re
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
+
 
 class Storage(object):
 
@@ -533,13 +537,30 @@ class Storage(object):
 
     def _add_actor_to_app(self, key, value, actor_id, actor_name):
         _log.debug("Adding actor {} to application {} list of actors".format(actor_id, key))
-        if not value or actor_id in value['actors']:
+        if not value:
+            return
+        if actor_id in value['actors'] and actor_id in value['actors_name_map']:
             _log.debug("Actor {} already in app {} actors".format(actor_id, key))
             return
 
-        value['actors'].append(actor_id)
+        if actor_id not in value['actors']:
+            value['actors'].append(actor_id)
+
         value['actors_name_map'][actor_id] = actor_name
         self.set(prefix="application-", key=key, value=value, cb=None)
+        if self.started:
+            cb = CalvinCB(self._verify_add_actor_to_app, actor_id=actor_id, actor_name=actor_name)
+            self.storage.get(key="application-{}".format(key), cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
+
+    def _verify_add_actor_to_app(self, key, value, actor_id, actor_name):
+        """To avoid simultaneous update problems"""
+        if not value:
+            _log.warning("Value is none, aborting verification")
+        elif actor_id not in value['actors'] or actor_id not in value['actors_name_map']:
+            _log.warning("Verification failed. {} not in {}".format(actor_id, value))
+            time.sleep(random.uniform(0, 0.1))
+            callback = CalvinCB(self._add_actor_to_app, actor_id=actor_id, actor_name=actor_name)
+            self.get(prefix="application-", key=key, cb=callback)
 
     def get_actor(self, actor_id, cb=None):
         """
