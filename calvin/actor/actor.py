@@ -16,6 +16,7 @@
 
 import wrapt
 import functools
+import re
 
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
@@ -665,7 +666,8 @@ class Actor(object):
         The name must not contain '-', this will break the web interface
         """
         args = self._get_managed()
-        args['name'] = self.name + calvinuuid.uuid("REPLICA").replace("-", ":")
+
+        args['name'] = re.sub(calvincontrol.uuid_re, "", self.name) + calvinuuid.uuid("REPLICA")
         args['id'] = calvinuuid.uuid("ACTOR")
 
         return args
