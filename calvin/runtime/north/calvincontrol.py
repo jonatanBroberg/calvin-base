@@ -250,7 +250,7 @@ control_api_doc += \
         "extend": True or False  # defaults to False, i.e. replace current requirements
         "move": True or False  # defaults to False, i.e. when possible stay on the current node
     }
-    
+
     For further details about requirements see application deploy.
     Response status code: OK, BAD_REQUEST, INTERNAL_ERROR or NOT_FOUND
     Response: none
@@ -345,14 +345,14 @@ control_api_doc += \
            }
     }
     Note that either a script or app_info must be supplied.
-    
+
     The matching rules are implemented as plug-ins, intended to be extended.
     The type "+" is "and"-ing rules together (actually the intersection of all
     possible nodes returned by the rules.) The type "-" is explicitly removing
     the nodes returned by this rule from the set of possible nodes. Note that
     only negative rules will result in no possible nodes, i.e. there is no
     implied "all but these."
-    
+
     A special matching rule exist, to first form a union between matching
     rules, i.e. alternative matches. This is useful for e.g. alternative
     namings, ownerships or specifying either of two specific nodes.
@@ -461,7 +461,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
             [
                 [<seconds since epoch>, <name of action>],
                 ...
@@ -480,7 +480,7 @@ control_api_doc += \
     {
         'activity':
         {
-            <actor-id>: 
+            <actor-id>:
             {
                 <action-name>: <total fire count>,
                 ...
@@ -503,7 +503,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
         {
             <action-name>:
             {
@@ -871,10 +871,21 @@ class CalvinControl(object):
 
     def handle_peer_setup_cb(self, handle, connection, status=None, peer_node_ids=None):
         _log.analyze(self.node.id, "+", status.encode())
-        self.send_response(handle, connection,
-                           None if peer_node_ids is None else json.dumps(
-                               {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}),
-                           status=status.status)
+        if not peer_node_ids:
+            data = {}
+        else:
+            data = {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}
+
+        peers = data.keys()
+        for uri, (node_id, status_code) in data.iteritems():
+            if status_code == 200:
+                to_send = set(peers)
+                to_send.remove(uri)
+                to_send.add(self.node.uri[0])
+                cb = CalvinCB(self.node.logging_callback)
+                self.node.proto.peer_setup(node_id, [peer for peer in to_send], callback=cb)
+
+        self.send_response(handle, connection, json.dumps(data), status=status.status)
 
     def handle_get_nodes(self, handle, connection, match, data, hdr):
         """ Get active nodes
@@ -1168,7 +1179,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_timed_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_aggregated_meter(self, handle, connection, match, data, hdr):
@@ -1178,7 +1189,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_aggregated_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_metainfo_meter(self, handle, connection, match, data, hdr):
@@ -1188,7 +1199,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_metainfo_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_post_index(self, handle, connection, match, data, hdr):
