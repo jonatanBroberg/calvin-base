@@ -597,10 +597,9 @@ class Storage(object):
                 data["peers"] = []
         elif direction == "in":
             if port.is_connected():
-                peer = port.get_peer()
-                data["peer"] = (peer.node_id, peer.port_id)
+                data["peers"] = [(peer.node_id, peer.port_id) for peer in port.get_peers()]
             else:
-                data["peer"] = None
+                data["peers"] = []
         self.set(prefix="port-", key=port.id, value=data, cb=cb)
 
     def get_port(self, port_id, cb=None):

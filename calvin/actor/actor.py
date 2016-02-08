@@ -123,11 +123,13 @@ def condition(action_input=[], action_output=[]):
                 port = self.inports[portname]
                 tokenlist = []
                 for i in range(repeat):
-                    token = port.peek_token()
-                    is_exception = isinstance(token, ExceptionToken)
-                    if is_exception:
-                        ex.setdefault(portname, []).append(i)
-                    tokenlist.append(token if is_exception else token.value)
+                    tokens = port.peek_token()
+                    for token in filter(None, tokens):
+                        is_exception = isinstance(token, ExceptionToken)
+                        if is_exception:
+                            ex.setdefault(portname, []).append(i)
+                        tokenlist.append(token if is_exception else token.value)
+
                 args.append(tokenlist if len(tokenlist) > 1 else tokenlist[0])
 
             #
@@ -530,11 +532,9 @@ class Actor(object):
         # Manual state handling
         # Not available until after __init__ completes
         state['_managed'] = list(self._managed)
-        state['inports'] = {port: self.inports[port]._state()
-                            for port in self.inports}
-        state['outports'] = {
-            port: self.outports[port]._state() for port in self.outports}
         state['_component_members'] = list(self._component_members)
+        state['inports'] = {port: self.inports[port]._state() for port in self.inports}
+        state['outports'] = {port: self.outports[port]._state() for port in self.outports}
 
         state.update(self._get_managed())
 
@@ -592,18 +592,14 @@ class Actor(object):
 
         inports = []
         for port in self.inports.values():
-            peer = port.get_peer()
-            if peer.is_local:
-                peer.node_id = node_id
-            #inports[port.id] = (peer.node_id, peer.port_id)
-            inports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
+            for peer in port.get_peers():
+                if peer.is_local:
+                    peer.node_id = node_id
+                inports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
         c['inports'] = inports
 
         outports = []
         for port in self.outports.values():
-            #peers = [
-            #    (node_id, p.port_id) if p.is_local else (p.node_id, p.port_id) for p in port.get_peers()]
-            #outports[port.id] = peers
             for peer in port.get_peers():
                 if peer.is_local:
                     peer.node_id = node_id
@@ -674,11 +670,11 @@ class Actor(object):
 
     def port_names(self):
         """Returns a dict mapping port_id to port_name"""
-        port_names = {}
+        port_names = {'inports': {}, 'outports': {}}
         for port_name in self.inports:
-            port_names[self.inports[port_name].id] = port_name
+            port_names['inports'][self.inports[port_name].id] = port_name
         for port_name in self.outports:
-            port_names[self.outports[port_name].id] = port_name
+            port_names['outports'][self.outports[port_name].id] = port_name
         return port_names
 
 

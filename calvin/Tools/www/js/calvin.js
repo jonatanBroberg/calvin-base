@@ -65,16 +65,17 @@ function addPortToGraph(port)
                 }
             }
         } else if(port.direction == "in") {
-            if (port.peer) {
-                var peer_port = findPort(port.peer[1]);
+            var peer_index;
+            for (peer_index in port.peers) {
+                var peer_port = findPort(port.peers[peer_index][1]);
                 if (peer_port) {
-                    var peer_actor = findActor(peer_port.actor_id);
-                    if (peer_actor) {
-                        if(document.getElementById("chkShowPortNames").checked) {
-                            graph.setEdge(peer_port.actor_id, port.actor_id, {label: peer_port.name + " > " + port.name});
-                        } else {
-                            graph.setEdge(peer_port.actor_id, port.actor_id);
-                        }
+                    if (graphTimer) {
+                        clearTimeout(graphTimer);
+                    }
+                    if(document.getElementById("chkShowPortNames").checked) {
+                        graph.setEdge(peer_port.actor_id, port.actor_id, {label: peer_port.name + " > " + port.name});
+                    } else {
+                        graph.setEdge(peer_port.actor_id, port.actor_id);
                     }
                 }
             }
@@ -633,14 +634,9 @@ function getPort(actor_id, port_id)
                 port.connected = data.connected;
                 port.peer_id = data.node_id;
                 port.peers = []
-                if (port.direction == "out") {
-                    var index;
-                    for (index in data.peers) {
-                        port.peers[port.peers.length] = data.peers[index];
-                    }
-                }
-                if (port.direction == "in") {
-                    port.peer = data.peer;
+                var index;
+                for (index in data.peers) {
+                    port.peers[port.peers.length] = data.peers[index];
                 }
                 ports[ports.length] = port;
 
