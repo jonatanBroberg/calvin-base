@@ -1021,8 +1021,15 @@ function replicate(actor_id)
                 url: url,
                 type: 'POST',
                 data: data,
-                success: function() {
-                    getActor(actor_id, true);
+                success: function(data) {
+                    if (data) {
+                        var selectedIndex = document.getElementById("applicationSelector").selectedIndex;
+                        var selectOptions = document.getElementById("applicationSelector").options;
+                        var applicationID = selectOptions[selectedIndex].id;
+                        var application = findApplication(applicationID);
+                        application.actors.push(data.actor_id);
+                        setTimeout(showApplication, 1000);
+                    }
                 },
                 error: function() {
                     console.log("Failed to replicate");
