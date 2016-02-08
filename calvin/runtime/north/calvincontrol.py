@@ -876,7 +876,12 @@ class CalvinControl(object):
         else:
             data = {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}
 
-        peers = data.keys()
+        peers = []
+        for uri, (_, status_code) in data.iteritems():
+            # Only include successful peers
+            if status_code == 200:
+                peers.append(uri)
+
         for uri, (node_id, status_code) in data.iteritems():
             if status_code == 200:
                 to_send = set(peers)
