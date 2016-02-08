@@ -516,7 +516,7 @@ class CalvinProto(CalvinCBClass):
             prev_connections: list of node ids to setup a connecting with
         """
         if self.node.network.link_request(to_rt_uuid, CalvinCB(self._peer_setup, callback=callback, peers=peers)):
-            # Already have link just continue in _actor_new
+            # Already have link just continue in _peer_setup
                 self._peer_setup(to_rt_uuid, callback, peers, status=response.CalvinResponse(True))
 
     def _peer_setup(self, to_rt_uuid, callback, peers, status):
