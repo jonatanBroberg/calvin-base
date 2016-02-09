@@ -1007,7 +1007,7 @@ class CalvinControl(object):
 
         # Retrieve information about the lost actor and replicate
         self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
-       
+        
         # Delete rest of old actor
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
@@ -1023,22 +1023,28 @@ class CalvinControl(object):
         """
         key = actor_id of lost actor
         value = actor information of lost actor
+
+        TODO:
+        1. Replicate only the first replica
+        2. Replicate it enough times to different nodes
         """
         actor_name = re.sub(uuid_re, "", value['name'])
         application = self.node.app_manager.get_actor_app(key)
+        self.already_replicated = False
         
         for actor_id in application.get_actors():
             def handle_CB(handle, connection, key_2, value, *args, **kwargs):
                 name = re.sub(uuid_re, "", value['name'])
                 if actor_name == name and not actor_id == key:
-                    #We have found a replica
-                    print actor_id
+                    print 'One more try'
+                    # We have found a replica
                     self.node.am.replicate(actor_id, self.node.id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
-            self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
+                    self.already_replicated = True
+            if not self.already_replicated:
+                self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
 
-        # Send response
-        self.send_response(handle, connection, None if value is None else json.dumps(value),
-                            status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
+        # Correct the status
+        self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
         
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
