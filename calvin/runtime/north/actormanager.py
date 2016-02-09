@@ -98,7 +98,7 @@ class ActorManager(object):
 
         return a
 
-    def destroy(self, actor_id):
+    def delete_actor(self, actor_id, delete_from_app=False):
         # @TOOD - check order here
         self.node.metering.remove_actor_info(actor_id)
         a = self.actors[actor_id]
