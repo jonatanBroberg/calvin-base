@@ -18,11 +18,14 @@ class ResourceManager(object):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         self.usages[node_id].append(usage)
 
+    def _average(self, node_id):
+        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
+
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
         min_usage, least_busy = sys.maxint, None
         for node_id in self.usages.keys():
-            average = sum(self.usages[node_id]) / self.history_size
+            average = self._average(node_id)
             if average < min_usage:
                 min_usage = average
                 least_busy = node_id
@@ -33,7 +36,7 @@ class ResourceManager(object):
         """Returns the id of the node with the highest average CPU usage"""
         min_usage, most_busy = - sys.maxint, None
         for node_id in self.usages.keys():
-            average = sum(self.usages[node_id]) / self.history_size
+            average = self._average(node_id)
             if average > min_usage:
                 min_usage = average
                 most_busy = node_id
