@@ -963,7 +963,7 @@ function migrate(actor_id)
     var actor = findActor(actor_id);
     if (actor) {
         var node = findRuntime(actor.peer_id);
-        if (node && peer_id && node.id != peer_id) {
+        if (node && peer_id && node.id != peer.id) {
             var url = node.control_uri + '/actor/' + actor.id + '/migrate';
             var data = JSON.stringify({'peer_node_id': peer_id});
             console.log("migrate - url: " + url + " data: " + data);
