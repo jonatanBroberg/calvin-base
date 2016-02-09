@@ -161,6 +161,7 @@ class CalvinProto(CalvinCBClass):
             'TUNNEL_NEW': [CalvinCB(self.tunnel_new_handler)],
             'TUNNEL_DESTROY': [CalvinCB(self.tunnel_destroy_handler)],
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
+            'REPORT_USAGE': [CalvinCB(self.report_usage_handler)],
             'REPLY': [CalvinCB(self.reply_handler)]})
 
         self.rt_id = node.id
@@ -594,6 +595,33 @@ class CalvinProto(CalvinCBClass):
 
     def _peer_setup_handler(self, payload, status, **kwargs):
         """ Potentially created actor, reply to requesting node """
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
+    ### RESOURCE USAGE ###
+
+    def report_usage(self, to_rt_uuid, node_id, usage, callback=None):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, node_id, usage, callback)):
+            # Already have link just continue in _actor_new
+                self._report_usage(to_rt_uuid, node_id, usage, callback, response.CalvinResponse(True))
+
+    def _report_usage(self, to_rt_uuid, node_id, usage, callback, status):
+        """ Got link? continue actor new """
+        if status:
+            msg = {'cmd': 'REPORT_USAGE',
+                   'node_id': node_id,
+                   'usage': usage}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def report_usage_handler(self, payload):
+        """ Peer request new actor with state and connections """
+        _log.analyze(self.rt_id, "+", payload, tb=True)
+        self.node.register_resource_usage(payload['node_id'], payload['usage'],
+                                          callback=CalvinCB(self._report_usage_handler, payload))
+
+    def _report_usage_handler(self, payload, status, **kwargs):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
