@@ -1036,15 +1036,14 @@ class CalvinControl(object):
             def handle_CB(handle, connection, key_2, value, *args, **kwargs):
                 name = re.sub(uuid_re, "", value['name'])
                 if actor_name == name and not actor_id == key:
-                    print 'One more try'
                     # We have found a replica
-                    self.node.am.replicate(actor_id, self.node.id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+                    self.node.am.replicate(actor_id, None, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
                     self.already_replicated = True
             if not self.already_replicated:
                 self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
 
         # Correct the status
-        self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
+        self.send_response(handle, connection, None, status=calvinresponse.OK if self.already_replicated else calvinresponse.NOT_FOUND)
         
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
