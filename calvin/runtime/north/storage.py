@@ -208,6 +208,7 @@ class Storage(object):
         value = None
         if prefix + key in self.localstore:
             value = self.localstore[prefix + key]
+            print prefix, key
             if value:
                 value = self.coder.decode(value)
             async.DelayedCall(0, cb, key=key, value=value)
