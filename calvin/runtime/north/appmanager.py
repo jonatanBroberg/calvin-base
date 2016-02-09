@@ -58,6 +58,9 @@ class Application(object):
         except:
             pass
 
+    def get_reliability_level(self):
+        return self.reliability_level
+
     def get_actors(self):
         return self.actors.keys()
 
