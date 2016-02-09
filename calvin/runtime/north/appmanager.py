@@ -59,8 +59,13 @@ class Application(object):
         except:
             pass
 
+<<<<<<< HEAD
     def get_required_reliability(self):
         return self.required_reliability
+=======
+    def get_reliability_level(self):
+        return self.reliability_level
+>>>>>>> actor lost replicates the actor on itself
 
     def get_actors(self):
         return self.actors.keys()
