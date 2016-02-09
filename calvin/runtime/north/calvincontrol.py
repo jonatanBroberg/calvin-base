@@ -1001,7 +1001,6 @@ class CalvinControl(object):
 
     def handle_lost_actor(self, handle, connection, match, data, hdr):
         """ We lost actor, replicate if possible
-<<<<<<< HEAD
             1. Find reliability level. from applicaiton 
             2. Replicate until level is reached
             3. Delete old actor from sys? handle_delete_actor
@@ -1014,41 +1013,11 @@ class CalvinControl(object):
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
         or somethins else, perhaps:
-=======
-            1. Delete old actor from sys? handle_delete_actor
-            2. Find reliability level. from applicaiton 
-            3. Replicate until level is reached
-        """
-
-        # retrieve information about the lost actor
-        lost_actor = self.node.storage.get_actor(match.group(1))
-        print lost_actor
-        
-        # Get application from actor_id
-        # application = self.node.app_manager.get_actor_app(match.group(1))
-        
-        # How many replicas should we have?
-        # nbr  = application.get_reliability_level()
-
-        # Find one of the other replicas of the actor and replicate it
-        data = {'peer_node_id':self.node.id}
-        self.handle_actor_replicate(handle, connection, match, data, hdr)
-        
-
-
-        # Delete rest of old actor
-        """
-        self.handle_del_actor(handle, connection, match, data, hdr) 
-
-        perhaps replcace with:
-        
->>>>>>> actor lost replicates the actor on itself
         self.node.storage.get_application(match.group(1), CalvinCB(self.node.am._destroy_app_info_cb, cb=None))
         self.node.del_actor_info(actor_id)
         self.node.storage.del_actor_info()
         """
 
-<<<<<<< HEAD
     def handle_lost_actor_cb(self, handle, connection, key, value, *args, **kwargs):
         """
         key = actor_id of lost actor
@@ -1095,14 +1064,6 @@ class CalvinControl(object):
         
         self.send_response(handle, connection, None, status=calvinresponse.OK if not current_reliability < required_reliability else calvinresponse.NOT_FOUND)
 
-=======
-    def handle_lost_actor_cb(self, key, value, handle, connection): 
-        
-        # Send response
-        self.send_response(handle, connection, None if value is None else json.dumps(value),
-                           status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
-        
->>>>>>> actor lost replicates the actor on itself
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
         """
