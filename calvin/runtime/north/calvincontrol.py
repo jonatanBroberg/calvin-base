@@ -218,6 +218,15 @@ re_get_actor = re.compile(r"GET /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\s
 
 control_api_doc += \
     """
+    POST /actor/{actor-id}
+    Lost an actor, replicate until reliability level is acheived if possbile
+    Response status code: OK or NOT_FOUND
+    Response: none
+"""
+re_post_lost_actor = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+
+control_api_doc += \
+    """
     DELETE /actor/{actor-id}
     Delete actor
     Response status code: OK or NOT_FOUND
@@ -674,6 +683,7 @@ class CalvinControl(object):
             (re_post_actor_migrate, self.handle_actor_migrate),
             (re_post_actor_replicate, self.handle_actor_replicate),
             (re_post_actor_disable, self.handle_actor_disable),
+            (re_post_lost_actor, self.handle_lost_actor),
             (re_get_port, self.handle_get_port),
             (re_get_port_state, self.handle_get_port_state),
             (re_post_connect, self.handle_connect),
@@ -968,6 +978,47 @@ class CalvinControl(object):
         self.node.storage.get_actor(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
+
+    def handle_lost_actor(self, handle, connection, match, data, hdr):
+        """ We lost actor, replicate if possible
+            1. Delete old actor from sys? handle_delete_actor
+            2. Find reliability level. from applicaiton 
+            3. Replicate until level is reached
+        """
+
+        # retrieve information about the lost actor
+        lost_actor = self.node.storage.get_actor(match.group(1))
+        print lost_actor
+        
+        # Get application from actor_id
+        # application = self.node.app_manager.get_actor_app(match.group(1))
+        
+        # How many replicas should we have?
+        # nbr  = application.get_reliability_level()
+
+        # Find one of the other replicas of the actor and replicate it
+        data = {'peer_node_id':self.node.id}
+        self.handle_actor_replicate(handle, connection, match, data, hdr)
+        
+
+
+        # Delete rest of old actor
+        """
+        self.handle_del_actor(handle, connection, match, data, hdr) 
+
+        perhaps replcace with:
+        
+        self.node.storage.get_application(match.group(1), CalvinCB(self.node.am._destroy_app_info_cb, cb=None))
+        self.node.del_actor_info(actor_id)
+        self.node.storage.del_actor_info()
+        """
+
+    def handle_lost_actor_cb(self, key, value, handle, connection): 
+        
+        # Send response
+        self.send_response(handle, connection, None if value is None else json.dumps(value),
+                           status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
+        
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
         """
