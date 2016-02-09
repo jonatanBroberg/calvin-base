@@ -35,9 +35,12 @@ from calvin.runtime.south.monitor import Event_Monitor
 from calvin.runtime.south.plugins.async import async
 from calvin.utilities.attribute_resolver import AttributeResolver
 from calvin.utilities.calvin_callback import CalvinCB
+import calvin.utilities.calvinresponse as response
 from calvin.utilities import calvinuuid
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities import calvinconfig
+from calvin.runtime.north.resource_manager import ResourceManager
+
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
@@ -85,6 +88,7 @@ class Node(object):
         self.proto = CalvinProto(self, self.network)
         self.pm = PortManager(self, self.proto)
         self.app_manager = appmanager.AppManager(self)
+        self.resource_manager = ResourceManager()
 
         # The initialization that requires the main loop operating is deferred to start function
         async.DelayedCall(0, self.start)
@@ -168,6 +172,17 @@ class Node(object):
         # @TODO: Write node capabilities to storage
         return self._calvinsys
 
+    def report_resource_usage(self, usage):
+        _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
+        self.resource_manager.register(self.id, usage)
+        for peer_id in self.network.links:
+            self.proto.report_usage(peer_id, self.id, usage)
+
+    def register_resource_usage(self, node_id, usage, callback):
+        _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
+        self.resource_manager.register(node_id, usage)
+        callback(status=response.CalvinResponse(True))
+
     #
     # Event loop
     #
@@ -193,6 +208,17 @@ class Node(object):
         else:
             if self.control_uri is not None:
                 self.control.start(node=self, uri=self.control_uri)
+
+        self._start_resource_reporter()
+
+    def _start_resource_reporter(self):
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self})
+        actor = self.am.actors[actor_id]
+        in_port = actor.inports['in']
+        out_port = actor.outports['out']
+        self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
+                     peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
+                     peer_port_dir='out', peer_port_id=out_port.id)
 
     def stop(self, callback=None):
         def stopped(*args):
