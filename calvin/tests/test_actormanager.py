@@ -97,10 +97,8 @@ class ActorManagerTests(unittest.TestCase):
         prev_connections = a.connections(self.am.node.id)
         prev_connections['port_names'] = a.port_names()
 
-        prev_connections['inports'] = [conn.__dict__ for conn in prev_connections['inports']]
-
         args = a.replication_args()
-        b = self.am.new_replica(a_type, args, state, prev_connections, None)
+        b = self.am.new_replica(a_type, args, state, prev_connections, None, None)
         self.assertEqual(len(self.am.actors), 2)
 
         self.assertEqual(a.tokens, [1, 2, 3])
@@ -113,18 +111,12 @@ class ActorManagerTests(unittest.TestCase):
 
         # Assert new name is assigned
         self.assertNotEqual(b.name, a.name)
-
-        self.assertNotEqual(b.name, a.name)
         assert b.name.startswith(a.name)
 
         # Assert actor database is consistent
         self.assertTrue(self.am.actors[a_id])
         self.assertTrue(self.am.actors[b.id])
         self.assertEqual(len(self.am.actors), 2)
-
-        a_inport = a.connections(self.am.node.id)['inports'][0].port_id
-        b_inport = b.connections(self.am.node.id)['inports'][0].port_id
-        self.assertNotEqual(a_inport, b_inport)
 
 
 if __name__ == '__main__':
