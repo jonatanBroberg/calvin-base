@@ -1000,24 +1000,19 @@ class CalvinControl(object):
 
     def handle_lost_actor(self, handle, connection, match, data, hdr):
         """ We lost actor, replicate if possible
-            1. Delete old actor from sys? handle_delete_actor
-            2. Find reliability level. from applicaiton 
-            3. Replicate until level is reached
+            1. Find reliability level. from applicaiton 
+            2. Replicate until level is reached
+            3. Delete old actor from sys? handle_delete_actor
         """
 
-        # Get application from actor_id
-        # application = self.node.app_manager.get_actor_app(match.group(1))
-        # How many replicas should we have?
-        # nbr  = application.get_reliability_level()
-
-        # retrieve information about the lost actor
+        # Retrieve information about the lost actor and replicate
         self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
        
         # Delete rest of old actor
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
 
-        perhaps replcace with:
+        or somethins else, perhaps:
         
         self.node.storage.get_application(match.group(1), CalvinCB(self.node.am._destroy_app_info_cb, cb=None))
         self.node.del_actor_info(actor_id)
@@ -1029,17 +1024,21 @@ class CalvinControl(object):
         key = actor_id of lost actor
         value = actor information of lost actor
         """
-
+        actor_name = re.sub(uuid_re, "", value['name'])
         application = self.node.app_manager.get_actor_app(key)
-
-
-        #Replicate to our own node for the moment
-        self.node.am.replicate(key, self.node.id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
-               
+        
+        for actor_id in application.get_actors():
+            def handle_CB(handle, connection, key_2, value, *args, **kwargs):
+                name = re.sub(uuid_re, "", value['name'])
+                if actor_name == name and not actor_id == key:
+                    #We have found a replica
+                    print actor_id
+                    self.node.am.replicate(actor_id, self.node.id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+            self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
 
         # Send response
-        #self.send_response(handle, connection, None if value is None else json.dumps(value),
-        #                       status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
+        self.send_response(handle, connection, None if value is None else json.dumps(value),
+                            status=calvinresponse.NOT_FOUND if None else calvinresponse.OK)
         
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
