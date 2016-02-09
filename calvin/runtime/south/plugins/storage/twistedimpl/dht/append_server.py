@@ -21,6 +21,7 @@
 import json
 import uuid
 import types
+import sys
 
 from twisted.internet import defer, task, reactor
 from kademlia.network import Server
@@ -234,7 +235,8 @@ class AppendServer(Server):
 
         def append_(nodes):
             # if this node is close too, then store here as well
-            if self.node.distanceTo(node) < max([n.distanceTo(node) for n in nodes]):
+            max_distance = max([n.distanceTo(node) for n in nodes]) if nodes else sys.maxint
+            if self.node.distanceTo(node) < max_distance:
                 try:
                     pvalue = json.loads(value)
                     self.set_keys.add(dkey)
@@ -325,7 +327,7 @@ class AppendServer(Server):
         exists, value = self.storage.get(dkey)
         node = Node(dkey)
         nearest = self.protocol.router.findNeighbors(node)
-        _log.debug("Server:get_concat key=%s, value=%s, exists=%s, nbr nearest=%d" % (base64.b64encode(dkey), value, 
+        _log.debug("Server:get_concat key=%s, value=%s, exists=%s, nbr nearest=%d" % (base64.b64encode(dkey), value,
                                                                                       exists, len(nearest)))
         if len(nearest) == 0:
             # No neighbors but we had it, return that value
