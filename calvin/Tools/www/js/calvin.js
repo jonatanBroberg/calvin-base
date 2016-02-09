@@ -873,11 +873,9 @@ function showActor()
         selectNode.id = "selectRuntime";
         var index;
         for (index in peers) {
-            if (peers[index].id != actor.peer_id) {
-                var optionPeer = new Option(peers[index].name);
-                optionPeer.id = peers[index].id;
-                selectNode.options.add(optionPeer);
-            }
+            var optionPeer = new Option(peers[index].name);
+            optionPeer.id = peers[index].id;
+            selectNode.options.add(optionPeer);
         }
         var div = document.createElement('div');
         var btnMigrate = document.createElement('input');
@@ -968,7 +966,7 @@ function migrate(actor_id)
     var actor = findActor(actor_id);
     if (actor) {
         var node = findRuntime(actor.peer_id);
-        if (node) {
+        if (node && peer_id && node.id != peer.id) {
             var url = node.control_uri + '/actor/' + actor.id + '/migrate';
             var data = JSON.stringify({'peer_node_id': peer_id});
             console.log("migrate - url: " + url + " data: " + data);
