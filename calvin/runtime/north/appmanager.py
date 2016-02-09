@@ -195,7 +195,7 @@ class AppManager(object):
             if actor_id in self._node.am.list_actors():
                 _log.analyze(self._node.id, "+ LOCAL ACTOR", {'actor_id': actor_id})
                 # TODO: Check if it whent ok
-                self._node.am.destroy(actor_id)
+                self._node.am.delete_actor(actor_id)
                 application.remove_actor(actor_id)
             else:
                 _log.analyze(self._node.id, "+ REMOTE ACTOR", {'actor_id': actor_id})
@@ -213,17 +213,24 @@ class AppManager(object):
         if value and 'node_id' in value:
             application.update_node_info(value['node_id'], key)
         else:
-            if retries<10:
+            if retries < 10:
                 # FIXME add backoff time
                 _log.analyze(self._node.id, "+ RETRY", {'actor_id': key, 'value': value, 'retries': retries})
-                self.storage.get_actor(key, CalvinCB(func=self._destroy_actor_cb, application=application, retries=(retries+1)))
+                self.storage.get_actor(key, CalvinCB(func=self._destroy_actor_cb, application=application, retries=(retries + 1)))
             else:
-                # FIXME report failure
-                _log.analyze(self._node.id, "+ GIVE UP", {'actor_id': key, 'value': value, 'retries': retries})
-                application.update_node_info(None, key)
+                self.storage.get_application(application.id, cb=CalvinCB(self._check_if_actor_is_already_deleted, actor_id=key, retries=retries))
 
         if application.complete_node_info():
             self._destroy_final(application)
+
+    def _check_if_actor_is_already_deleted(self, key, value, actor_id, retries):
+        if not value or actor_id in value['actors'] or actor_id in value['actors_name_map']:
+            # FIXME report failure
+            _log.analyze(self._node.id, "+ GIVE UP", {'actor_id': key, 'value': value, 'retries': retries})
+            self.applications[key].update_node_info(None, actor_id)
+        elif actor_id in self.applications[key].actors:
+            _log.debug("Actor has already been deleted")
+            self.applications[key].remove_actor(actor_id)
 
     def _destroy_final(self, application):
         """ Final destruction of the application on this node and send request to peers to also destroy the app """
@@ -270,7 +277,7 @@ class AppManager(object):
         reply = response.CalvinResponse(True)
         for actor_id in actor_ids:
             if actor_id in self._node.am.list_actors():
-                self._node.am.destroy(actor_id)
+                self._node.am.delete_actor(actor_id)
             else:
                 reply = response.CalvinResponse(False)
         if application_id in self.applications:

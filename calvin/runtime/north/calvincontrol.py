@@ -956,7 +956,7 @@ class CalvinControl(object):
         """ Delete actor from id
         """
         try:
-            self.node.am.destroy(match.group(1))
+            self.node.am.delete_actor(match.group(1), delete_from_app=True)
             status = calvinresponse.OK
         except:
             _log.exception("Destroy actor failed")

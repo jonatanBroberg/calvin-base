@@ -104,10 +104,20 @@ class ActorManager(object):
         a = self.actors[actor_id]
         a.will_end()
         self.node.pm.remove_ports_of_actor(a)
+
         # @TOOD - insert callback here
         self.node.storage.delete_actor(actor_id)
         del self.actors[actor_id]
+
         self.node.control.log_actor_destroy(a.id)
+
+        if delete_from_app:
+            self.node.storage.delete_actor_from_app(a.app_id, actor_id)
+            app = self.node.app_manager.applications.get(a.app_id)
+            if app:
+                app.remove_actor(actor_id)
+
+        return a
 
     # DEPRECATED: Enabling of an actor is dependent on wether it's connected or not
     def enable(self, actor_id):
@@ -232,7 +242,7 @@ class ActorManager(object):
         """ Actor disconnected, continue migration """
         if status:
             state = actor.state()
-            self.destroy(actor.id)
+            self.delete_actor(actor.id)
             self.node.proto.actor_new(node_id, callback, actor_type, state, ports, app_id=actor.app_id)
         elif callback:  # FIXME handle errors!!!
             callback(status=status)

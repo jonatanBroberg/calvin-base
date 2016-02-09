@@ -575,6 +575,28 @@ class Storage(object):
         _log.debug("Delete actor id %s" % (actor_id))
         self.delete(prefix="actor-", key=actor_id, cb=cb)
 
+    def delete_actor_from_app(self, app_id, actor_id):
+        """Remove actor_id from application's list of actors"""
+        if not app_id:
+            return
+        self.get_application(app_id, cb=CalvinCB(self._delete_actor_from_app, actor_id=actor_id))
+
+    def _delete_actor_from_app(self, key, value, actor_id):
+        """Remove actor_id from application's list of actors, and update
+        application value in storage.
+        """
+        if not value:
+            return
+
+        if actor_id in value['actors']:
+            value['actors'].remove(actor_id)
+        if actor_id in value['actors_name_map']:
+            del value['actors_name_map'][actor_id]
+
+        prefix = "application-"
+        callback = CalvinCB(self.set_cb, org_key=prefix + key, org_value=None, org_cb=None)
+        self.set(prefix=prefix, key=key, value=value, cb=callback)
+
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
         Add port to storage

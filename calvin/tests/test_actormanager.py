@@ -73,7 +73,7 @@ class ActorManagerTests(unittest.TestCase):
         a.data = 43
         a.n = 2
         s = a.state()
-        self.am.destroy(a_id)
+        self.am.delete_actor(a_id)
         self.assertEqual(len(self.am.actors), 0)
 
         b, b_id = self._new_actor(a_type, None, state=s)
