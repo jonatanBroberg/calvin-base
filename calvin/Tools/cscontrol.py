@@ -83,8 +83,8 @@ def control_actors(args):
             raise Exception("No actor or peer given")
         return utils.migrate(args.node, args.id, args.peer_node)
     elif args.cmd == 'replicate':
-        if not args.id or not args.peer_node:
-            raise Exception("No actor or peer given")
+        if not args.id:
+            raise Exception("No actor id given")
         return utils.replicate(args.node, args.id, args.peer_node)
 
 

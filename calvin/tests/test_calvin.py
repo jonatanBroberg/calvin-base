@@ -1442,6 +1442,32 @@ class TestActorReplication(CalvinTestBase):
         utils.delete_actor(rt, replica)
         utils.delete_actor(rt, snk)
 
+    def testReplicateWithoutNodeIdSelectsLeastBusyNode(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        replica = utils.replicate(rt, ity, None)
+        time.sleep(0.2)
+
+        new_node = None
+        for runtime in self.runtimes:
+            if replica in utils.get_actors(runtime):
+                new_node = runtime
+
+        assert new_node
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(new_node, replica)
+        utils.delete_actor(rt, snk)
+
 
 @pytest.mark.essential
 @pytest.mark.slow

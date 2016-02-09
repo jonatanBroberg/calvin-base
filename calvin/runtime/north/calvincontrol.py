@@ -1028,7 +1028,13 @@ class CalvinControl(object):
     def handle_actor_replicate(self, handle, connection, match, data, hdr):
         """ Replicate actor
         """
-        self.node.am.replicate(match.group(1), data['peer_node_id'],
+        peer_node_id = data['peer_node_id']
+        if not peer_node_id:
+            _log.info("No peer node id given, selecting least busy one")
+            peer_node_id = self.node.resource_manager.least_busy()
+
+        _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
+        self.node.am.replicate(match.group(1), peer_node_id,
                                callback=CalvinCB(self.actor_replicate_cb, handle, connection))
 
     def actor_replicate_cb(self, handle, connection, status, *args, **kwargs):
