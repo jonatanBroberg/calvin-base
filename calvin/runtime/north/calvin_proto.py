@@ -157,6 +157,7 @@ class CalvinProto(CalvinCBClass):
             'PORT_PENDING_MIGRATE': [CalvinCB(self.not_impl_handler)],
             'PORT_COMMIT_MIGRATE': [CalvinCB(self.not_impl_handler)],
             'PORT_CANCEL_MIGRATE': [CalvinCB(self.not_impl_handler)],
+            'PEER_SETUP': [CalvinCB(self.peer_setup_handler)],
             'TUNNEL_NEW': [CalvinCB(self.tunnel_new_handler)],
             'TUNNEL_DESTROY': [CalvinCB(self.tunnel_destroy_handler)],
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
@@ -567,6 +568,35 @@ class CalvinProto(CalvinCBClass):
         # Send reply
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
+
+    #### NODES ####
+
+    def peer_setup(self, to_rt_uuid, peers, callback=None):
+        """ Sends a peer setup request to the other node.
+            prev_connections: list of node ids to setup a connecting with
+        """
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._peer_setup, callback=callback, peers=peers)):
+            # Already have link just continue in _peer_setup
+                self._peer_setup(to_rt_uuid, callback, peers, status=response.CalvinResponse(True))
+
+    def _peer_setup(self, to_rt_uuid, callback, peers, status):
+        """ Got link? continue actor new """
+        if status:
+            msg = {'cmd': 'PEER_SETUP',
+                   'peers': peers}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def peer_setup_handler(self, payload):
+        """ Peer request new actor with state and connections """
+        self.node.peersetup(payload['peers'], cb=CalvinCB(self._peer_setup_handler, payload))
+
+    def _peer_setup_handler(self, payload, status, **kwargs):
+        """ Potentially created actor, reply to requesting node """
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
 
 if __name__ == '__main__':
     import pytest

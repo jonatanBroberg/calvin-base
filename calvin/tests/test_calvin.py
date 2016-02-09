@@ -39,6 +39,8 @@ runtime = None
 runtimes = []
 peerlist = []
 kill_peers = True
+ip_addr = None
+
 
 
 def setup_module(module):
@@ -46,7 +48,7 @@ def setup_module(module):
     global runtimes
     global peerlist
     global kill_peers
-    ip_addr = None
+    global ip_addr
     bt_master_controluri = None
 
     try:
@@ -1604,3 +1606,36 @@ class TestMultipleInports(CalvinTestBase):
         utils.delete_actor(rt, src_1)
         utils.delete_actor(rt, src_2)
         utils.delete_actor(rt, snk)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestPeerSetup(CalvinTestBase):
+
+    def testPeerSetup(self):
+        global ip_addr
+        rt1, _ = dispatch_node(["calvinip://%s:5010" % (ip_addr, )], "http://localhost:5011")
+        rt2, _ = dispatch_node(["calvinip://%s:5012" % (ip_addr, )], "http://localhost:5013")
+        rt3, _ = dispatch_node(["calvinip://%s:5014" % (ip_addr, )], "http://localhost:5015")
+
+        peers = [rt2.uri[0], rt3.uri[0]]
+        utils.peer_setup(rt1, peers)
+
+        time.sleep(0.5)
+
+        rt1_nodes = utils.get_nodes(rt1)
+        rt2_nodes = utils.get_nodes(rt2)
+        rt3_nodes = utils.get_nodes(rt3)
+
+        for peer in [rt1, rt2, rt3]:
+            utils.quit(peer)
+            time.sleep(0.2)
+
+        assert rt2.id in rt1_nodes
+        assert rt3.id in rt1_nodes
+
+        assert rt1.id in rt2_nodes
+        assert rt3.id in rt2_nodes
+
+        assert rt1.id in rt3_nodes
+        assert rt2.id in rt3_nodes
