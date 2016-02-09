@@ -1612,7 +1612,27 @@ class TestMultipleInports(CalvinTestBase):
 @pytest.mark.slow
 class TestPeerSetup(CalvinTestBase):
 
-    def testPeerSetup(self):
+    def testPeerSetupSinglePeer(self):
+        global ip_addr
+        rt1, _ = dispatch_node(["calvinip://%s:5020" % (ip_addr, )], "http://localhost:5021")
+        rt2, _ = dispatch_node(["calvinip://%s:5022" % (ip_addr, )], "http://localhost:5023")
+
+        peers = [rt2.uri[0]]
+        utils.peer_setup(rt1, peers)
+
+        time.sleep(0.5)
+
+        rt1_nodes = utils.get_nodes(rt1)
+        rt2_nodes = utils.get_nodes(rt2)
+
+        for peer in [rt1, rt2]:
+            utils.quit(peer)
+            time.sleep(0.2)
+
+        assert rt2.id in rt1_nodes
+        assert rt1.id in rt2_nodes
+
+    def testPeerSetupMultiplePeers(self):
         global ip_addr
         rt1, _ = dispatch_node(["calvinip://%s:5010" % (ip_addr, )], "http://localhost:5011")
         rt2, _ = dispatch_node(["calvinip://%s:5012" % (ip_addr, )], "http://localhost:5013")
