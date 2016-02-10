@@ -1025,25 +1025,31 @@ class CalvinControl(object):
         value = actor information of lost actor
 
         TODO:
-        1. Replicate only the first replica
-        2. Replicate it enough times to different nodes
+        Solve so that self.node.am.replicate works even if the actor to be replicated isn't on self.node
+        Change the level of reliability to percentage instead of number of replicas 
         """
         actor_name = re.sub(uuid_re, "", value['name'])
         application = self.node.app_manager.get_actor_app(key)
-        self.already_replicated = False
+        self.required_reliability = application.get_required_reliability()
+        self.current_reliability = 0
+        self.replica_id = 0
         
         for actor_id in application.get_actors():
             def handle_CB(handle, connection, key_2, value, *args, **kwargs):
                 name = re.sub(uuid_re, "", value['name'])
                 if actor_name == name and not actor_id == key:
                     # We have found a replica
-                    self.node.am.replicate(actor_id, None, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
-                    self.already_replicated = True
-            if not self.already_replicated:
-                self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
+                    self.replica_id = actor_id
+                    self.current_reliability += 1
+            self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
 
-        # Correct the status
-        self.send_response(handle, connection, None, status=calvinresponse.OK if self.already_replicated else calvinresponse.NOT_FOUND)
+        while self.current_reliability < self.required_reliability:
+            peer_node_id = self.node.resource_manager.least_busy()
+            # Problem if we try to replicate an actor which isn't on our node
+            self.node.am.replicate(self.replica_id, peer_node_id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+            self.current_reliability += 1
+
+        self.send_response(handle, connection, None, status=calvinresponse.OK if not self.current_reliability < self.required_reliability else calvinresponse.NOT_FOUND)
         
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
