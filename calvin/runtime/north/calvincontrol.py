@@ -17,6 +17,7 @@
 import re
 import time
 import json
+import random
 from random import randint
 from calvin.Tools import cscompiler as compiler
 from calvin.runtime.north.appmanager import Deployer
@@ -1006,14 +1007,13 @@ class CalvinControl(object):
         """
 
         # Retrieve information about the lost actor and replicate
+        # If runtime dies -> node is None. Does get_actor work for retrieving an actor from another node
         self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
         
         # Delete rest of old actor
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
-
         or somethins else, perhaps:
-        
         self.node.storage.get_application(match.group(1), CalvinCB(self.node.am._destroy_app_info_cb, cb=None))
         self.node.del_actor_info(actor_id)
         self.node.storage.del_actor_info()
@@ -1023,34 +1023,50 @@ class CalvinControl(object):
         """
         key = actor_id of lost actor
         value = actor information of lost actor
+        """        
+        application = self.node.app_manager.get_actor_app(key)
+        required_reliability = application.get_required_reliability()
+        self.node.storage.get_application(application.id, CalvinCB(func = self.handle_lost_actor_cb_2, lost_actor_id=key, lost_actor_name=value['name'], 
+                                                                    required_reliability=required_reliability, handle=handle, connection=connection))
+
+    def handle_lost_actor_cb_2(self, key, value, lost_actor_id, lost_actor_name, required_reliability, handle, connection):
+        """
+        key = application_id
+        value = application information
 
         TODO:
-        Solve so that self.node.am.replicate works even if the actor to be replicated isn't on self.node
         Change the level of reliability to percentage instead of number of replicas 
         """
-        actor_name = re.sub(uuid_re, "", value['name'])
-        application = self.node.app_manager.get_actor_app(key)
-        self.required_reliability = application.get_required_reliability()
-        self.current_reliability = 0
-        self.replica_id = 0
-        
-        for actor_id in application.get_actors():
-            def handle_CB(handle, connection, key_2, value, *args, **kwargs):
-                name = re.sub(uuid_re, "", value['name'])
-                if actor_name == name and not actor_id == key:
-                    # We have found a replica
-                    self.replica_id = actor_id
-                    self.current_reliability += 1
-            self.node.storage.get_actor(actor_id, CalvinCB(handle_CB, handle, connection))
 
-        while self.current_reliability < self.required_reliability:
-            peer_node_id = self.node.resource_manager.least_busy()
-            # Problem if we try to replicate an actor which isn't on our node
-            self.node.am.replicate(self.replica_id, peer_node_id, callback=CalvinCB(self.actor_replicate_cb, handle, connection))
-            self.current_reliability += 1
+        lost_actor_name = re.sub(uuid_re, "", lost_actor_name)
+        current_reliability = 0
+        replica_id = 0
+        replica_values = None
 
-        self.send_response(handle, connection, None, status=calvinresponse.OK if not self.current_reliability < self.required_reliability else calvinresponse.NOT_FOUND)
+        for actor_id, actor_name in value['actors_name_map'].iteritems():
+            actor_name = re.sub(uuid_re, "", actor_name)
+            if actor_name == lost_actor_name and not actor_id == lost_actor_id:
+                #We found a replica
+                print actor_id
+                replica_id = actor_id
+                current_reliability += 1
+        if replica_id != 0:
+            self.node.storage.get_actor(actor_id, CalvinCB(func=self.handle_lost_actor_cb_3, current_reliability=current_reliability,
+                                                            required_reliability=required_reliability, handle=handle, connection=connection))
+        else:
+            self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
+
+    def handle_lost_actor_cb_3(self, id, value, current_reliability, required_reliability, handle, connection):
+        # Add stopping criterion
+        while current_reliability < required_reliability:
+            #peer_node_id = self.node.resource_manager.least_busy()
+            peer_node_id = random.choice(self.node.network.list_links())
+            self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
+            current_reliability += 1
         
+        self.send_response(handle, connection, None, status=calvinresponse.OK if not current_reliability < required_reliability else calvinresponse.NOT_FOUND)
+
+
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
         """
