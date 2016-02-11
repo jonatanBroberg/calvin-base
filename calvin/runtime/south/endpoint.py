@@ -111,7 +111,7 @@ class LocalInEndpoint(Endpoint):
             # Empty local inport fifo once, since local transport only use outport's fifo
             token = self.port.fifo.read(self.fifo_key)
             if token:
-                self.port.fifo.commit_reads(self.fifo_key, True)
+                self.port.fifo.commit_reads(self.fifo_key, token is not None)
                 return token
             self.data_in_local_fifo = False
 
@@ -218,7 +218,7 @@ class TunnelInEndpoint(Endpoint):
         elif self.port.fifo.write_pos[self.fifo_key] > payload['sequencenbr']:
             # Other side resent a token we already have received (can happen after a reconnect if our previous ACK was lost), just ACK
             ok = True
-        reply = {'cmd': 'TOKEN_REPLY', 'port_id':payload['port_id'], 'peer_port_id': payload['peer_port_id'], 'sequencenbr': payload['sequencenbr'], 'value': 'ACK' if ok else 'NACK'}
+        reply = {'cmd': 'TOKEN_REPLY', 'port_id': payload['port_id'], 'peer_port_id': payload['peer_port_id'], 'sequencenbr': payload['sequencenbr'], 'value': 'ACK' if ok else 'NACK'}
         self.tunnel.send(reply)
 
     def read_token(self):
@@ -275,13 +275,13 @@ class TunnelOutEndpoint(Endpoint):
         sequencenbr_sent = self.port.fifo.tentative_read_pos[self.fifo_key]
         sequencenbr_acked = self.port.fifo.read_pos[self.fifo_key]
         _log.debug("Reply on port %s/%s/%s [%i] %s" % (self.port.owner.name, self.fifo_key, self.port.name, sequencenbr, status))
-        if status=='ACK':
+        if status == 'ACK':
             # Back to full send speed directly
             self.bulk = True
             self.backoff = 0.0
             if sequencenbr < sequencenbr_sent:
                 self.sequencenbrs_acked.append(sequencenbr)
-            while any(n==sequencenbr_acked for n in self.sequencenbrs_acked):
+            while any(n == sequencenbr_acked for n in self.sequencenbrs_acked):
                 self.port.fifo.commit_one_read(self.fifo_key, True)
                 self.sequencenbrs_acked.remove(sequencenbr_acked)
             # Maybe someone can fill the fifo again

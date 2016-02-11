@@ -28,17 +28,25 @@ class ConnectionHandler(object):
         port_id_translations = self._translate_port_ids(actor, prev_connections)
         connection_list = self._translate_connection_list(actor, connection_list, port_id_translations)
         state = self._translate_state(actor, state, port_id_translations)
-        self.connect(actor, connection_list, callback=callback)
 
-        for port_name in state['inports']:
-            actor.inports[port_name]._set_state(state['inports'][port_name])
-        for port_name in state['outports']:
-            actor.outports[port_name]._set_state(state['outports'][port_name])
+        callback = CalvinCB(self._set_port_states, actor, state, callback)
+        self.connect(actor, connection_list, state, callback=callback)
 
     def connections(self, actor):
         return actor.connections(self.node.id)
 
-    def connect(self, actor, connection_list, callback=None):
+    def _set_port_states(self, actor, state, callback, *args, **kwargs):
+        for port_id in state['inports']:
+            port_name = state['inports'][port_id]['name']
+            actor.inports[port_name]._set_state(state['inports'][port_id])
+        for port_id in state['outports']:
+            port_name = state['outports'][port_id]['name']
+            actor.outports[port_name]._set_state(state['outports'][port_id])
+
+        if callback:
+            callback(*args, **kwargs)
+
+    def connect(self, actor, connection_list, port_states=None, callback=None):
         """
         Reconnecting the ports can be done using a connection_list
         of tuples (node_id i.e. our id, port_id, peer_node_id, peer_port_id)
@@ -51,6 +59,7 @@ class ConnectionHandler(object):
                                  port_id=port_id,
                                  peer_node_id=peer_node_id,
                                  peer_port_id=peer_port_id,
+                                 port_states=port_states,
                                  callback=CalvinCB(self._actor_connected,
                                                    peer_port_id=peer_port_id,
                                                    actor_id=actor.id,
@@ -176,7 +185,8 @@ class ConnectionHandler(object):
                 new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
                 new_write_pos[new_key] = val
 
-            new_ports[port_name] = {
+            catchup_fifo_key = fifo['readers'][0] if fifo['readers'] else None
+            new_ports[port_id_translations[port['id']]] = {
                 'name': port['name'],
                 'fifo': {
                     'readers': new_readers,
@@ -184,7 +194,8 @@ class ConnectionHandler(object):
                     'N': fifo['N'],
                     'tentative_read_pos': new_tentative_read_pos,
                     'read_pos': new_read_pos,
-                    'fifo': new_fifo
+                    'fifo': new_fifo,
+                    'catchup_fifo_key': catchup_fifo_key
                 },
                 'id': port_id_translations[port['id']]
             }
@@ -211,14 +222,14 @@ class ConnectionHandler(object):
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_tentative_read_pos[new_key] = 0
+                new_tentative_read_pos[new_key] = fifo['tentative_read_pos'][reader]
 
             new_read_pos = {}
             for reader in fifo['read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_read_pos[new_key] = 0
+                new_read_pos[new_key] = fifo['read_pos'][reader]
 
             new_write_pos = {}
             for reader in fifo['write_pos']:
@@ -236,7 +247,7 @@ class ConnectionHandler(object):
                 new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
                 new_fifo[new_key] = val
 
-            new_ports[port_name] = {
+            new_ports[port_id_translations[port['id']]] = {
                 'name': port['name'],
                 'fanout': port['fanout'],
                 'fifo': {

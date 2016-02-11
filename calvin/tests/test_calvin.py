@@ -19,6 +19,7 @@ import unittest
 import time
 import pytest
 import multiprocessing
+from collections import Counter
 
 from calvin.tests.helpers import expected_tokens, actual_tokens
 from calvin.Tools import cscompiler as compiler
@@ -1101,7 +1102,7 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual_snk_2) > len(before_migration_2))
         self.assert_list_prefix(expected, actual_snk_1)
         self.assert_list_prefix(expected, actual_snk_2)
-        self.assertListEqual(actual_snk_1, actual_snk_2)
+        self.assert_list_prefix(actual_snk_1, actual_snk_2)
 
         utils.delete_actor(rt, src_1)
         utils.delete_actor(rt, src_2)
@@ -1245,6 +1246,54 @@ class TestActorReplication(CalvinTestBase):
 
         d.destroy()
 
+    def testDoubleReplication(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk1 : io.StandardOut(store_tokens=1)
+            snk2 : io.StandardOut(store_tokens=1)
+            src.integer > snk1.token
+            src.integer > snk2.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk1 = d.actor_map['simple:snk1']
+        snk2 = d.actor_map['simple:snk2']
+        src = d.actor_map['simple:src']
+        utils.migrate(rt, snk1, peer.id)
+        utils.migrate(rt, snk2, peer.id)
+        time.sleep(0.2)
+        replica_1 = utils.replicate(peer, snk1, peer.id)
+        replica_2 = utils.replicate(peer, snk2, peer.id)
+        time.sleep(0.2)
+
+        app = utils.get_application(rt, app_id)
+        assert replica_1 in app['actors']
+        assert replica_1 in app['actors_name_map']
+        assert replica_2 in app['actors']
+        assert replica_2 in app['actors_name_map']
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig_1 = actual_tokens(peer, snk1)
+        actual_orig_2 = actual_tokens(peer, snk2)
+        actual_replica_1 = actual_tokens(peer, replica_1)
+        actual_replica_2 = actual_tokens(peer, replica_2)
+
+        assert(len(actual_orig_1) > 1)
+        assert(len(actual_orig_2) > 1)
+        self.assert_list_prefix(expected, actual_orig_1)
+        self.assert_list_prefix(expected, actual_replica_1)
+        self.assert_list_prefix(expected, actual_orig_2)
+        self.assert_list_prefix(expected, actual_replica_2)
+
+        d.destroy()
+
     def testRemoteToLocalReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1296,16 +1345,24 @@ class TestActorReplication(CalvinTestBase):
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
-        time.sleep(0.2)
+        time.sleep(0.3)
 
         src_replica = utils.replicate(rt, src, peer.id)
-        time.sleep(0.4)
+        time.sleep(0.2)
 
         expected_src = expected_tokens(rt, src, 'std.CountTimer')
         expected_replica = expected_tokens(peer, src_replica, 'std.CountTimer')
         expected = sorted(expected_src + expected_replica)
         actual_snk_1 = actual_tokens(rt, snk_1)
         actual_snk_2 = actual_tokens(rt, snk_2)
+
+        counts = Counter(actual_snk_1)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual_snk_1 = filter(lambda x: x not in unique_elements, actual_snk_1)
+        actual_snk_2 = filter(lambda x: x not in unique_elements, actual_snk_2)
 
         assert(len(actual_snk_1) > 1)
         assert(len(actual_snk_2) > 1)
@@ -1337,6 +1394,14 @@ class TestActorReplication(CalvinTestBase):
         expected = sorted(expected_src + expected_replica)
         actual_snk_1 = actual_tokens(rt, snk_1)
         actual_snk_2 = actual_tokens(rt, snk_2)
+
+        counts = Counter(actual_snk_1)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual_snk_1 = filter(lambda x: x not in unique_elements, actual_snk_1)
+        actual_snk_2 = filter(lambda x: x not in unique_elements, actual_snk_2)
 
         assert(len(actual_snk_1) > 1)
         assert(len(actual_snk_2) > 1)
@@ -1431,11 +1496,21 @@ class TestActorReplication(CalvinTestBase):
 
         expected_1 = expected_tokens(rt, src, 'std.CountTimer')
         expected_2 = expected_tokens(rt, src, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
         actual = actual_tokens(rt, snk)
 
         assert(len(actual) > 1)
         assert(len(expected_2) > 1)
-        self.assert_list_prefix(sorted(expected_1 + expected_2), sorted(actual))
+        assert actual.count(1) == 1
+        assert actual.count(4) == 2
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual = filter(lambda x: x not in unique_elements, actual)
+        self.assert_list_prefix(expected, sorted(actual))
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, ity)

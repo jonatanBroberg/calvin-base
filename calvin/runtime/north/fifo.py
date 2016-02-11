@@ -61,18 +61,21 @@ class FIFO(object):
         return state
 
     def _set_state(self, state):
-        self.fifo = {}
         for reader in state['fifo']:
-            if not state['fifo'][reader]:
-                self.fifo[reader] = [Token(0)] * self.N
+            if state.get('catchup_fifo_key') in self.fifo:
+                self.fifo[reader] = self.fifo[state['catchup_fifo_key']]
+                self.write_pos[reader] = self.write_pos[state['catchup_fifo_key']]
             else:
-                self.fifo[reader] = [Token.decode(token) for token in state['fifo'][reader]]
+                if not state['fifo'][reader]:
+                    self.fifo[reader] = [Token(0)] * self.N
+                else:
+                    self.fifo[reader] = [Token.decode(token) for token in state['fifo'][reader]]
+                self.write_pos[reader] = state['write_pos'][reader]
 
         self.N = state['N']
-        self.readers = set(state['readers'])
-        self.write_pos = state['write_pos']
-        self.read_pos = state['read_pos']
-        self.tentative_read_pos = state['tentative_read_pos']
+        self.readers.update(set(state['readers']))
+        self.read_pos.update(state['read_pos'])
+        self.tentative_read_pos.update(state['tentative_read_pos'])
 
     def add_reader(self, reader):
         if not isinstance(reader, basestring):
@@ -96,7 +99,7 @@ class FIFO(object):
         return not (self.write_pos[reader] + 1) % self.N == self.read_pos[reader] % self.N
 
     def write(self, data, reader):
-        if not self.can_write(reader):
+        if reader and not self.can_write(reader):
             return False
 
         write_pos = self.write_pos[reader]
@@ -133,9 +136,11 @@ class FIFO(object):
             raise Exception("Unknown reader: '%s'" % reader)
         if not self.can_read(reader):
             return None
+
         read_pos = self.tentative_read_pos[reader]
         data = self.fifo[reader][read_pos % self.N]
         self.tentative_read_pos[reader] = read_pos + 1
+
         return data
 
     # Commit is always required after reads.

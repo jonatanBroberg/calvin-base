@@ -166,12 +166,14 @@ class PortManager(object):
                 return response.CalvinResponse(response.GONE)
 
             if isinstance(port, InPort):
+                remote_port_type = 'outports'
                 endp = endpoint.TunnelInEndpoint(port,
                                                  tunnel,
                                                  payload['from_rt_uuid'],
                                                  payload['port_id'],
                                                  self.node.sched.trigger_loop)
             else:
+                remote_port_type = 'inports'
                 endp = endpoint.TunnelOutEndpoint(port,
                                                   tunnel,
                                                   payload['from_rt_uuid'],
@@ -180,6 +182,10 @@ class PortManager(object):
                 self.monitor.register_out_endpoint(endp)
 
             invalid_endpoint = port.attach_endpoint(endp)
+            if payload['port_states']:
+                if 'fifo' in payload['port_states'][remote_port_type][payload['port_id']]:
+                    port.fifo._set_state(payload['port_states'][remote_port_type][payload['port_id']]['fifo'])
+
             # Remove previous endpoint
             if invalid_endpoint:
                 if isinstance(invalid_endpoint, endpoint.TunnelOutEndpoint):
@@ -196,7 +202,7 @@ class PortManager(object):
             return response.CalvinResponse(response.OK, {'port_id': port.id})
 
     def connect(self, callback=None, actor_id=None, port_name=None, port_dir=None, port_id=None, peer_node_id=None,
-                peer_actor_id=None, peer_port_name=None, peer_port_dir=None, peer_port_id=None):
+                peer_actor_id=None, peer_port_name=None, peer_port_dir=None, peer_port_id=None, port_states=None):
         """ Obtain any missing information to enable making a connection and make actual connect
             callback: an optional callback that gets called with status when finished
             local port identified by:
@@ -222,7 +228,8 @@ class PortManager(object):
             'peer_actor_id': peer_actor_id,
             'peer_port_name': peer_port_name,
             'peer_port_dir': peer_port_dir,
-            'peer_port_id': peer_port_id
+            'peer_port_id': peer_port_id,
+            'port_states': port_states
         }
         _log.analyze(self.node.id, "+", {k: state[k] for k in state.keys() if k != 'callback'}, peer_node_id=state['peer_node_id'])
         try:
@@ -349,7 +356,7 @@ class PortManager(object):
             port2 = self._get_local_port(state['peer_actor_id'], state['peer_port_name'], state['peer_port_dir'], state['peer_port_id'])
             # Local connect wants the first port to be an inport
             inport, outport = (port1, port2) if isinstance(port1, InPort) else (port2, port1)
-            self._connect_via_local(inport, outport)
+            self._connect_via_local(inport, outport, state['port_states'])
             if state['callback']:
                 state['callback'](status=response.CalvinResponse(True), **state)
             return None
@@ -413,7 +420,8 @@ class PortManager(object):
                                 peer_port_id=state['peer_port_id'],
                                 peer_actor_id=state['peer_actor_id'],
                                 peer_port_name=state['peer_port_name'],
-                                peer_port_dir=state['peer_port_dir'], tunnel=tunnel)
+                                peer_port_dir=state['peer_port_dir'],
+                                port_states=state['port_states'], tunnel=tunnel)
 
 
     def _connected_via_tunnel(self, reply, **state):
@@ -480,12 +488,18 @@ class PortManager(object):
         else:
             self.node.storage.add_port(port, self.node.id, port.owner.id, "out")
 
-
-    def _connect_via_local(self, inport, outport):
+    def _connect_via_local(self, inport, outport, port_states):
         """ Both connecting ports are local, just connect them """
         _log.analyze(self.node.id, "+", {})
         ein = endpoint.LocalInEndpoint(inport, outport)
         eout = endpoint.LocalOutEndpoint(outport, inport)
+
+        if port_states and inport.id in port_states['inports']:
+            if 'fifo' in port_states['inports'][inport.id]:
+                outport.fifo._set_state(port_states['inports'][inport.id]['fifo'])
+        if port_states and outport.id in port_states['outports']:
+            if 'fifo' in port_states['outports'][outport.id]:
+                inport.fifo._set_state(port_states['outports'][outport.id]['fifo'])
 
         invalid_endpoint = inport.attach_endpoint(ein)
         if invalid_endpoint:
