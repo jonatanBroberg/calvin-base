@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.utilities.calvinlogger import get_logger
@@ -267,7 +266,12 @@ class ActorManager(object):
             app.actors[args['id']] = args['name']
             self.node.storage.add_application(app)
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
+        if node_id == self.node.id:
+            prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
+            prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]
+            self.new_replica(actor_type, args, state, prev_connections, app_id, callback)
+        else:
+            self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
