@@ -1,6 +1,6 @@
 cscontrol http://localhost:5002 nodes add calvinip://localhost:5003
 cscontrol http://localhost:5002 nodes add calvinip://localhost:5005
-cscontrol http://localhost:5004 nodes add calvinip://localhost:5005
+
 a=`cscontrol http://localhost:5002 deploy calvin/examples/sample-scripts/actions.calvin`
 echo $a
 
