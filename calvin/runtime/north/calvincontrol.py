@@ -988,8 +988,12 @@ class CalvinControl(object):
         """
 
         # If runtime dies -> node is None. Does get_actor work for retrieving an actor from another node
-        self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
+        #self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
         
+        application = self.node.app_manager.get_actor_app(match.group(1))
+        required_reliability = application.get_required_reliability()
+        self.node.storage.get_application(application.id, CalvinCB(func = self.handle_lost_actor_cb, lost_actor_id=match.group(1), 
+                                                                    required_reliability=required_reliability, handle=handle, connection=connection))
         # Delete rest of old actor
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
@@ -999,24 +1003,12 @@ class CalvinControl(object):
         self.node.storage.del_actor_info()
         """
 
-    def handle_lost_actor_cb(self, handle, connection, key, value, *args, **kwargs):
+    def handle_lost_actor_cb(self, key, value, lost_actor_id, required_reliability, handle, connection):
         """
-        key = actor_id of lost actor
-        value = actor information of lost actor
-        """        
-        application = self.node.app_manager.get_actor_app(key)
-        required_reliability = application.get_required_reliability()
-        self.node.storage.get_application(application.id, CalvinCB(func = self.handle_lost_actor_cb_2, lost_actor_id=key, lost_actor_name=value['name'], 
-                                                                    required_reliability=required_reliability, handle=handle, connection=connection))
-
-    def handle_lost_actor_cb_2(self, key, value, lost_actor_id, lost_actor_name, required_reliability, handle, connection):
+        key = application_id, value = application information
         """
-        key = application_id
-        value = application information
-
-        TODO:
-        Change the level of reliability to percentage instead of number of replicas 
-        """
+        print value['actors_name_map']
+        lost_actor_name = re.sub(uuid_re, "", value['actors_name_map'][lost_actor_id])
 
         lost_actor_name = re.sub(uuid_re, "", lost_actor_name)
         current_reliability = 0
@@ -1027,23 +1019,19 @@ class CalvinControl(object):
             actor_name = re.sub(uuid_re, "", actor_name)
             if actor_name == lost_actor_name and not actor_id == lost_actor_id:
                 #We found a replica
-
                 replica_id = actor_id
                 current_reliability += 1
         if replica_id != 0:
-            self.node.storage.get_actor(replica_id, CalvinCB(func=self.handle_lost_actor_cb_3, current_reliability=current_reliability,
+            self.node.storage.get_actor(replica_id, CalvinCB(func=self.handle_lost_actor_cb_2, current_reliability=current_reliability,
                                                             required_reliability=required_reliability, handle=handle, connection=connection))
         else:
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
         
-    def handle_lost_actor_cb_3(self, id, value, current_reliability, required_reliability, handle, connection):
-        # Add stopping criterion
+    def handle_lost_actor_cb_2(self, id, value, current_reliability, required_reliability, handle, connection):
         while current_reliability < required_reliability:
-            #peer_node_id = self.node.resource_manager.least_busy()
             peer_node_id = random.choice(self.node.network.list_links())
             self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
             time.sleep(0.2)
-
             current_reliability += 1
         
         self.send_response(handle, connection, None, status=calvinresponse.OK if not current_reliability < required_reliability else calvinresponse.NOT_FOUND)
