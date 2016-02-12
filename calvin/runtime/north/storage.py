@@ -200,13 +200,13 @@ class Storage(object):
     def get(self, prefix, key, cb=None):
         """ Get value for key: prefix+key, first look in localstore
         """
-        cb = cb if cb else CalvinCB(self.get_cb, org_cb=cb, org_key=key)
         value = None
         if prefix + key in self.localstore:
             value = self.localstore[prefix + key]
             if value:
                 value = self.coder.decode(value)
-            async.DelayedCall(0, cb, key=key, value=value)
+            if cb:
+                async.DelayedCall(0, cb, key=key, value=value)
         elif self.started:
             try:
                 return self.storage.get(key=prefix + key, cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
@@ -271,7 +271,6 @@ class Storage(object):
             storage and hence the return list might contain removed items,
             but also missing items.
         """
-        cb = cb if cb else CalvinCB(self.get_concat_cb, org_cb=None, org_key=key, local_list=[])
         value = []
         if prefix + key in self.localstore_sets:
             _log.analyze(self.node.id, "+ GET LOCAL", None)
@@ -354,7 +353,6 @@ class Storage(object):
     def append(self, prefix, key, value, cb=None):
         """ set operation append on key: prefix+key value: value is a list of items
         """
-        cb = cb if cb else CalvinCB(self.append_cb, org_key=prefix + key, org_value=value, org_cb=None)
         _log.debug("Append key %s, value %s" % (prefix + key, value))
         # Keep local storage for sets updated until confirmed
         if (prefix + key) in self.localstore_sets:
