@@ -1006,7 +1006,6 @@ class CalvinControl(object):
             3. Delete old actor from sys? handle_delete_actor
         """
 
-        # Retrieve information about the lost actor and replicate
         # If runtime dies -> node is None. Does get_actor work for retrieving an actor from another node
         self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
         
@@ -1047,7 +1046,6 @@ class CalvinControl(object):
             actor_name = re.sub(uuid_re, "", actor_name)
             if actor_name == lost_actor_name and not actor_id == lost_actor_id:
                 #We found a replica
-                print actor_id
                 replica_id = actor_id
                 current_reliability += 1
         if replica_id != 0:
@@ -1055,7 +1053,7 @@ class CalvinControl(object):
                                                             required_reliability=required_reliability, handle=handle, connection=connection))
         else:
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
-
+        
     def handle_lost_actor_cb_3(self, id, value, current_reliability, required_reliability, handle, connection):
         # Add stopping criterion
         while current_reliability < required_reliability:
@@ -1065,7 +1063,6 @@ class CalvinControl(object):
             current_reliability += 1
         
         self.send_response(handle, connection, None, status=calvinresponse.OK if not current_reliability < required_reliability else calvinresponse.NOT_FOUND)
-
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
