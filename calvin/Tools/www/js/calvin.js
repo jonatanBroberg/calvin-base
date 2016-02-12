@@ -10,6 +10,8 @@ var graph = new dagreD3.graphlib.Graph({compound:true})
             .setDefaultEdgeLabel(function() { return {}; });
 var render = new dagreD3.render();
 var svg = d3.select("#applicationGraph").append("svg");
+svg.attr("width", document.getElementById("applicationGraph").width);
+svg.attr("height", document.getElementById("applicationGraph").height);
 var svgGroup = svg.append("g");
 var graphTimer = null;
 
@@ -101,9 +103,6 @@ function updateGraph()
 
     // Run the renderer. This is what draws the final graph.
     render(d3.select("svg g"), graph);
-
-    svg.attr("width", 1000);
-    svg.attr("height", 600);
 }
 
 // Clear application graph
@@ -114,11 +113,11 @@ function clearApplicationGraph() {
                 .setGraph({
                     rankdir: "LR"
                 })
-                .setDefaultEdgeLabel(function() { return {}; });    
+                .setDefaultEdgeLabel(function() { return {}; });
     render = new dagreD3.render();
     svg = d3.select("#applicationGraph").append("svg");
-    svg.attr("width", 1000);
-    svg.attr("height", 600);
+    svg.attr("width", document.getElementById("applicationGraph").width);
+    svg.attr("height", document.getElementById("applicationGraph").height);
     svgGroup = svg.append("g");
 }
 
@@ -128,6 +127,7 @@ function runtimeObject(id)
     this.id = id;
     this.actors = [];
     this.source = null;
+    this.peers = [];
 }
 
 // Return runtime object from id
@@ -210,6 +210,15 @@ function clearCombo(selectbox)
         selectbox.remove(i);
     }
 }
+
+// Helper to sort combobox
+function sortCombo(selectbox)
+{
+    $(selectbox).html($(selectbox).children('option').sort(function (x, y) {
+        return $(x).text().toUpperCase() < $(y).text().toUpperCase() ? -1 : 1;
+    }));
+    $(selectbox).get(0).selectedIndex = 0;
+};
 
 // Busy spinner
 var opts = {
@@ -295,7 +304,6 @@ function connectHandler() {
     document.cookie="calvin_uri=" + connect_uri;
     document.cookie="calvin_indexsearch=" + index_search;
     getPeerID();
-    getPeers();
     if (index_search) {
         getPeersFromIndex(index_search);
     }
@@ -368,11 +376,12 @@ function getPeersFromIndex(index)
 }
 
 // Get connected peers
-function getPeers()
+function getPeers(peer)
 {
-    var url = connect_uri + '/nodes';
+    var url = peer.control_uri + '/nodes';
     console.log("getPeers - url: " + url);
     $.ajax({
+        peer: peer,
         timeout: 20000,
         beforeSend: function() {
             startSpin();
@@ -386,6 +395,7 @@ function getPeers()
         success: function(data) {
             if (data) {
                 console.log("getPeers response: " + JSON.stringify(data));
+                this.peer.peers = data;
                 var index;
                 for (index in data) {
                     if (!findRuntime(data[index])) {
@@ -439,6 +449,7 @@ function getPeer(id)
                     }
                     peers[peers.length] = peer;
                     showPeer(peer);
+                    getPeers(peer);
                 }
             } else {
                 console.log("getPeer - Empty response");
@@ -504,7 +515,17 @@ function getApplications()
 // Get application with id "id"
 function getApplication(uri, id)
 {
-    var url = uri + '/application/' + id;
+    var application = findApplication(id);
+    if (!application) {
+        application = new applicationObject(id);
+        applications[applications.length] = application;
+    }
+    loadApplicationActors(uri, application);
+    loadApplicationData(uri, application);
+}
+
+function loadApplicationData(uri, application) {
+    var url = uri + '/application/' + application.id;
     console.log("getApplication - url: " + url);
     $.ajax({
         uri: uri,
@@ -521,29 +542,55 @@ function getApplication(uri, id)
         success: function(data) {
             if (data) {
                 console.log("getApplication - Response: " + JSON.stringify(data));
-                var application = findApplication(id);
-                if (!application) {
-                    application = new applicationObject(id);
-                    applications[applications.length] = application;
-                }
                 application.name = data.name;
-                application.actors = data.actors;
                 application.control_uri = this.uri;
+
                 var applicationSelector = document.getElementById("applicationSelector");
                 var optionApplication = new Option(application.name);
                 optionApplication.id =  application.id;
                 applicationSelector.options.add(optionApplication);
+                sortCombo(applicationSelector);
 
-                var applicationSelector = document.getElementById("traceApplicationSelector");
-                var optionApplication = new Option(application.name);
+                applicationSelector = document.getElementById("traceApplicationSelector");
+                optionApplication = new Option(application.name);
                 optionApplication.id =  application.id;
                 applicationSelector.options.add(optionApplication);
+                sortCombo(applicationSelector);
             } else {
                 console.log("getApplication - Empty response");
             }
         },
         error: function() {
             alert("Failed to get application, url: " + url);
+        }
+    });
+}
+
+function loadApplicationActors(uri, application) {
+    var url = uri + '/application/' + application.id + '/actors';
+    console.log("getApplicationActors - url: " + url);
+    $.ajax({
+        uri: uri,
+        timeout: 20000,
+        beforeSend: function() {
+            startSpin();
+        },
+        complete: function() {
+            stopSpin();
+        },
+        dataType: 'json',
+        url: url,
+        type: 'GET',
+        success: function(data) {
+            if (data) {
+                console.log("getApplicationActors - Response: " + JSON.stringify(data));
+                application.actors = data;
+            } else {
+                console.log("getApplicationActors - Empty response");
+            }
+        },
+        error: function() {
+            alert("Failed to get application actors, url: " + url);
         }
     });
 }
@@ -596,6 +643,7 @@ function getActor(id, show)
                     var optionActor = new Option(actor.name);
                     optionActor.id =  actor.id;
                     actorSelector.options.add(optionActor);
+                    sortCombo(actorSelector);
                     addActorToGraph(actor);
                 }
             } else {
@@ -753,9 +801,9 @@ function showPeer(peer)
     btnDeploy.value = 'Deploy...';
     btnDeploy.setAttribute("onclick", "showDeployApplication(this.id)");
 
-    var row = AddTableItem(tableRef, document.createTextNode(peer.id), document.createTextNode(peer.uri), document.createTextNode(peer.control_uri), btnDestroy, btnDeploy);
+    var row = AddTableItem(tableRef, document.createTextNode(peer.id), document.createTextNode(peer.name), document.createTextNode(peer.uri), document.createTextNode(peer.control_uri), btnDestroy, btnDeploy);
     row.id = peer.id;
-    row.setAttribute("onclick", "showPeerAttributes(this.id); $(this).toggleClass(\"active\"); $(this).siblings().removeClass(\"active\");");
+    row.setAttribute("onclick", "showPeerAttributes(this.id); showPeerConnections(this.id); $(this).toggleClass(\"active\"); $(this).siblings().removeClass(\"active\");");
 }
 
 // Update peerTable with attributes from runtime with id "peer_id"
@@ -774,6 +822,26 @@ function showPeerAttributes(peer_id)
         if (peer.attributes.public) {
             for (attribute in peer.attributes.public) {
                 AddTableItem(tableRef, document.createTextNode("Public"), document.createTextNode(peer.attributes.public[attribute]));
+            }
+        }
+    }
+}
+
+// Update connectionsTable with attributes from runtime with id "peer_id"
+function showPeerConnections(peer_id)
+{
+    var runtime = findRuntime(peer_id);
+    if (runtime) {
+        var tableRef = document.getElementById('connectionsTable');
+        clearTable(tableRef);
+        if (runtime.peers) {
+            for (connection in runtime.peers) {
+                var peer = findRuntime(runtime.peers[connection]);
+                if (peer) {
+                    AddTableItem(tableRef, document.createTextNode(peer.name));
+                } else {
+                    AddTableItem(tableRef, document.createTextNode(runtime.peers[connection]));
+                }
             }
         }
     }
@@ -873,6 +941,7 @@ function showActor()
             var optionPeer = new Option(peers[index].name);
             optionPeer.id = peers[index].id;
             selectNode.options.add(optionPeer);
+            sortCombo(selectNode);
         }
         var div = document.createElement('div');
         var btnMigrate = document.createElement('input');
@@ -906,6 +975,7 @@ function showActor()
                 var optionPort = new Option(port.name);
                 optionPort.id =  port.id;
                 portSelector.options.add(optionPort);
+                sortCombo(portSelector);
             }
         }
         for (index in actor.outports) {
@@ -914,6 +984,7 @@ function showActor()
                 var optionPort = new Option(port.name);
                 optionPort.id =  port.id;
                 portSelector.options.add(optionPort);
+                sortCombo(portSelector);
             }
         }
     }

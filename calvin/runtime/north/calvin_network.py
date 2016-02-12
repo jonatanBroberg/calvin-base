@@ -43,9 +43,10 @@ class CalvinLink(object):
         self.rt_id = rt_id
         self.peer_id = peer_id
         self.transport = transport
-        # FIXME replies should also be made independent on the link object, 
+        # FIXME replies should also be made independent on the link object,
         # to handle dying transports losing reply callbacks
         self.replies = old_link.replies if old_link else {}
+        self.replies_timeout = old_link.replies_timeout if old_link else {}
         if old_link:
             # close old link after a period, since might still receive messages on the transport layer
             # TODO chose the delay based on RTT instead of arbitrary 3 seconds
@@ -55,10 +56,30 @@ class CalvinLink(object):
     def reply_handler(self, payload):
         """ Gets called when a REPLY messages arrives on this link """
         try:
+            # Cancel timeout
+            self.replies_timeout.pop(payload['msg_uuid']).cancel()
+        except:
+            # We ignore any errors in cancelling timeout
+            pass
+
+        try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))
         except:
             # We ignore unknown replies
+            return
+
+    def reply_timeout(self, msg_id):
+        """ Gets called when a request times out """
+        try:
+            # remove timeout
+            self.replies_timeout.pop(msg_id)
+        except:
+            pass
+        try:
+            self.replies.pop(msg_id)(response.CalvinResponse(response.GATEWAY_TIMEOUT))
+        except:
+            # We ignore errors
             return
 
     def send_with_reply(self, callback, msg):
@@ -67,11 +88,12 @@ class CalvinLink(object):
         """
         msg_id = calvinuuid.uuid("MSGID")
         self.replies[msg_id] = callback
+        self.replies_timeout[msg_id] = async.DelayedCall(10.0, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
         self.send(msg)
 
     def send(self, msg):
-        """ Adds the from and to node ids to the message and 
+        """ Adds the from and to node ids to the message and
             sends the message using the transport.
 
             The from and to node ids seems redundant since the link goes only between
@@ -89,8 +111,8 @@ class CalvinLink(object):
 
 
 class CalvinNetwork(object):
-    """ CalvinNetwork keeps track of and establish all runtime to runtime links, 
-        registers the transport plugins and start their listeners of incoming 
+    """ CalvinNetwork keeps track of and establish all runtime to runtime links,
+        registers the transport plugins and start their listeners of incoming
         join requests.
 
         The actual join protocol is handled by each transport plugin.
@@ -150,7 +172,7 @@ class CalvinNetwork(object):
                 self.transports.update(schema_objects)
 
     def start_listeners(self, uris=None):
-        """ Start the transport listening on the uris 
+        """ Start the transport listening on the uris
             uris: optional list of uri strings. When not provided all schemas will be started.
                   a '<schema>:default' uri can be used to indicate that the transport should
                   use a default configuration, e.g. choose port number.
@@ -181,13 +203,13 @@ class CalvinNetwork(object):
                                                'pending_joins': self.pending_joins,
                                                'pending_joins_by_id': self.pending_joins_by_id}, tb=True)
         # For each URI and when available a peer id
-        for uri, peer_id in zip(uris,
-                                corresponding_peer_ids if corresponding_peer_ids and
-                                                           len(uris) == len(corresponding_peer_ids) 
-                                                       else [None]*len(uris)):
+        if not (corresponding_peer_ids and len(uris) == len(corresponding_peer_ids)):
+            corresponding_peer_ids = [None] * len(uris)
+
+        for uri, peer_id in zip(uris, corresponding_peer_ids):
             if not (uri in self.pending_joins or peer_id in self.pending_joins_by_id or peer_id in self.links):
                 # No simultaneous join detected
-                schema = uri.split(":",1)[0]
+                schema = uri.split(":", 1)[0]
                 _log.analyze(self.node.id, "+", {'uri': uri, 'peer_id': peer_id, 'schema': schema, 'transports': self.transports.keys()}, peer_node_id=peer_id)
                 if schema in self.transports.keys():
                     # store we have a pending join and its callback
@@ -214,7 +236,7 @@ class CalvinNetwork(object):
 
     def join_finished(self, tp_link, peer_id, uri, is_orginator):
         """ Peer join is (not) accepted, called by transport plugin.
-            This may be initiated by us (is_orginator=True) or by the peer, 
+            This may be initiated by us (is_orginator=True) or by the peer,
             i.e. both nodes get called.
             When inititated by us pending_joins likely have a callback
 
@@ -237,7 +259,7 @@ class CalvinNetwork(object):
                     for cb in cbs:
                         cb(status=response.CalvinResponse(response.SERVICE_UNAVAILABLE), uri=uri, peer_node_id=peer_id)
             return
-        # Only support for one RT to RT communication link per peer 
+        # Only support for one RT to RT communication link per peer
         if peer_id in self.links:
             # Likely simultaneous join requests, use the one requested by the node with highest id
             if is_orginator and self.node.id > peer_id:
@@ -262,9 +284,9 @@ class CalvinNetwork(object):
             self.links[peer_id] = CalvinLink(self.node.id, peer_id, tp_link)
 
         # Find and call any callbacks registered for the uri or peer id
-        _log.debug("%s: peer_id: %s, uri: %s\npending_joins_by_id: %s\npending_joins: %s" % (self.node.id, peer_id, 
-                                                                                         uri, 
-                                                                                         self.pending_joins_by_id, 
+        _log.debug("%s: peer_id: %s, uri: %s\npending_joins_by_id: %s\npending_joins: %s" % (self.node.id, peer_id,
+                                                                                         uri,
+                                                                                         self.pending_joins_by_id,
                                                                                          self.pending_joins))
         if peer_id in self.pending_joins_by_id:
             peer_uri = self.pending_joins_by_id.pop(peer_id)
@@ -292,7 +314,7 @@ class CalvinNetwork(object):
             peer_id: the node id that the link should be establieshed to
             callback: will get called with arguments status and uri used
                       if the link needs to be established
-            
+
             returns: True when link already exist, False when link needs to be established
         """
         if peer_id in self.links:
@@ -327,7 +349,7 @@ class CalvinNetwork(object):
         return None
 
     def peer_disconnected(self, link, rt_id, reason):
-        _log.analyze(self.node.id, "+", {'reason': reason, 
+        _log.analyze(self.node.id, "+", {'reason': reason,
                                          'links_equal': link == self.links[rt_id].transport if rt_id in self.links else "Gone"},
                                          peer_node_id=rt_id)
         if rt_id in self.links and link == self.links[rt_id].transport:

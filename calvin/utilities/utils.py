@@ -292,6 +292,13 @@ def get_application(rt, application_id, timeout=TIMEOUT, async=False):
     return check_response(r)
 
 
+def get_application_actors(rt, application_id, timeout=TIMEOUT, async=False):
+    rt = get_RT(rt)
+    req = session if async else requests
+    r = req.get(rt.control_uri + '/application/{}/actors'.format(application_id), timeout=timeout)
+    return check_response(r)
+
+
 def delete_application(rt, application_id, timeout=TIMEOUT, async=False):
     rt = get_RT(rt)
     req = session if async else requests

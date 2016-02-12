@@ -158,6 +158,11 @@ class FDMock(object):
         self.fp.write(data + "\n")
 
 
+class StdInMock(FDMock):
+    def __init__(self):
+        self.buffer = "stdin\nstdin_second_line"
+
+
 class TimerMock(object):
 
     def __init__(self):
@@ -190,6 +195,9 @@ class CalvinSysTimerMock(object):
 class CalvinSysFileMock(object):
     def open(self, fname, mode):
         return FDMock(fname, mode)
+
+    def open_stdin(self):
+        return StdInMock()
 
     def close(self, fdmock):
         fdmock.close()

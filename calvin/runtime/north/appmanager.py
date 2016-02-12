@@ -190,8 +190,11 @@ class AppManager(object):
         except:
             pass
         application.clear_node_info()
+        self.storage.get_application_actors(application.id, cb=CalvinCB(self._destroy_actors, application=application))
+
+    def _destroy_actors(self, key, value, application):
         # Loop over copy of app's actors, since modified inside loop
-        for actor_id in application.actors.keys()[:]:
+        for actor_id in value:
             if actor_id in self._node.am.list_actors():
                 _log.analyze(self._node.id, "+ LOCAL ACTOR", {'actor_id': actor_id})
                 # TODO: Check if it whent ok
@@ -218,7 +221,8 @@ class AppManager(object):
                 _log.analyze(self._node.id, "+ RETRY", {'actor_id': key, 'value': value, 'retries': retries})
                 self.storage.get_actor(key, CalvinCB(func=self._destroy_actor_cb, application=application, retries=(retries + 1)))
             else:
-                self.storage.get_application(application.id, cb=CalvinCB(self._check_if_actor_is_already_deleted, actor_id=key, retries=retries))
+                _log.analyze(self._node.id, "+ GIVE UP", {'actor_id': key, 'value': value, 'retries': retries})
+                application.update_node_info(None, key)
 
         if application.complete_node_info():
             self._destroy_final(application)

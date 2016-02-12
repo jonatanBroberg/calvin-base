@@ -17,6 +17,7 @@
 import wrapt
 import functools
 import re
+import time
 
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
@@ -346,6 +347,7 @@ class Actor(object):
         self.control = calvincontrol.get_calvincontrol()
         self.metering = metering.get_metering()
         self._migrating_to = None  # During migration while on the previous node set to the next node id
+        self._last_time_warning = 0.0
 
         self.inports = {p: actorport.InPort(p, self) for p in self.inport_names}
         self.outports = {p: actorport.OutPort(p, self) for p in self.outport_names}
@@ -483,6 +485,7 @@ class Actor(object):
 
     @verify_status([STATUS.ENABLED])
     def fire(self):
+        start_time = time.time()
         total_result = ActionResult(did_fire=False)
         while True:
             # Re-try action in list order after EVERY firing
@@ -508,6 +511,11 @@ class Actor(object):
                     break
 
             if not action_result.did_fire:
+                diff = time.time() - start_time
+                if diff > 0.2 and start_time - self._last_time_warning > 120.0:
+                    # Every other minute warn if an actor runs for longer than 200 ms
+                    self._last_time_warning = start_time
+                    _log.warning("%s (%s) actor blocked for %f sec" % (self.name, self._type, diff))
                 # We reached the end of the list without ANY firing => return
                 return total_result
         # Redundant as of now, kept as reminder for when rewriting exeption handling.

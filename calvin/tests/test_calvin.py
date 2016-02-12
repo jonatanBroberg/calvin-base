@@ -259,14 +259,15 @@ class TestActorDeletion(CalvinTestBase):
 
         time.sleep(0.2)
 
+        actors = utils.get_application_actors(rt, app_id)
         snk = d.actor_map['simple:snk']
+
+        assert snk in actors
         utils.delete_actor(rt, snk)
+        time.sleep(0.2)
 
-        time.sleep(0.3)
-
-        app = utils.get_application(rt, app_id)
-        assert snk not in app['actors']
-        assert snk not in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert snk not in actors
 
         d.destroy()
 
@@ -287,13 +288,16 @@ class TestActorDeletion(CalvinTestBase):
 
         time.sleep(0.2)
         utils.migrate(rt, snk, peer.id)
-        time.sleep(0.3)
+        time.sleep(0.2)
         utils.delete_actor(peer, snk)
-        time.sleep(0.3)
+        time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert snk not in app['actors']
-        assert snk not in app['actors_name_map']
+        snk = d.actor_map['simple:snk']
+        actors = utils.get_application_actors(rt, app_id)
+        assert snk not in actors
+
+        actors = utils.get_application_actors(peer, app_id)
+        assert snk not in actors
 
         d.destroy()
 
@@ -1158,13 +1162,11 @@ class TestActorReplication(CalvinTestBase):
 
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
 
-        app = utils.get_application(peer, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig = actual_tokens(rt, snk)
@@ -1196,9 +1198,8 @@ class TestActorReplication(CalvinTestBase):
 
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig = actual_tokens(rt, snk)
@@ -1232,9 +1233,8 @@ class TestActorReplication(CalvinTestBase):
         replica = utils.replicate(peer, snk, peer.id)
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig = actual_tokens(peer, snk)
@@ -1273,11 +1273,9 @@ class TestActorReplication(CalvinTestBase):
         replica_2 = utils.replicate(peer, snk2, peer.id)
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica_1 in app['actors']
-        assert replica_1 in app['actors_name_map']
-        assert replica_2 in app['actors']
-        assert replica_2 in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica_1 in actors
+        assert replica_2 in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig_1 = actual_tokens(peer, snk1)
@@ -1316,13 +1314,10 @@ class TestActorReplication(CalvinTestBase):
         replica = utils.replicate(peer, snk, rt.id)
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
-
-        app = utils.get_application(peer, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig = actual_tokens(peer, snk)

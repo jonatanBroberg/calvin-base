@@ -155,6 +155,8 @@ def parse_args():
     cmd_nodes = cmdparsers.add_parser('nodes', help='handle node peers')
     cmd_nodes.add_argument('cmd', metavar='<command>', choices=node_commands, type=str,
                            help="one of %s" % ", ".join(node_commands))
+    cmd_nodes.add_argument('id', metavar="<node id>", type=str, nargs='?', default=None,
+                           help="id of node")
     cmd_nodes.add_argument('peerlist', metavar='<peer>', nargs='*', default=[],
                            help="list of peers of the form calvinip://<address>:<port>")
     cmd_nodes.set_defaults(func=control_nodes)

@@ -28,6 +28,7 @@ class DummyNode:
         self.storage = mock.Mock()
         self.control = mock.Mock()
         self.metering = metering.set_metering(metering.Metering(self))
+        self.app_manager = mock.Mock()
 
     def calvinsys(self):
         return None

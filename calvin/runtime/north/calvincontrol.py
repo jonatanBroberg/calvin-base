@@ -169,6 +169,18 @@ re_get_application = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid
 
 control_api_doc += \
     """
+    GET /application/{application-id}/actors
+    Get list of actors for application
+    Response status code: OK or NOT_FOUND
+    Response:
+    {
+         "actors": <list of actor ids>
+    }
+"""
+re_get_application_actors = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid_re + ")/actors\sHTTP/1")
+
+control_api_doc += \
+    """
     DELETE /application/{application-id}
     Stop application (only applications launched from this node)
     Response status code: OK, NOT_FOUND, INTERNAL_ERROR
@@ -665,6 +677,7 @@ class CalvinControl(object):
             (re_post_peer_setup, self.handle_peer_setup),
             (re_get_applications, self.handle_get_applications),
             (re_get_application, self.handle_get_application),
+            (re_get_application_actors, self.handle_get_application_actors),
             (re_del_application, self.handle_del_application),
             (re_post_new_actor, self.handle_new_actor),
             (re_get_actors, self.handle_get_actors),
@@ -929,6 +942,12 @@ class CalvinControl(object):
         self.node.storage.get_application(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
+    def handle_get_application_actors(self, handle, connection, match, data, hdr):
+        """ Get application from id
+        """
+        self.node.storage.get_application_actors(match.group(1), CalvinCB(
+            func=self.storage_cb, handle=handle, connection=connection))
+
     def handle_del_application(self, handle, connection, match, data, hdr):
         """ Delete application from id
         """
@@ -972,7 +991,7 @@ class CalvinControl(object):
         """ Delete actor from id
         """
         try:
-            self.node.am.delete_actor(match.group(1), delete_from_app=True)
+            self.node.am.delete_actor(match.group(1))
             status = calvinresponse.OK
         except:
             _log.exception("Destroy actor failed")
