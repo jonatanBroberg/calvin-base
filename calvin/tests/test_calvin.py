@@ -1543,12 +1543,9 @@ class TestActorReplication(CalvinTestBase):
 class TestLosingActors(CalvinTestBase):
 
     def testLoseOneActor(self):
-        rt1 = self.runtime
-        rt2 = self.runtime2
-        rt3 = self.runtime3
-
-    
-
+        rt = self.runtime
+        rt1 = self.runtimes[0]
+        rt2 = self.runtimes[1]
 
 
 @pytest.mark.essential
