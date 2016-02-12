@@ -1027,10 +1027,11 @@ class CalvinControl(object):
             actor_name = re.sub(uuid_re, "", actor_name)
             if actor_name == lost_actor_name and not actor_id == lost_actor_id:
                 #We found a replica
+
                 replica_id = actor_id
                 current_reliability += 1
         if replica_id != 0:
-            self.node.storage.get_actor(actor_id, CalvinCB(func=self.handle_lost_actor_cb_3, current_reliability=current_reliability,
+            self.node.storage.get_actor(replica_id, CalvinCB(func=self.handle_lost_actor_cb_3, current_reliability=current_reliability,
                                                             required_reliability=required_reliability, handle=handle, connection=connection))
         else:
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
@@ -1041,6 +1042,8 @@ class CalvinControl(object):
             #peer_node_id = self.node.resource_manager.least_busy()
             peer_node_id = random.choice(self.node.network.list_links())
             self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
+            time.sleep(0.2)
+
             current_reliability += 1
         
         self.send_response(handle, connection, None, status=calvinresponse.OK if not current_reliability < required_reliability else calvinresponse.NOT_FOUND)
