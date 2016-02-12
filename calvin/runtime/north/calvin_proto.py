@@ -371,10 +371,8 @@ class CalvinProto(CalvinCBClass):
         self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback = CalvinCB(self._actor_replication_request_handler, payload))
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
-        """Potentially requested a successfull replication"""    
-        # data is None from time to time and status = 200, OK
-        print kwargs  
-        resp = response.CalvinResponse(status=status.status, data={'actor_id':kwargs['actor_id']})
+        """Potentially requested a successfull replication"""
+        resp = response.CalvinResponse(status=status.status, data={'actor_id':status.data.get('actor_id')})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
