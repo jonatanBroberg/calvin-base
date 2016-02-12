@@ -1007,7 +1007,6 @@ class CalvinControl(object):
         """
         key = application_id, value = application information
         """
-        print value['actors_name_map']
         lost_actor_name = re.sub(uuid_re, "", value['actors_name_map'][lost_actor_id])
 
         lost_actor_name = re.sub(uuid_re, "", lost_actor_name)

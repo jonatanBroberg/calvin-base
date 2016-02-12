@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import traceback
 from calvin.utilities import calvinuuid
 from calvin.utilities.utils import enum
 from calvin.utilities.calvin_callback import CalvinCB, CalvinCBClass
@@ -299,8 +300,8 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
-        resp = response.CalvinResponse(status=status.status, data={'actor_id': kwargs['actor_id']})
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
+        resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode(), }
         self.network.links[payload['from_rt_uuid']].send(msg)
 
     def actor_replication_request(self, actor_id, from_node_id, to_node_id, callback):
@@ -334,10 +335,8 @@ class CalvinProto(CalvinCBClass):
         self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback = CalvinCB(self._actor_replication_request_handler, payload))
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
-        """Potentially requested a successfull replication"""    
-        # data is None from time to time and status = 200, OK
-        print kwargs  
-        resp = response.CalvinResponse(status=status.status, data={'actor_id':kwargs['actor_id']})
+        """Potentially requested a successfull replication"""
+        resp = response.CalvinResponse(status=status.status, data={'actor_id':status.data.get('actor_id')})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
