@@ -60,7 +60,7 @@ class Node(object):
        such as name of node
     """
 
-    def __init__(self, uri, control_uri, attributes=None):
+    def __init__(self, uri, control_uri, attributes=None, self_start=True):
         super(Node, self).__init__()
         self.uri = uri
         self.control_uri = control_uri
@@ -91,7 +91,8 @@ class Node(object):
         self.resource_manager = ResourceManager()
 
         # The initialization that requires the main loop operating is deferred to start function
-        async.DelayedCall(0, self.start)
+        if self_start:
+            async.DelayedCall(0, self.start)
 
     def insert_local_reply(self):
         msg_id = calvinuuid.uuid("LMSG")
