@@ -1007,7 +1007,6 @@ class CalvinControl(object):
         """
 
         # If runtime dies -> node is None. Does get_actor work for retrieving an actor from another node
-        #self.node.storage.get_actor(match.group(1), CalvinCB(self.handle_lost_actor_cb, handle, connection))
         
         application = self.node.app_manager.get_actor_app(match.group(1))
         required_reliability = application.get_required_reliability()
@@ -1027,8 +1026,6 @@ class CalvinControl(object):
         key = application_id, value = application information
         """
         lost_actor_name = re.sub(uuid_re, "", value['actors_name_map'][lost_actor_id])
-
-        lost_actor_name = re.sub(uuid_re, "", lost_actor_name)
         current_reliability = 0
         replica_id = 0
         replica_values = None
