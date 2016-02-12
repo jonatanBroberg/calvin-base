@@ -147,7 +147,7 @@ class AutoDHTServer(StorageBase):
         dlist = []
         dlist.append(self.dht_server.bootstrap(bootstrap))
 
-        self._ssdps = SSDPServiceDiscovery(iface, ignore_self=False)
+        self._ssdps = SSDPServiceDiscovery(iface)
         dlist += self._ssdps.start()
 
         _log.debug("Register service %s %s:%s" % (network, ip, port))
