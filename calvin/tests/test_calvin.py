@@ -1539,6 +1539,18 @@ class TestActorReplication(CalvinTestBase):
         utils.delete_actor(rt, snk)
 
 
+@pytest.mark.slow
+class TestLosingActors(CalvinTestBase):
+
+    def testLoseOneActor(self):
+        rt1 = self.runtime
+        rt2 = self.runtime2
+        rt3 = self.runtime3
+
+    
+
+
+
 @pytest.mark.essential
 @pytest.mark.slow
 class TestCalvinScript(CalvinTestBase):
