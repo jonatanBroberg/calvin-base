@@ -51,6 +51,8 @@ class StorageNode(Node):
 
         async.DelayedCall(0, self.start)
 
+    def _start_resource_reporter(self):
+        pass
     #
     # Event loop
     #
