@@ -1001,37 +1001,59 @@ class CalvinControl(object):
 
     def handle_lost_actor(self, handle, connection, match, data, hdr):
         """ We lost actor, replicate if possible
-            1. Find reliability level. from applicaiton 
-            2. Replicate until level is reached
-            3. Delete old actor from sys? handle_delete_actor
+            1. Find the required reliability from the applicaiton 
+            2. Replicate until required reliability is reached
+            3. Delete information about the lost actor
         """
 
         # If runtime dies -> node is None. Does get_actor work for retrieving an actor from another node
         
-        application = self.node.app_manager.get_actor_app(match.group(1))
-        required_reliability = application.get_required_reliability()
+        application = self.node.app_manager.get_actor_app(match.group(1))   #Replace with a method in storage?
+        required_reliability = application.get_required_reliability()       #Replace with something similar to application[required_reliability], i.c.o. the application is started on another node
+
+        # With callbacks
         self.node.storage.get_application(application.id, CalvinCB(func = self.handle_lost_actor_cb, lost_actor_id=match.group(1), 
                                                                     required_reliability=required_reliability, handle=handle, connection=connection))
+        # Without callbacks 
+        """
+        lost_actor = self.node.storage.get_actor(match.group(1))
+        lost_actor_name = re.sub(uuid_re, "", lost_actor['name'])
 
-        # Delete rest of old actor
-        """
-        self.handle_del_actor(handle, connection, match, data, hdr) 
-        or somethins else, perhaps:
-        self.node.storage.get_application(match.group(1), CalvinCB(self.node.am._destroy_app_info_cb, cb=None))
-        self.node.del_actor_info(actor_id)
-        self.node.storage.del_actor_info()
-        """
-
-    def handle_lost_actor_cb(self, key, value, lost_actor_id, required_reliability, handle, connection):
-        """
-        key = application_id, value = application information
-        """
-        lost_actor_name = re.sub(uuid_re, "", value['actors_name_map'][lost_actor_id])
         current_reliability = 0
         replica_id = 0
-        replica_values = None
+
+        for actor_id, actor_name in self.node.storage.get_application_actors(application.id):
+            actor = self.node.storage.get_actor(actor_id)
+            actor_name = re.sub(uuid_re, "", actor['name'])
+            if actor_name == lost_actor_name and not actor_id == match.group(1):
+                replica_id = actor_id
+                current_reliability += 1
+        if replica_id != 0:
+            replica = self.node.storage.get_actor(replica_id)
+            while current_reliability < required_reliability:
+                peer_node_id = random.choice(self.node.network.list_links())
+                self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
+                time.sleep(0.2)
+                current_reliability += 1
+        else:
+            self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
+        """
+
+        # Delete information about the lost actor
+        self.node.storage.delete_actor(match.group(1))
+        self.node.storage.delete_actor_from_app(application.id, match.group(1))
+        
+    def handle_lost_actor_cb(self, key, value, lost_actor_id, required_reliability, handle, connection):
+        """ key = application_id, value = application information """
+        # Don't use actors_name_map
+        lost_actor_name = re.sub(uuid_re, "", value['actors_name_map'][lost_actor_id])
+        
+        current_reliability = 0
+        replica_id = 0
 
         for actor_id, actor_name in value['actors_name_map'].iteritems():
+            #actor = self.node.storage.get_actor(actor_id)
+            #actor_name = re.sub(uuid_re, "", actor['name'])
             actor_name = re.sub(uuid_re, "", actor_name)
             if actor_name == lost_actor_name and not actor_id == lost_actor_id:
                 #We found a replica
@@ -1044,7 +1066,7 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
         
     def handle_lost_actor_cb_2(self, id, value, current_reliability, required_reliability, handle, connection):
-        """ Replicate the actor id, value enough times so that the required_reliability is acheived """
+        """ Replicate the actor enough times so that the required_reliability is acheived """
         while current_reliability < required_reliability:
             peer_node_id = random.choice(self.node.network.list_links())
             self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
