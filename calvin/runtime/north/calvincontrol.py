@@ -1035,7 +1035,6 @@ class CalvinControl(object):
             actor_name = re.sub(uuid_re, "", actor_name)
             if actor_name == lost_actor_name and not actor_id == lost_actor_id:
                 #We found a replica
-
                 replica_id = actor_id
                 current_reliability += 1
         if replica_id != 0:
