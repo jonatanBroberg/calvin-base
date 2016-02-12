@@ -1173,7 +1173,7 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         assert replica in app['actors_name_map']
 
         d.destroy()
-=======
+
     def testDeploy3NodesProxyStorageGetActorInfoOnRemoteNode(self):
         _log.analyze("TESTRUN", "+", {})
         global rt1
