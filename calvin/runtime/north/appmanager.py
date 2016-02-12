@@ -59,9 +59,6 @@ class Application(object):
         except:
             pass
 
-    def get_required_reliability(self):
-        return self.required_reliability
-
     def get_actors(self):
         return self.actors.keys()
 

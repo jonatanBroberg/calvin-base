@@ -498,7 +498,8 @@ class Storage(object):
                         "ns": application.ns,
                         # FIXME when all users of the actors field is updated, save the full dict only
                         "actors_name_map": application.actors,
-                        "origin_node_id": application.origin_node_id},
+                        "origin_node_id": application.origin_node_id,
+                        "required_reliability":application.required_reliability},
                  cb=cb)
 
     def get_application(self, application_id, cb=None):
