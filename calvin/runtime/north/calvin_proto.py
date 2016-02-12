@@ -373,8 +373,8 @@ class CalvinProto(CalvinCBClass):
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
         """Potentially requested a successfull replication"""    
         # data is None from time to time and status = 200, OK
-        print status  
-        resp = response.CalvinResponse(status=status.status, data={'actor_id':status.data.get('actor_id')})
+        print kwargs  
+        resp = response.CalvinResponse(status=status.status, data={'actor_id':kwargs['actor_id']})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
