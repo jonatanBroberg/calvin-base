@@ -1012,6 +1012,7 @@ class CalvinControl(object):
         required_reliability = application.get_required_reliability()
         self.node.storage.get_application(application.id, CalvinCB(func = self.handle_lost_actor_cb, lost_actor_id=match.group(1), 
                                                                     required_reliability=required_reliability, handle=handle, connection=connection))
+
         # Delete rest of old actor
         """
         self.handle_del_actor(handle, connection, match, data, hdr) 
@@ -1043,6 +1044,7 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
         
     def handle_lost_actor_cb_2(self, id, value, current_reliability, required_reliability, handle, connection):
+        """ Replicate the actor id, value enough times so that the required_reliability is acheived """
         while current_reliability < required_reliability:
             peer_node_id = random.choice(self.node.network.list_links())
             self.node.proto.actor_replication_request(id, value['node_id'], peer_node_id, None)
