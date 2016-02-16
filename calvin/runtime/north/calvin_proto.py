@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import traceback
 from calvin.utilities import calvinuuid
 from calvin.utilities.utils import enum
 from calvin.utilities.calvin_callback import CalvinCB, CalvinCBClass
