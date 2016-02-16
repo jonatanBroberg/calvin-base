@@ -65,7 +65,7 @@ class CalvinLink(object):
         try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))
-        except Exception as e:    
+        except:
             # We ignore unknown replies
             return
 

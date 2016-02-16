@@ -29,6 +29,7 @@ from calvin.utilities.attribute_resolver import format_index_string
 from calvin.Tools.cscontrol import control_deploy as deploy_app
 from calvin.utilities import calvinlogger
 from calvin.utilities import calvinconfig
+from calvin.utilities.nodecontrol import dispatch_node
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
 

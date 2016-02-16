@@ -781,7 +781,7 @@ class TestActorMigration(CalvinTestBase):
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(peer, sum_, id_)
-        time.sleep(0.2)
+        time.sleep(0.4)
 
         expected = expected_tokens(rt, src, 'std.Sum')
         actual = actual_tokens(rt, snk)
@@ -1767,7 +1767,7 @@ class TestLosingActors(CalvinTestBase):
                 a = utils.get_actor(rt, actor)
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt       
+                    replicas[actor] = rt
         assert(4 == len(replicas))
 
         utils.delete_actor(rt1, src)

@@ -220,13 +220,11 @@ class ActorManager(object):
             if callback:
                 callback(status=response.CalvinResponse(True))
             return
-
         actor = self.actors[actor_id]
         actor._migrating_to = node_id
         actor.will_migrate()
         actor_type = actor._type
         ports = actor.connections(self.node.id)
-
         # Disconnect ports and continue in _migrate_disconnect
         callback = CalvinCB(self._migrate_disconnected,
                             actor=actor,
@@ -235,7 +233,7 @@ class ActorManager(object):
                             node_id=node_id,
                             callback=callback)
         self.node.pm.disconnect(callback=callback, actor_id=actor_id)
-
+        
     def _migrate_disconnected(self, actor, actor_type, ports, node_id, status, callback=None, **state):
         """ Actor disconnected, continue migration """
         if status:
