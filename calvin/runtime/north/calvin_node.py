@@ -219,6 +219,10 @@ class Node(object):
     def _start_resource_reporter(self):
         actor_id = self.new("sys.NodeResourceReporter", {'node': self})
         actor = self.am.actors[actor_id]
+        if not actor.inports or not actor.outports:
+            _log.warning("Could not set up ResourceReporter: {}".format(actor))
+            return
+
         in_port = actor.inports['in']
         out_port = actor.outports['out']
         self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,

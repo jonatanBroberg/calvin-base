@@ -29,6 +29,8 @@ from calvin.utilities.attribute_resolver import format_index_string
 from calvin.Tools.cscontrol import control_deploy as deploy_app
 from calvin.utilities import calvinlogger
 from calvin.utilities import calvinconfig
+from calvin.Tools import cscompiler as compiler
+from calvin.Tools import deployer
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
@@ -43,6 +45,7 @@ storage_node = None
 rt1 = None
 rt2 = None
 rt3 = None
+storage_node_id = None
 rt1_id = None
 rt2_id = None
 rt3_id = None
@@ -817,9 +820,11 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         global rt1
         global rt2
         global rt3
+        global storage_node_id
         global rt1_id
         global rt2_id
         global rt3_id
+        storage_node_id = None
         rt1_id = None
         rt2_id = None
         rt3_id = None
@@ -1164,13 +1169,11 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         replica = utils.replicate(peer, snk, rt2_id)
         time.sleep(0.2)
 
-        app = utils.get_application(rt, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
 
-        app = utils.get_application(peer, app_id)
-        assert replica in app['actors']
-        assert replica in app['actors_name_map']
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
 
         d.destroy()
 
