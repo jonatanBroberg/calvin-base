@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import os
 import unittest
 import time
@@ -35,6 +36,7 @@ _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
 
 
+uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 runtime = None
 runtimes = []
@@ -301,6 +303,35 @@ class TestActorDeletion(CalvinTestBase):
 
         d.destroy()
 
+    def testDeleteRemoteActorFromRemoteNode(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+        utils.delete_actor(rt, snk)
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        actors = utils.get_application_actors(rt, app_id)
+        assert snk not in actors
+
+        actors = utils.get_application_actors(peer, app_id)
+        assert snk not in actors
+
+        d.destroy()
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1528,7 +1559,9 @@ class TestActorReplication(CalvinTestBase):
         time.sleep(0.2)
 
         new_node = None
-        for runtime in self.runtimes:
+        runtimes = [self.runtime]
+        runtimes.extend(self.runtimes)
+        for runtime in runtimes:
             if replica in utils.get_actors(runtime):
                 new_node = runtime
 
@@ -1539,13 +1572,207 @@ class TestActorReplication(CalvinTestBase):
         utils.delete_actor(rt, snk)
 
 
+@pytest.mark.essential
 @pytest.mark.slow
 class TestLosingActors(CalvinTestBase):
 
-    def testLoseOneActor(self):
-        rt = self.runtime
-        rt1 = self.runtimes[0]
-        rt2 = self.runtimes[1]
+    def testLoseOneActorFromAppRTOneReplica(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.2)
+        replicas = {snk2:rt2}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_application_actors(rt, app_id)
+            for actor in actors:
+                a = utils.get_actor(rt, actor)
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk' and a['node_id'] == rt.id:
+                    replicas[actor] = rt
+        assert(4 == len(replicas))
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+        
+    def testLoseOneActorFromNotAppRTOneReplica(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        utils.lost_actor(rt2, snk2)
+        time.sleep(0.2)
+        replicas = {snk:rt1}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_application_actors(rt, app_id)
+            for actor in actors:
+                a = utils.get_actor(rt, actor)
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk' and a['node_id'] == rt.id:
+                    replicas[actor] = rt  
+        assert(4 == len(replicas))
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+    def testLoseOneActorFromAppRTTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt2, snk2, rt3.id)
+        time.sleep(0.2)
+
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.2)
+        replicas = {snk2:rt2, snk3:rt3}
+        
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_application_actors(rt, app_id)
+            for actor in actors:
+                a = utils.get_actor(rt, actor)
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk' and a['node_id'] == rt.id:
+                    replicas[actor] = rt      
+        assert(4 == len(replicas))
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+    def testLoseOneActorFromNotAppRTTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt2, snk2, rt3.id)
+        time.sleep(0.2)
+
+        utils.lost_actor(rt2, snk2)
+        time.sleep(0.2)
+        replicas = {snk:rt1, snk3:rt3}
+        
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_application_actors(rt, app_id)
+            for actor in actors:
+                a = utils.get_actor(rt, actor)
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk' and a['node_id'] == rt.id:
+                    replicas[actor] = rt
+        assert(4 == len(replicas))
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+    def testLoseTwoActorsTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt1, snk, rt3.id)
+        time.sleep(0.2)
+
+        utils.lost_actor(rt2, snk2)
+        time.sleep(0.2)
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.2)
+        replicas = {snk3:rt3}
+        
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_application_actors(rt, app_id)
+            for actor in actors:
+                a = utils.get_actor(rt, actor)
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk' and a['node_id'] == rt.id:
+                    replicas[actor] = rt       
+        assert(4 == len(replicas))
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
 
 
 @pytest.mark.essential

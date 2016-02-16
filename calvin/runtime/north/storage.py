@@ -178,7 +178,6 @@ class Storage(object):
         """
         _log.debug("Set key %s, value %s" % (prefix + key, value))
         value = self.coder.encode(value) if value else value
-
         if prefix + key in self.localstore_sets:
             del self.localstore_sets[prefix + key]
 
