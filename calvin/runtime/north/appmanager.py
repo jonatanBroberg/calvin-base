@@ -496,9 +496,9 @@ class AppManager(object):
         actor_matrix = [[0 for x in range(l)] for x in range(l)]
         for actor_id in list_actors:
             connections = self._node.am.connections(actor_id)
-            for p in connections['inports'].values():
+            for conn in connections['inports']:
                 try:
-                    peer_actor_id = self._node.pm._get_local_port(port_id=p[1]).owner.id
+                    peer_actor_id = self._node.pm._get_local_port(port_id=conn.peer_port).owner.id
                 except:
                     # Only work while the peer still is local
                     # TODO get it from storage
