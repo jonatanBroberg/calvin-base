@@ -31,6 +31,7 @@ from calvin.utilities import calvinlogger
 from calvin.utilities import calvinconfig
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
+from calvin.utilities.nodecontrol import dispatch_node
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
