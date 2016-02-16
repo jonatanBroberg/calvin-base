@@ -262,16 +262,13 @@ class ActorManager(object):
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
-        if app:
-            app.actors[args['id']] = args['name']
-            self.node.storage.add_application(app)
-
-        if node_id == self.node.id:
+        
+        """if node_id == self.node.id:
             prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
             prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]
             self.new_replica(actor_type, args, state, prev_connections, app_id, callback)
-        else:
-            self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
+        else:"""
+        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:

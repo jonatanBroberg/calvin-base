@@ -179,7 +179,6 @@ class Storage(object):
         """
         _log.debug("Set key %s, value %s" % (prefix + key, value))
         value = self.coder.encode(value) if value else value
-
         if prefix + key in self.localstore_sets:
             del self.localstore_sets[prefix + key]
 
@@ -265,7 +264,6 @@ class Storage(object):
             org_cb(org_key, list(set(value + local_list)))
         elif org_cb:
             org_cb(org_key, local_list if local_list else None)
-
         return value
 
     def get_concat(self, prefix, key, cb=None):
@@ -289,7 +287,6 @@ class Storage(object):
             except:
                 _log.error("Failed to get: %s" % key, exc_info=True)
                 async.DelayedCall(0, cb, key=key, value=value if value else None)
-
         return value
 
     def get_concat_iter_cb(self, key, value, org_key, include_key, it):
