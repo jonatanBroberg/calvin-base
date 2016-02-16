@@ -88,14 +88,14 @@ class PortManager(object):
     def recv_token_handler(self, tunnel, payload):
         """ Gets called when a token arrives on any port """
         error_endpoints = []
-        port = self._get_local_port(port_id=payload['peer_port_id'])
-        for ep in port.endpoints:
-            if isinstance(ep, endpoint.TunnelInEndpoint):
-                try:
+        try:
+            port = self._get_local_port(port_id=payload['peer_port_id'])
+            for ep in port.endpoints:
+                if isinstance(ep, endpoint.TunnelInEndpoint):
                     ep.recv_token(payload)
-                except Exception as e:
-                    _log.error("Failed to receive token {}".format(e))
-                    error_endpoints.append(ep)
+        except Exception as e:
+            _log.error("Failed to receive token {}".format(e))
+            error_endpoints.append(e)
 
         if error_endpoints:
             # Inform other end that it sent token to a port that does not exist on this node or
