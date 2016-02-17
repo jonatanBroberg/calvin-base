@@ -121,13 +121,13 @@ class InPort(Port):
 
         disconnected_endpoints = []
         for ep in endpoints:
-            if self.owner.id == actor_id:
+            if not actor_id or ep.port.owner.id == actor_id:
                 self.fifo.commit_reads(ep.fifo_key, False)
                 disconnected_endpoints.append(ep)
             else:
                 self.endpoints.append(ep)
 
-        return endpoints
+        return disconnected_endpoints
 
     def read_token(self):
         """Used by actor (owner) to read a token from the ports.
@@ -256,7 +256,7 @@ class OutPort(Port):
 
         # When tunneled transport tokens after last continuous acked token will be resent later, receiver will just ack them again if rereceived
         for ep in endpoints:
-            if self.owner.id == actor_id:
+            if not actor_id or ep.port.owner.id == actor_id:
                 self.fifo.commit_reads(ep.fifo_key, False)
                 disconnected_endpoints.append(ep)
             else:

@@ -612,12 +612,11 @@ class PortManager(object):
             ep.destroy()
 
         ok = True
-        for peer in peer_ids:
-            peer_node_id = peer.node_id
-            peer_port_id = peer.port_id
+        for ep in port.endpoints:
+            peer = ep.get_peer()
             if peer.is_local:
                 # Use the disconnect request function since does not matter if local or remote request
-                if not self.disconnection_request({'peer_port_id': peer_port_id}):
+                if not self.disconnection_request({'peer_port_id': peer.port_id, 'peer_actor_id': ep.owner.id}):
                     ok = False
 
         # Inform all the remote ports of the disconnect
