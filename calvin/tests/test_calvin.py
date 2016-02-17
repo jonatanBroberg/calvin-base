@@ -1528,7 +1528,9 @@ class TestActorReplication(CalvinTestBase):
         time.sleep(0.2)
 
         new_node = None
-        for runtime in self.runtimes:
+        runtimes = [rt]
+        runtimes.extend(self.runtimes)
+        for runtime in runtimes:
             if replica in utils.get_actors(runtime):
                 new_node = runtime
 
