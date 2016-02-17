@@ -94,7 +94,6 @@ class ActorManager(object):
         self.connection_handler.setup_replica_connections(a, state, prev_connections)
         if callback:
             callback(status=response.CalvinResponse(True, data={'actor_id': a.id}))
-
         return a
 
     def delete_actor(self, actor_id, delete_from_app=False):

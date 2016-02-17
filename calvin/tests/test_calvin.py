@@ -302,7 +302,7 @@ class TestActorDeletion(CalvinTestBase):
         assert snk not in actors
 
         d.destroy()
-
+    
     def testDeleteRemoteActorFromRemoteNode(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -332,7 +332,7 @@ class TestActorDeletion(CalvinTestBase):
         assert snk not in actors
 
         d.destroy()
-
+    
 @pytest.mark.essential
 @pytest.mark.slow
 class TestLocalConnectDisconnect(CalvinTestBase):
@@ -1598,17 +1598,18 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
+        time.sleep(0.5)
         replicas = {snk2:rt2}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-        assert(4 == len(replicas))
+                if not actor == snk2:
+                    a = utils.get_actor(rt, actor)
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
+        assert(2 == len(replicas))
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
@@ -1634,19 +1635,20 @@ class TestLosingActors(CalvinTestBase):
         snk = d.actor_map['simple:snk']
         snk2 = utils.replicate(rt1, snk, rt2.id)
         time.sleep(0.2)
-
+     
         utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.5)
         replicas = {snk:rt1}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt  
-        assert(4 == len(replicas))
+                if not actor == snk2:
+                    a = utils.get_actor(rt, actor)
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt  
+        assert(2 == len(replicas))
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
@@ -1676,17 +1678,18 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
+        time.sleep(0.5)
         replicas = {snk2:rt2, snk3:rt3}
         
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt      
-        assert(4 == len(replicas))
+                if not actor == snk2:
+                    a = utils.get_actor(rt, actor)
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt      
+        assert(3 == len(replicas))
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
@@ -1711,22 +1714,24 @@ class TestLosingActors(CalvinTestBase):
         src = d.actor_map['simple:src']
         snk = d.actor_map['simple:snk']
         snk2 = utils.replicate(rt1, snk, rt2.id)
-        time.sleep(0.2)
+        time.sleep(0.3)
         snk3 = utils.replicate(rt2, snk2, rt3.id)
-        time.sleep(0.2)
+        time.sleep(0.3)
 
         utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.5)
         replicas = {snk:rt1, snk3:rt3}
         
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-        assert(4 == len(replicas))
+                if not actor == snk2:
+                    a = utils.get_actor(rt, actor)
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
+
+        assert(3 == len(replicas))
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
@@ -1756,19 +1761,20 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.5)
         utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
+        time.sleep(0.5)
         replicas = {snk3:rt3}
-        
+       
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-        assert(4 == len(replicas))
+                if not actor in [snk, snk2]:
+                    a = utils.get_actor(rt, actor)
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
+        assert(3 == len(replicas))
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():

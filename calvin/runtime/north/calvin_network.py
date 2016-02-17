@@ -61,7 +61,6 @@ class CalvinLink(object):
         except:
             # We ignore any errors in cancelling timeout
             pass
-
         try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))

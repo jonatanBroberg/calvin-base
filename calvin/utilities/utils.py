@@ -191,6 +191,7 @@ def delete_actor(rt, actor_id, timeout=TIMEOUT, async=False):
     req = session if async else requests
     r = req.delete(rt.control_uri + '/actor/' + actor_id, timeout=timeout)
     return check_response(r)
+    
 
 def lost_actor(rt, actor_id, timeout=TIMEOUT, async=False):
     rt = get_RT(rt)

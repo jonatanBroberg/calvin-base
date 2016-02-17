@@ -381,16 +381,16 @@ class CalvinProto(CalvinCBClass):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
-    def actor_destroy(self, to_rt_uuid, actor_id, callback=None):
+    def actor_destroy(self, to_rt_uuid, actor_id, callback):
         """ Destroys an actor on to_rt_uuid node
             actor_id: id of the actor
             callback: called when finished with the peer's respons as argument
         """
         if self.network.link_request(to_rt_uuid):
-            # Already have link just continue in _app_destroy
-            self._actor_destroy(to_rt_uuid, actor_id, status=response.CalvinResponse(True), callback = callback)
+            # Already have link just continue in _actor_destroy
+            self._actor_destroy(to_rt_uuid, actor_id, status=response.CalvinResponse(True), callback=callback)
         else:
-            # Request link before continue in _app_destroy
+            # Request link before continue in _actor_destroy
             self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy,
                                                         to_rt_uuid=to_rt_uuid,
                                                         actor_id=actor_id,
