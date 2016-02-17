@@ -17,6 +17,7 @@
 import re
 import time
 import json
+from lost_actor_manager import LostActorManager
 from random import randint
 from calvin.Tools import cscompiler as compiler
 from calvin.runtime.north.appmanager import Deployer
@@ -227,6 +228,15 @@ control_api_doc += \
      }
 """
 re_get_actor = re.compile(r"GET /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+
+control_api_doc += \
+    """
+    POST /actor/{actor-id}
+    Lost an actor, replicate until required reliability is acheived if possbile
+    Response status code: OK or NOT_FOUND
+    Response: none
+"""
+re_post_lost_actor = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
 
 control_api_doc += \
     """
@@ -687,6 +697,7 @@ class CalvinControl(object):
             (re_post_actor_migrate, self.handle_actor_migrate),
             (re_post_actor_replicate, self.handle_actor_replicate),
             (re_post_actor_disable, self.handle_actor_disable),
+            (re_post_lost_actor, self.handle_lost_actor),
             (re_get_port, self.handle_get_port),
             (re_get_port_state, self.handle_get_port_state),
             (re_post_connect, self.handle_connect),
@@ -775,7 +786,7 @@ class CalvinControl(object):
 
     def send_response(self, handle, connection, data, status=200):
         """ Send response header text/html
-        """
+        """ 
         header = "HTTP/1.0 " + \
             str(status) + " " + calvinresponse.RESPONSE_CODES[status] + \
             "\n" + ("" if data is None else "Content-Type: application/json\n") + \
@@ -987,6 +998,32 @@ class CalvinControl(object):
         self.node.storage.get_actor(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
+
+    def handle_lost_actor(self, handle, connection, match, data, hdr):
+        """ We lost actor, replicate if possible
+            1. Find the required reliability from the applicaiton 
+            2. Replicate until required reliability is reached
+            3. Delete information about the lost actor
+        """
+        self.node.storage.get_actor(match.group(1), cb=CalvinCB(func=self._handle_lost_actor_cb_01, 
+                                                                handle=handle, connection=connection))
+       
+    def _handle_lost_actor_cb_01(self, key, value, handle, connection):
+        """ Get app id and actor name from actor info """
+        self.node.storage.get_application(value['app_id'], cb=CalvinCB(func=self._handle_lost_actor_cb_02, lost_actor_id=key, lost_actor_info=value,
+                                                                                handle = handle, connection=connection))
+
+    def _handle_lost_actor_cb_02(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
+        """ Get required reliability from application info """
+        lost_actor_manager = LostActorManager(self.node, lost_actor_id, lost_actor_info, value['required_reliability'], uuid_re)
+        self.node.storage.get_application_actors(key, cb=CalvinCB(func=self._handle_lost_actor_cb_03, lost_actor_manager=lost_actor_manager,
+                                                                    handle=handle, connection=connection))
+
+    def _handle_lost_actor_cb_03(self, key, value, lost_actor_manager, handle, connection):
+        """ Find which of the applications actors which are replicas of the lost actor """
+        lost_actor_manager.find_and_replicate(value, callback=CalvinCB(self.send_response, handle=handle, connection=connection))
+        self.send_response(handle, connection, None, status = 200)
+
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
         """
@@ -997,6 +1034,29 @@ class CalvinControl(object):
             _log.exception("Destroy actor failed")
             status = calvinresponse.NOT_FOUND
         self.send_response(handle, connection, None, status=status)
+        
+        #self.node.storage.get_actor(match.group(1), cb = CalvinCB(func= self.handle_del_actor_cb, handle = handle,
+        #                                                        connection = connection))
+        
+    def handle_del_actor_cb(self, key, value, handle, connection):
+        if value:
+            if value['node_id'] == self.node.id:
+                try:
+                    self.node.am.delete_actor(key)
+                    status = calvinresponse.OK
+                except Exception as e:
+                    print e
+                    _log.exception("Destroy actor failed")
+                    status = calvinresponse.NOT_FOUND
+                self.send_response(handle, connection, None, status=status)
+            else: 
+                self.node.proto.actor_destroy(value['node_id'], key, callback = CalvinCB(self.handle_del_actor_other_node, 
+                                                                                        handle=handle, connection=connection))
+        else:
+            self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+
+    def handle_del_actor_other_node(self, value, handle, connection):
+        self.send_response(handle, connection, None, status=value.status)
 
     def handle_get_actor_report(self, handle, connection, match, data, hdr):
         """ Get report from actor
