@@ -39,9 +39,10 @@ class Endpoint(object):
 
     """docstring for Endpoint"""
 
-    def __init__(self, port):
+    def __init__(self, port, former_peer_id=None):
         super(Endpoint, self).__init__()
         self.port = port
+        self.former_peer_id = former_peer_id
 
     def __str__(self):
         return self.__class__.__name__
@@ -78,7 +79,7 @@ class LocalInEndpoint(Endpoint):
         super(LocalInEndpoint, self).__init__(port)
         self.fifo_key = get_fifo_key(port.id, peer_port.id)
         self.peer_port = peer_port
-        self.peer_id = peer_port.id
+        self.peer_port_id = peer_port.id
         # When migrating from remote to local,
         # there might be initial data to read in the FIFO
         self.data_in_local_fifo = True
@@ -175,13 +176,13 @@ class LocalOutEndpoint(Endpoint):
         super(LocalOutEndpoint, self).__init__(port)
         self.fifo_key = get_fifo_key(in_port=peer_port.id, out_port=port.id)
         self.peer_port = peer_port
-        self.peer_id = peer_port.id
+        self.peer_port_id = peer_port.id
 
     def is_connected(self):
         return True
 
     def get_peer(self):
-        return Peer('local', self.peer_id)
+        return Peer('local', self.peer_port_id)
 
 
 #
@@ -197,7 +198,7 @@ class TunnelInEndpoint(Endpoint):
         self.fifo_key = get_fifo_key(in_port=port.id, out_port=peer_port_id)
         self.tunnel = tunnel
         self.peer_port_id = peer_port_id
-        self.peer_id = peer_port_id
+        self.peer_port_id = peer_port_id
         self.peer_node_id = peer_node_id
         self.trigger_loop = trigger_loop
 
@@ -255,7 +256,7 @@ class TunnelOutEndpoint(Endpoint):
         super(TunnelOutEndpoint, self).__init__(port)
         self.fifo_key = get_fifo_key(in_port=peer_port_id, out_port=port.id)
         self.tunnel = tunnel
-        self.peer_id = peer_port_id
+        self.peer_port_id = peer_port_id
         self.peer_node_id = peer_node_id
         self.trigger_loop = trigger_loop
         # Keep track of acked tokens, only contains something post call if acks comes out of order
@@ -316,7 +317,7 @@ class TunnelOutEndpoint(Endpoint):
                                                        self.port.name,
                                                        sequencenbr_sent,
                                                        "" if self.bulk else "@%f/%f" % (self.time_cont, self.backoff)))
-        self.tunnel.send({'cmd': 'TOKEN', 'token': token.encode(), 'peer_port_id': self.peer_id, 'sequencenbr': sequencenbr_sent, 'port_id': self.port.id})
+        self.tunnel.send({'cmd': 'TOKEN', 'token': token.encode(), 'peer_port_id': self.peer_port_id, 'sequencenbr': sequencenbr_sent, 'port_id': self.port.id})
 
     def communicate(self, *args, **kwargs):
         sent = False
@@ -339,4 +340,4 @@ class TunnelOutEndpoint(Endpoint):
         return sent
 
     def get_peer(self):
-        return Peer(self.peer_node_id, self.peer_id)
+        return Peer(self.peer_node_id, self.peer_port_id)

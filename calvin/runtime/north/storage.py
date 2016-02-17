@@ -565,6 +565,7 @@ class Storage(object):
     def delete_actor_from_app(self, app_id, actor_id):
         """Remove actor_id from application's list of actors"""
         if not app_id:
+            _log.warning("Cannot delete actor because app id is None: {}".format(app_id))
             return
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)

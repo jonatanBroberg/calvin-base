@@ -77,7 +77,7 @@ class DummyInEndpoint(Endpoint):
 
     def __init__(self, port, actor):
         super(DummyInEndpoint, self).__init__(port)
-        self.peer_id = actor.id
+        self.peer_port_id = actor.id
         self.fifo_key = port.id # actor.id
 
     def is_connected(self):
@@ -112,7 +112,7 @@ class DummyOutEndpoint(Endpoint):
 
     def __init__(self, port, actor):
         super(DummyOutEndpoint, self).__init__(port)
-        self.peer_id = actor.id
+        self.peer_port_id = actor.id
         self.fifo_key = self.port.id
 
     def is_connected(self):

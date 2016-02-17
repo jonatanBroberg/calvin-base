@@ -605,18 +605,16 @@ class PortManager(object):
         peer_ids = port.get_peers()
 
         # Disconnect and destroy the endpoints
-        endpoints = port.disconnect(actor_id)
+        endpoints = port.disconnect(port.id)
         for ep in endpoints:
             if isinstance(ep, endpoint.TunnelOutEndpoint):
                 self.monitor.unregister_out_endpoint(ep)
             ep.destroy()
-
         ok = True
-        for ep in port.endpoints:
-            peer = ep.get_peer()
+        for peer in peer_ids:
             if peer.is_local:
                 # Use the disconnect request function since does not matter if local or remote request
-                if not self.disconnection_request({'peer_port_id': peer.port_id, 'peer_actor_id': ep.owner.id}):
+                if not self.disconnection_request({'peer_port_id': peer.port_id, 'port_id': port.id}):
                     ok = False
 
         # Inform all the remote ports of the disconnect
@@ -636,14 +634,14 @@ class PortManager(object):
             self.disconnecting_ports.pop(state['port_id'])
             if state['callback']:
                 _log.analyze(self.node.id, "+ DONE", {k: state[k] for k in state.keys() if k != 'callback'})
-                state['callback'](status=response.CalvinResponse(ok) , **state)
+                state['callback'](status=response.CalvinResponse(ok), **state)
 
     def _disconnected_port(self, reply, **state):
         """ Get called for each peer port when diconnecting but callback should only be called once"""
         try:
             # Remove this peer from the list of remote peer ports
             self.disconnecting_ports[state['port_id']].remove(state['peer_id'])
-        except:
+        except Exception as e:
             pass
         if not reply:
             # Got failed response do callback, but also remove port from dictionary indicating we have sent the callback
@@ -683,6 +681,7 @@ class PortManager(object):
                 'peer_port_name' in payload and
                 'peer_port_dir' in payload)):
             # Not enough info to find port
+            _log.warning("Not enough info to find port: {}".format(payload))
             return response.CalvinResponse(response.BAD_REQUEST)
         # Check if port actually is local
         try:
@@ -690,12 +689,13 @@ class PortManager(object):
                                         payload['peer_port_name'] if 'peer_port_name' in payload else None,
                                         payload['peer_port_dir'] if 'peer_port_dir' in payload else None,
                                         payload['peer_port_id'] if 'peer_port_id' in payload else None)
-        except:
+        except Exception as e:
+            _log.warning("Could not get local port: {}".format(e))
             # We don't have the port
             return response.CalvinResponse(response.NOT_FOUND)
         else:
             # Disconnect and destroy endpoints
-            endpoints = port.disconnect(payload.get('peer_actor_id'))
+            endpoints = port.disconnect(payload.get('port_id'))
             for ep in endpoints:
                 if isinstance(ep, endpoint.TunnelOutEndpoint):
                     self.monitor.unregister_out_endpoint(ep)
@@ -713,9 +713,11 @@ class PortManager(object):
     def remove_ports_of_actor(self, actor):
         """ Remove an actor's ports in the dictionary, used by actor manager """
         for port in actor.inports.values():
-            self.ports.pop(port.id)
+            if not port.is_connected():
+                self.ports.pop(port.id)
         for port in actor.outports.values():
-            self.ports.pop(port.id)
+            if not port.is_connected():
+                self.ports.pop(port.id)
 
     def _get_local_port(self, actor_id=None, port_name=None, port_dir=None, port_id=None):
         """ Return a port if it is local otherwise raise exception """
@@ -724,6 +726,7 @@ class PortManager(object):
         if port_name and actor_id and port_dir:
             for port in self.ports.itervalues():
                 if port.name == port_name and port.owner and port.owner.id == actor_id and isinstance(port, InPort if port_dir == "in" else OutPort):
+                    self.ports[port.id] = port
                     return port
             # For new shadow actors we create the port
             _log.analyze(self.node.id, "+ SHADOW PORT?", {'actor_id': actor_id, 'port_name': port_name, 'port_dir': port_dir, 'port_id': port_id})

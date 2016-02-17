@@ -18,13 +18,28 @@ import unittest
 import mock
 from calvin.runtime.north.actormanager import ActorManager
 from calvin.runtime.north import metering
+import calvin.utilities.calvinresponse as response
+
+
+class DummyPortManager:
+
+    def disconnect(self, callback=None, actor_id=None, port_name=None, port_dir=None, port_id=None):
+        status = response.CalvinResponse(True)
+        if callback:
+            callback(status=status, actor_id=actor_id, port_name=port_name, port_id=port_id)
+
+    def add_ports_of_actor(self, actor):
+        pass
+
+    def remove_ports_of_actor(self, actor):
+        pass
 
 
 class DummyNode:
 
     def __init__(self):
         self.id = id(self)
-        self.pm = mock.Mock()
+        self.pm = DummyPortManager()
         self.storage = mock.Mock()
         self.control = mock.Mock()
         self.metering = metering.set_metering(metering.Metering(self))

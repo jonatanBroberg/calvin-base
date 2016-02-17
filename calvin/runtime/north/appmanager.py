@@ -199,7 +199,7 @@ class AppManager(object):
             if actor_id in self._node.am.list_actors():
                 _log.analyze(self._node.id, "+ LOCAL ACTOR", {'actor_id': actor_id})
                 # TODO: Check if it whent ok
-                self._node.am.delete_actor(actor_id)
+                self._node.am.delete_actor(actor_id, delete_from_app=True)
                 application.remove_actor(actor_id)
             else:
                 _log.analyze(self._node.id, "+ REMOTE ACTOR", {'actor_id': actor_id})
@@ -282,7 +282,7 @@ class AppManager(object):
         reply = response.CalvinResponse(True)
         for actor_id in actor_ids:
             if actor_id in self._node.am.list_actors():
-                self._node.am.delete_actor(actor_id)
+                self._node.am.delete_actor(actor_id, delete_from_app=True)
             else:
                 reply = response.CalvinResponse(False)
         if application_id in self.applications:

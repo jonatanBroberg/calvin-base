@@ -98,22 +98,32 @@ class ActorManager(object):
         return a
 
     def delete_actor(self, actor_id, delete_from_app=False):
+        actor = self.actors[actor_id]
+        callback = CalvinCB(self._delete_actor_disconnected, actor=actor, delete_from_app=delete_from_app)
+        self.node.pm.disconnect(callback=callback, actor_id=actor_id)
+
+    def _delete_actor_disconnected(self, actor, delete_from_app, actor_id, status, *args, **kwargs):
+        if not status:
+            _log.warning("Disconnecting of actor {} failed: {}".format(actor_id, status))
+            return
         # @TOOD - check order here
-        self.node.metering.remove_actor_info(actor_id)
-        a = self.actors[actor_id]
+        self.node.metering.remove_actor_info(actor.id)
+        a = self.actors[actor.id]
         a.will_end()
         self.node.pm.remove_ports_of_actor(a)
 
         # @TOOD - insert callback here
-        self.node.storage.delete_actor(actor_id)
-        del self.actors[actor_id]
+        self.node.storage.delete_actor(actor.id)
+        del self.actors[actor.id]
 
         self.node.control.log_actor_destroy(a.id)
 
-        self.node.storage.delete_actor_from_app(a.app_id, actor_id)
+        if delete_from_app:
+            self.node.storage.delete_actor_from_app(a.app_id, actor.id)
+
         app = self.node.app_manager.applications.get(a.app_id)
         if app:
-            app.remove_actor(actor_id)
+            app.remove_actor(actor.id)
 
         return a
 
@@ -233,7 +243,7 @@ class ActorManager(object):
                             node_id=node_id,
                             callback=callback)
         self.node.pm.disconnect(callback=callback, actor_id=actor_id)
-        
+
     def _migrate_disconnected(self, actor, actor_type, ports, node_id, status, callback=None, **state):
         """ Actor disconnected, continue migration """
         if status:
@@ -246,6 +256,8 @@ class ActorManager(object):
     def replicate(self, actor_id, node_id, callback=None):
         """Replicate an actor actor_id to peer node node_id """
         if actor_id not in self.actors:
+            _log.warning("Failed to replicate {} to {}. Can only replicate actors from our node.".format(
+                actor_id, node_id))
             # Can only replicate actors from our node
             if callback:
                 callback(status=response.CalvinResponse(False))
@@ -260,7 +272,7 @@ class ActorManager(object):
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
-        
+
         """if node_id == self.node.id:
             prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
             prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]

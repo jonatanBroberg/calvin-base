@@ -152,7 +152,7 @@ class CalvinProto(CalvinCBClass):
             'ACTOR_NEW': [CalvinCB(self.actor_new_handler)],
             'ACTOR_MIGRATE': [CalvinCB(self.actor_migrate_handler)],
             'ACTOR_REPLICATE': [CalvinCB(self.actor_replication_handler)],
-            'ACTOR_REPLICATION_REQUEST' : [CalvinCB(self.actor_replication_request_handler)], 
+            'ACTOR_REPLICATION_REQUEST' : [CalvinCB(self.actor_replication_request_handler)],
             'ACTOR_DESTROY' : [CalvinCB(self.actor_destroy_handler)],
             'APP_DESTROY': [CalvinCB(self.app_destroy_handler)],
             'PORT_CONNECT': [CalvinCB(self.port_connect_handler)],
@@ -307,15 +307,15 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_request(self, actor_id, from_node_id, to_node_id, callback):
         """
-        Sends a replication request that actor actor_id should be replicated from 
+        Sends a replication request that actor actor_id should be replicated from
         from_node_id to to_node_id
         """
         _log.analyze(self.rt_id, "+", "Request replication of actor {} from {} to {}".format(actor_id, from_node_id, to_node_id))
         if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request,
-                                                                actor_id=actor_id,
-                                                                from_node_id=from_node_id,
-                                                                to_node_id=to_node_id,
-                                                                callback = callback)):
+                                                                 actor_id=actor_id,
+                                                                 from_node_id=from_node_id,
+                                                                 to_node_id=to_node_id,
+                                                                 callback=callback)):
             # Already have link just continue in _actor_replication
                 self._actor_replication_request(actor_id, from_node_id, to_node_id, callback, response.CalvinResponse(True))
 
@@ -324,7 +324,7 @@ class CalvinProto(CalvinCBClass):
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                     'actor_id': actor_id,
-                    'from_node_id':from_node_id,
+                    #'from_node_id': from_node_id,
                     'to_node_id': to_node_id}
             self.network.links[from_node_id].send_with_reply(callback, msg)
         elif callback:
@@ -333,7 +333,7 @@ class CalvinProto(CalvinCBClass):
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
         _log.analyze(self.rt_id, "+", "Handle of request of a replication request {}".format(payload))
-        self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback = CalvinCB(self._actor_replication_request_handler, payload))
+        self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback=CalvinCB(self._actor_replication_request_handler, payload))
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
         """Potentially requested a successfull replication"""
@@ -392,22 +392,22 @@ class CalvinProto(CalvinCBClass):
         else:
             # Request link before continue in _app_destroy
             self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy,
-                                                        to_rt_uuid=to_rt_uuid,
-                                                        actor_id=actor_id,
-                                                        callback=callback))
+                                                                to_rt_uuid=to_rt_uuid,
+                                                                actor_id=actor_id,
+                                                                callback=callback))
 
-    def _actor_destroy(self, to_rt_uuid, actor_id, status, callback):
+    def _actor_destroy(self, to_rt_uuid, actor_id, status, callback, *args, **kwargs):
         """ Got link? continue actor destruction """
         if status:
-            msg = {'cmd':'ACTOR_DESTROY', 'actor_id':actor_id}
+            msg = {'cmd': 'ACTOR_DESTROY', 'actor_id': actor_id}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
-            callback(status = status)
+            callback(status=status)
 
     def actor_destroy_handler(self, payload):
         """ Peer request destruction of actor"""
         try:
-            self.node.am.delete_actor(payload['actor_id'])
+            self.node.am.delete_actor(payload['actor_id'], delete_from_app=True)
             reply = response.CalvinResponse(response.OK)
         except:
             _log.exception("Destroy actor failed")

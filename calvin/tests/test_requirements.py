@@ -1155,12 +1155,13 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         peer.id = rt2_id
 
         script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
+          src : std.CountTimer()
+          snk : io.StandardOut(store_tokens=1)
+          src.integer > snk.token
+          """
+
         app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
+        d = deployer.Deployer(rt1, app_info)
         app_id = d.deploy()
 
         time.sleep(0.2)
@@ -1176,6 +1177,42 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         actors = utils.get_application_actors(peer, app_id)
         assert replica in actors
+
+        d.destroy()
+
+    @pytest.mark.slow
+    @pytest.mark.essential
+    def testDeleteRemoteActorRemovesActorFromApplicationsActors(self):
+        global rt1
+        global rt2
+        global rt1_id
+        global rt2_id
+        self.verify_storage()
+        rt = rt1
+        peer = rt2
+        rt.id = rt1_id
+        peer.id = rt2_id
+
+        script = """
+          src : std.CountTimer()
+          snk : io.StandardOut(store_tokens=1)
+          src.integer > snk.token
+          """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        utils.migrate(rt, snk, rt2_id)
+        time.sleep(0.2)
+        utils.delete_actor(peer, snk)
+        time.sleep(0.2)
+
+        assert snk not in utils.get_application_actors(rt, app_id)
+        assert snk not in utils.get_application_actors(peer, app_id)
 
         d.destroy()
 

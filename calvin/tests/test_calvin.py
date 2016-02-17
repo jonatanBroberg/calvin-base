@@ -268,8 +268,8 @@ class TestActorDeletion(CalvinTestBase):
         utils.delete_actor(rt, snk)
         time.sleep(0.2)
 
-        actors = utils.get_application_actors(rt, app_id)
-        assert snk not in actors
+        self.assertIsNone(utils.get_actor(rt, snk))
+        assert snk not in utils.get_application_actors(rt, app_id)
 
         d.destroy()
 
@@ -291,47 +291,20 @@ class TestActorDeletion(CalvinTestBase):
         time.sleep(0.2)
         utils.migrate(rt, snk, peer.id)
         time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
         utils.delete_actor(peer, snk)
-        time.sleep(0.2)
+        time.sleep(3)
 
         snk = d.actor_map['simple:snk']
-        actors = utils.get_application_actors(rt, app_id)
-        assert snk not in actors
 
-        actors = utils.get_application_actors(peer, app_id)
-        assert snk not in actors
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
 
         d.destroy()
 
-    def testDeleteRemoteActorFromRemoteNode(self):
-        rt = self.runtime
-        peer = self.runtimes[0]
-
-        script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-
-        snk = d.actor_map['simple:snk']
-
-        time.sleep(0.2)
-        utils.migrate(rt, snk, peer.id)
-        time.sleep(0.2)
-        utils.delete_actor(rt, snk)
-        time.sleep(0.2)
-
-        snk = d.actor_map['simple:snk']
-        actors = utils.get_application_actors(rt, app_id)
-        assert snk not in actors
-
-        actors = utils.get_application_actors(peer, app_id)
-        assert snk not in actors
-
-        d.destroy()
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1597,9 +1570,11 @@ class TestLosingActors(CalvinTestBase):
         snk2 = utils.replicate(rt1, snk, rt2.id)
         time.sleep(0.2)
 
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
         utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
-        replicas = {snk2:rt2}
+        time.sleep(0.3)
+        replicas = {snk2: rt2}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
@@ -1608,11 +1583,25 @@ class TestLosingActors(CalvinTestBase):
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
                     replicas[actor] = rt
-        assert(4 == len(replicas))
+
+            assert snk not in actors
+
+        assert(2 == len(replicas))
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        time.sleep(.3)
+        assert utils.get_application_actors(rt, app_id) == []
+
+        d.destroy()
 
     def testLoseOneActorFromNotAppRTOneReplica(self):
         rt1 = self.runtime
@@ -1635,9 +1624,11 @@ class TestLosingActors(CalvinTestBase):
         snk2 = utils.replicate(rt1, snk, rt2.id)
         time.sleep(0.2)
 
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
         utils.lost_actor(rt2, snk2)
         time.sleep(0.2)
-        replicas = {snk:rt1}
+        replicas = {snk: rt1}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
@@ -1646,11 +1637,25 @@ class TestLosingActors(CalvinTestBase):
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
                     replicas[actor] = rt
-        assert(4 == len(replicas))
+
+            assert snk2 not in actors
+
+        assert(2 == len(replicas))
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        time.sleep(.3)
+        assert utils.get_application_actors(rt, app_id) == []
+
+        d.destroy()
 
     def testLoseOneActorFromAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1675,9 +1680,11 @@ class TestLosingActors(CalvinTestBase):
         snk3 = utils.replicate(rt2, snk2, rt3.id)
         time.sleep(0.2)
 
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
         utils.lost_actor(rt1, snk)
         time.sleep(0.2)
-        replicas = {snk2:rt2, snk3:rt3}
+        replicas = {snk2: rt2, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
@@ -1686,11 +1693,25 @@ class TestLosingActors(CalvinTestBase):
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
                     replicas[actor] = rt
-        assert(4 == len(replicas))
+
+            assert snk not in actors
+
+        assert(3 == len(replicas))
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        time.sleep(.3)
+        assert utils.get_application_actors(rt, app_id) == []
+
+        d.destroy()
 
     def testLoseOneActorFromNotAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1715,9 +1736,11 @@ class TestLosingActors(CalvinTestBase):
         snk3 = utils.replicate(rt2, snk2, rt3.id)
         time.sleep(0.2)
 
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
         utils.lost_actor(rt2, snk2)
         time.sleep(0.2)
-        replicas = {snk:rt1, snk3:rt3}
+        replicas = {snk: rt1, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
@@ -1726,11 +1749,25 @@ class TestLosingActors(CalvinTestBase):
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
                     replicas[actor] = rt
-        assert(4 == len(replicas))
+
+            assert snk2 not in actors
+
+        assert(3 == len(replicas))
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        time.sleep(.3)
+        assert utils.get_application_actors(rt, app_id) == []
+
+        d.destroy()
 
     def testLoseTwoActorsTwoReplicas(self):
         rt1 = self.runtime
@@ -1755,11 +1792,12 @@ class TestLosingActors(CalvinTestBase):
         snk3 = utils.replicate(rt1, snk, rt3.id)
         time.sleep(0.2)
 
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
         utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
         utils.lost_actor(rt1, snk)
         time.sleep(0.2)
-        replicas = {snk3:rt3}
+        replicas = {snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_application_actors(rt, app_id)
@@ -1768,11 +1806,27 @@ class TestLosingActors(CalvinTestBase):
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk' and a['node_id'] == rt.id:
                     replicas[actor] = rt
-        assert(4 == len(replicas))
+
+            assert snk2 not in actors
+            assert snk not in actors
+
+        assert(3 == len(replicas))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        time.sleep(.3)
+        assert utils.get_application_actors(rt, app_id) == []
+
+        d.destroy()
 
 
 @pytest.mark.essential

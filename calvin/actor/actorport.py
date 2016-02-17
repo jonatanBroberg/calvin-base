@@ -85,15 +85,15 @@ class InPort(Port):
     def is_connected(self):
         return all([ep.is_connected() for ep in self.endpoints])
 
-    def is_connected_to(self, peer_id):
+    def is_connected_to(self, peer_port_id):
         for ep in self.endpoints:
-            if ep.get_peer().port_id == peer_id:
+            if ep.get_peer().port_id == peer_port_id:
                 return True
         return False
 
     def attach_endpoint(self, ep):
-        peer_id = ep.peer_id
-        match = [e for e in self.endpoints if e.peer_id == peer_id]
+        peer_port_id = ep.peer_port_id
+        match = [e for e in self.endpoints if e.peer_port_id == peer_port_id]
         if not match:
             old_endpoint = None
         else:
@@ -109,24 +109,27 @@ class InPort(Port):
         if ep not in self.endpoints:
             _log.warning("Outport: No such endpoint")
             return
-        self.owner.did_disconnect(self)
         self.endpoints.remove(ep)
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
         return
 
-    def disconnect(self, actor_id):
+    def disconnect(self, port_id):
         """Disconnects the port endpoints associated with the given actor_id"""
-        self.owner.did_disconnect(self)
         endpoints = self.endpoints
         self.endpoints = []
 
         disconnected_endpoints = []
         for ep in endpoints:
-            if not actor_id or ep.port.owner.id == actor_id:
+            if not port_id or ep.peer_port_id == port_id:
                 self.fifo.commit_reads(ep.fifo_key, False)
                 disconnected_endpoints.append(ep)
+                self._detach_endpoint(ep)
             else:
                 self.endpoints.append(ep)
 
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
         return disconnected_endpoints
 
     def read_token(self):
@@ -217,15 +220,15 @@ class OutPort(Port):
                 return False
         return True
 
-    def is_connected_to(self, peer_id):
+    def is_connected_to(self, peer_port_id):
         for ep in self.endpoints:
-            if ep.get_peer().port_id == peer_id:
+            if ep.get_peer().port_id == peer_port_id:
                 return True
         return False
 
     def attach_endpoint(self, ep):
-        peer_id = ep.peer_id
-        match = [e for e in self.endpoints if e.peer_id == peer_id]
+        peer_port_id = ep.peer_port_id
+        match = [e for e in self.endpoints if e.peer_port_id == peer_port_id]
         if not match:
             old_endpoint = None
         else:
@@ -241,12 +244,12 @@ class OutPort(Port):
         if ep not in self.endpoints:
             _log.warning("Outport: No such endpoint")
             return
-        self.owner.did_disconnect(self)
         self.endpoints.remove(ep)
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
 
-    def disconnect(self, actor_id):
+    def disconnect(self, port_id):
         """Disconnects the port endpoints associated with the given actor_id"""
-        self.owner.did_disconnect(self)
         endpoints = self.endpoints
         self.endpoints = []
         disconnected_endpoints = []
@@ -256,12 +259,14 @@ class OutPort(Port):
 
         # When tunneled transport tokens after last continuous acked token will be resent later, receiver will just ack them again if rereceived
         for ep in endpoints:
-            if not actor_id or ep.port.owner.id == actor_id:
+            if not port_id or ep.peer_port_id == port_id:
                 self.fifo.commit_reads(ep.fifo_key, False)
                 disconnected_endpoints.append(ep)
             else:
                 self.endpoints.append(ep)
 
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
         return disconnected_endpoints
 
     def write_token(self, data):
@@ -269,9 +274,8 @@ class OutPort(Port):
         errors = []
         for e in self.endpoints:
             if not self.fifo.write(data, e.fifo_key):
-                errors.append("FIFO full when writing to port {}.{} with id {}".format(
-                    self.owner.name, self.name, e.fifo_key))
-
+                errors.append("FIFO full when writing to port {}.{} from {}.{} with id {}".format(
+                    self.owner.name, self.name, e.port.owner.name, e.port.name, e.fifo_key))
         if errors:
             raise Exception("\n".join(errors))
 
