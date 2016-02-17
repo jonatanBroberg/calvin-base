@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.utilities.calvinlogger import get_logger
@@ -94,7 +93,7 @@ class ActorManager(object):
 
         self.connection_handler.setup_replica_connections(a, state, prev_connections)
         if callback:
-            callback(status=response.CalvinResponse(True), actor_id=a.id)
+            callback(status=response.CalvinResponse(True, data={'actor_id': a.id}))
 
         return a
 
@@ -221,13 +220,11 @@ class ActorManager(object):
             if callback:
                 callback(status=response.CalvinResponse(True))
             return
-
         actor = self.actors[actor_id]
         actor._migrating_to = node_id
         actor.will_migrate()
         actor_type = actor._type
         ports = actor.connections(self.node.id)
-
         # Disconnect ports and continue in _migrate_disconnect
         callback = CalvinCB(self._migrate_disconnected,
                             actor=actor,
@@ -236,7 +233,7 @@ class ActorManager(object):
                             node_id=node_id,
                             callback=callback)
         self.node.pm.disconnect(callback=callback, actor_id=actor_id)
-
+        
     def _migrate_disconnected(self, actor, actor_type, ports, node_id, status, callback=None, **state):
         """ Actor disconnected, continue migration """
         if status:
@@ -263,10 +260,12 @@ class ActorManager(object):
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
-        if app:
-            app.actors[args['id']] = args['name']
-            self.node.storage.add_application(app)
-
+        
+        """if node_id == self.node.id:
+            prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
+            prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]
+            self.new_replica(actor_type, args, state, prev_connections, app_id, callback)
+        else:"""
         self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
 
     def peernew_to_local_cb(self, reply, **kwargs):

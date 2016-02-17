@@ -86,6 +86,10 @@ def control_actors(args):
         if not args.id:
             raise Exception("No actor id given")
         return utils.replicate(args.node, args.id, args.peer_node)
+    elif args.cmd == 'lost':
+        if not args.id:
+            raise Exception("No actor id given")
+        return utils.lost_actor(args.node, args.id)
 
 
 def control_applications(args):
@@ -155,8 +159,6 @@ def parse_args():
     cmd_nodes = cmdparsers.add_parser('nodes', help='handle node peers')
     cmd_nodes.add_argument('cmd', metavar='<command>', choices=node_commands, type=str,
                            help="one of %s" % ", ".join(node_commands))
-    cmd_nodes.add_argument('id', metavar="<node id>", type=str, nargs='?', default=None,
-                           help="id of node")
     cmd_nodes.add_argument('peerlist', metavar='<peer>', nargs='*', default=[],
                            help="list of peers of the form calvinip://<address>:<port>")
     cmd_nodes.set_defaults(func=control_nodes)
@@ -175,7 +177,7 @@ def parse_args():
     cmd_deploy.set_defaults(func=control_deploy)
 
     # parsers for actor commands
-    actor_commands = ['info', 'list', 'delete', 'migrate', 'replicate']
+    actor_commands = ['info', 'list', 'delete', 'migrate', 'replicate', 'lost']
     cmd_actor = cmdparsers.add_parser('actor', help="handle actors on node")
     cmd_actor.add_argument('cmd', metavar="<command>", choices=actor_commands, type=str,
                            help="one of %s" % (", ".join(actor_commands)))

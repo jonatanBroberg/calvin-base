@@ -178,7 +178,6 @@ class Storage(object):
         """
         _log.debug("Set key %s, value %s" % (prefix + key, value))
         value = self.coder.encode(value) if value else value
-
         if prefix + key in self.localstore_sets:
             del self.localstore_sets[prefix + key]
 
@@ -498,7 +497,8 @@ class Storage(object):
                         "ns": application.ns,
                         # FIXME when all users of the actors field is updated, save the full dict only
                         "actors_name_map": application.actors,
-                        "origin_node_id": application.origin_node_id},
+                        "origin_node_id": application.origin_node_id,
+                        "required_reliability":application.required_reliability},
                  cb=cb)
 
     def get_application(self, application_id, cb=None):
