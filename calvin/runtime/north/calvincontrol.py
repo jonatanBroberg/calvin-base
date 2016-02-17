@@ -1021,7 +1021,7 @@ class CalvinControl(object):
 
     def _handle_lost_actor_cb_03(self, key, value, lost_actor_manager, handle, connection):
         """ Find which of the applications actors which are replicas of the lost actor """
-        lost_actor_manager.find_and_replicate(value, callback=CalvinCB(self.send_response, handle=handle, connection=connection))
+        lost_actor_manager.find_and_replicate(value)
         self.send_response(handle, connection, None, status = 200)
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
@@ -1035,8 +1035,7 @@ class CalvinControl(object):
             status = calvinresponse.NOT_FOUND
         self.send_response(handle, connection, None, status=status)
         
-        #self.node.storage.get_actor(match.group(1), cb = CalvinCB(func= self.handle_del_actor_cb, handle = handle,
-        #                                                        connection = connection))
+        #self.node.storage.get_actor(match.group(1), cb = CalvinCB(func= self.handle_del_actor_cb, handle = handle, connection = connection))
         
     def handle_del_actor_cb(self, key, value, handle, connection):
         if value:
@@ -1050,6 +1049,7 @@ class CalvinControl(object):
                     status = calvinresponse.NOT_FOUND
                 self.send_response(handle, connection, None, status=status)
             else: 
+                print 'Delete from another node'
                 self.node.proto.actor_destroy(value['node_id'], key, callback = CalvinCB(self.handle_del_actor_other_node, 
                                                                                         handle=handle, connection=connection))
         else:

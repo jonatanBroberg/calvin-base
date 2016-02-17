@@ -23,7 +23,7 @@ class LostActorManager(object):
 		self.current_reliability = 0
 		self.replica_id = 0
 
-	def find_and_replicate(self, actor_ids, callback):
+	def find_and_replicate(self, actor_ids):
 		for i, actor_id in enumerate(actor_ids):
 			self.node.storage.get_actor(actor_id, cb=CalvinCB(self._is_replica, stop = i==len(actor_ids)-1))    
 
@@ -43,13 +43,13 @@ class LostActorManager(object):
 	def _replicate(self):
 		print 'We need to do', self.required_reliability - self.current_reliability, 'replicas'
 		if self.replica_id != 0:
-			self.node.storage.get_actor(self.replica_id, self._replicate_cb)
+			self.node.storage.get_actor(self.replica_id, CalvinCB(self._replicate_cb))
 
 	def _replicate_cb(self, key, value):
 		linklist = [self.node.id]
 		linklist.extend(self.node.network.list_links())
 		
-		#for i in range(self.required_reliability - self.current_reliability):
+		#while self.required_reliability > self.current_reliability:
 		peer_node_id = random.choice(linklist)
 		self.node.proto.actor_replication_request(key, value['node_id'], peer_node_id, None)
 		#	self.current_reliability += 1

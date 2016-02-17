@@ -291,6 +291,7 @@ class TestActorDeletion(CalvinTestBase):
         time.sleep(0.2)
         utils.migrate(rt, snk, peer.id)
         time.sleep(0.2)
+      
         utils.delete_actor(peer, snk)
         time.sleep(0.2)
 
@@ -302,17 +303,17 @@ class TestActorDeletion(CalvinTestBase):
         assert snk not in actors
 
         d.destroy()
-    
+    """
     def testDeleteRemoteActorFromRemoteNode(self):
         rt = self.runtime
         peer = self.runtimes[0]
 
         script = """
-            src : std.CountTimer()
+    """        src : std.CountTimer()
             snk : io.StandardOut(store_tokens=1)
             src.integer > snk.token
         """
-        app_info, errors, warnings = compiler.compile(script, "simple")
+    """    app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
 
@@ -325,14 +326,44 @@ class TestActorDeletion(CalvinTestBase):
         time.sleep(0.2)
 
         snk = d.actor_map['simple:snk']
-        actors = utils.get_application_actors(rt, app_id)
+        actors = utils.get_actors(rt)
         assert snk not in actors
 
-        actors = utils.get_application_actors(peer, app_id)
+        actors = utils.get_actors(peer)
         assert snk not in actors
 
         d.destroy()
-    
+    """
+
+    """
+    def testDeleteRemoteReplicatedActorFromLocalNode(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+        
+        script = """
+    """        src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+    """    app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+        time.sleep(0.2)
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        time.sleep(0.2)
+        
+        utils.delete_actor(peer, snk)
+
+        actors = utils.get_actors(rt)
+        assert snk_replica not in actors
+
+        actors = utils.get_actors(peer)
+        assert snk_replica not in actors
+
+        d.destroy()
+    """
 @pytest.mark.essential
 @pytest.mark.slow
 class TestLocalConnectDisconnect(CalvinTestBase):
@@ -1615,6 +1646,9 @@ class TestLosingActors(CalvinTestBase):
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
         
+        d.destroy()
+
+
     def testLoseOneActorFromNotAppRTOneReplica(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1653,6 +1687,9 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
 
     def testLoseOneActorFromAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1694,6 +1731,9 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+        
+        d.destroy()
+
 
     def testLoseOneActorFromNotAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1737,6 +1777,8 @@ class TestLosingActors(CalvinTestBase):
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
 
+        d.destroy()
+
     def testLoseTwoActorsTwoReplicas(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1779,6 +1821,8 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
 
 
 @pytest.mark.essential
