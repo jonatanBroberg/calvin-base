@@ -216,7 +216,7 @@ class AppManager(object):
         _log.debug("Destroy app peers actor cb %s" % key)
         if value and 'node_id' in value:
             application.update_node_info(value['node_id'], key)
-        else:
+        elif value is not None:
             if retries < 10:
                 # FIXME add backoff time
                 _log.analyze(self._node.id, "+ RETRY", {'actor_id': key, 'value': value, 'retries': retries})
