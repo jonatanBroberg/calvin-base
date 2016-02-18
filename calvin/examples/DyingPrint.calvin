@@ -1,0 +1,5 @@
+
+src : std.CountTimer(sleep = 0.4)
+snk : io.DyingPrint(lifetime = 60)
+
+src.integer > snk.token
