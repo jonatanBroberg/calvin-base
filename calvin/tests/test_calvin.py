@@ -1648,7 +1648,6 @@ class TestLosingActors(CalvinTestBase):
         
         d.destroy()
 
-
     def testLoseOneActorFromNotAppRTOneReplica(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1689,7 +1688,6 @@ class TestLosingActors(CalvinTestBase):
             utils.delete_actor(a_rt, a_id)
 
         d.destroy()
-
 
     def testLoseOneActorFromAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1733,7 +1731,6 @@ class TestLosingActors(CalvinTestBase):
             utils.delete_actor(a_rt, a_id)
         
         d.destroy()
-
 
     def testLoseOneActorFromNotAppRTTwoReplicas(self):
         rt1 = self.runtime
@@ -1823,7 +1820,6 @@ class TestLosingActors(CalvinTestBase):
             utils.delete_actor(a_rt, a_id)
 
         d.destroy()
-
 
 @pytest.mark.essential
 @pytest.mark.slow

@@ -41,7 +41,6 @@ class LostActorManager(object):
 		self.current_reliability += 1
 
 	def _replicate(self):
-		print 'We need to do', self.required_reliability - self.current_reliability, 'replicas'
 		if self.replica_id != 0:
 			self.node.storage.get_actor(self.replica_id, CalvinCB(self._replicate_cb))
 
@@ -64,6 +63,7 @@ class LostActorManager(object):
 	def _delete_lost_actor_info(self):
 		# Delete information about the lost actor
 		if self.node.id == self.lost_actor_info['node_id']:
+			print 'deletion from same node'
 			try:
 				self.node.am.delete_actor(self.lost_actor_id)
 				self.node.storage.trigger_flush(delay=0)
@@ -71,5 +71,6 @@ class LostActorManager(object):
 				print e
 				#_log.exception("Destroy actor info failed")
 		else:
+			print 'Request deletion of actor on another node '
 			#Request deletion of actor info on another node
 			self.node.proto.actor_destroy(self.lost_actor_info['node_id'], self.lost_actor_id)
