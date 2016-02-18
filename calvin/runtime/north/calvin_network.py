@@ -65,7 +65,7 @@ class CalvinLink(object):
         try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))
-        except Exception as e:    
+        except Exception as e:
             # We ignore unknown replies
             return
 
@@ -235,6 +235,7 @@ class CalvinNetwork(object):
                         self.pending_joins[uri].append(callback)
                     else:
                         self.pending_joins[uri] = [callback]
+                self.join_finished(None, peer_id, uri, True)
 
     def join_finished(self, tp_link, peer_id, uri, is_orginator):
         """ Peer join is (not) accepted, called by transport plugin.

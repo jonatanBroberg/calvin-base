@@ -1012,6 +1012,7 @@ class CalvinControl(object):
     def _handle_lost_actor(self, key, value, lost_actor_id, handle, connection):
         """ Get app id and actor name from actor info """
         if not value:
+            _log.error("Failed get lost actor info from storage")
             self.send_response(handle, connection, None, status=calvinresponse.CalvinResponse(False))
 
         cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id,

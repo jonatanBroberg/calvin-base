@@ -20,11 +20,13 @@ import unittest
 import time
 import pytest
 import multiprocessing
+import copy
 from collections import Counter
 
 from calvin.tests.helpers import expected_tokens, actual_tokens
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
+from calvin.Tools.csruntime import csruntime
 from calvin.utilities import calvinconfig
 from calvin.utilities import utils
 from calvin.utilities.nodecontrol import dispatch_node
@@ -1826,6 +1828,259 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(.3)
         assert utils.get_application_actors(rt, app_id) == []
 
+        d.destroy()
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestDyingRuntimes(CalvinTestBase):
+
+    def setUp(self):
+        self.runtime = runtime
+        self.runtimes = runtimes
+        self.peerlist = peerlist
+
+        conf = copy.deepcopy(_conf)
+        conf.set('global', 'storage_proxy', self.runtime.uri[0])
+        conf.set('global', 'storage_start', "1")
+        conf.save("/tmp/calvin5030.conf")
+
+        global ip_addr
+        self.ip_addr = ip_addr
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        csruntime(ip_addr, port=5030, controlport=5031, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.5)
+        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
+        self.dying_rt.id = utils.get_node_id(self.dying_rt)
+
+        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
+
+    def tearDown(self):
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+
+    def testLoseSnkActorWithLocalSource(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt2, replica)
+
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+        self.assert_list_prefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
+
+        d.destroy()
+
+    def testLoseSnkActorWithRemoteSource(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+        rt3 = self.runtimes[0]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, snk, rt2.id)
+        utils.migrate(rt1, src, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt3, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt2, replica)
+
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        expected = expected_tokens(rt3, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+        self.assert_list_prefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
+
+        d.destroy()
+
+    def testLoseSrcActorWithLocalSink(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, src, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
+
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:src':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), filtered_actual)
+
+        time.sleep(3)
+        d.destroy()
+
+    def testLoseSrcActorWithRemoteSink(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+        rt3 = self.runtimes[0]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, src, rt2.id)
+        utils.migrate(rt1, src, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt3, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
+
+        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:src':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        expected = expected_tokens(rt3, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), filtered_actual)
+
+        time.sleep(3)
         d.destroy()
 
 

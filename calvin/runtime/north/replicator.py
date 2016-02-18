@@ -42,7 +42,8 @@ class Replicator(object):
         # Failed to delete actor, may have lost node, close ports
         self._close_actor_ports(lost_actor_id, lost_actor_info, org_cb)
         if status:
-            cb = CalvinCB(self._delete_lost_actor_cb, org_status=status, lost_actor_id=lost_actor_id, org_cb=org_cb)
+            cb = CalvinCB(self._delete_lost_actor_cb, org_status=status, lost_actor_id=lost_actor_id,
+                          lost_actor_info=lost_actor_info, org_cb=org_cb)
             self.node.proto.actor_destroy(lost_actor_info['node_id'], lost_actor_id, callback=cb)
 
     def _close_actor_ports(self, lost_actor_id, lost_actor_info, cb):
@@ -59,9 +60,11 @@ class Replicator(object):
                 if node_id == self.node.id:
                     self.node.pm.disconnection_request({'peer_port_id': port_id, 'port_id': key})
                 else:
-                    self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id, cb=None)
+                    self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id)
 
-    def _delete_lost_actor_cb(self, status, org_status, lost_actor_id, org_cb):
+    def _delete_lost_actor_cb(self, status, org_status, lost_actor_id, lost_actor_info, org_cb):
+        self.node.storage.delete_actor_from_app(lost_actor_id, lost_actor_info['app_id'])
+        self.node.storage.delete_actor(lost_actor_id)
         # TODO handle error
         if not status:
             org_cb(status=response.CalvinResponse(False))
