@@ -999,7 +999,6 @@ class CalvinControl(object):
         self.node.storage.get_actor(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
-
     def handle_lost_actor(self, handle, connection, match, data, hdr):
         """ We lost actor, replicate if possible
             1. Find the required reliability from the applicaiton
@@ -1012,6 +1011,9 @@ class CalvinControl(object):
 
     def _handle_lost_actor(self, key, value, lost_actor_id, handle, connection):
         """ Get app id and actor name from actor info """
+        if not value:
+            self.send_response(handle, connection, None, status=calvinresponse.CalvinResponse(False))
+
         cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id,
                       lost_actor_info=value, handle=handle, connection=connection)
         self.node.storage.get_application_actors(value['app_id'], cb=cb)
@@ -1026,8 +1028,9 @@ class CalvinControl(object):
         replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
         self.send_response(handle, connection, None, status=calvinresponse.OK)
 
-    def _handle_lost_actor_cb(self, handle, connection, status):
-        self.send_response(handle, connection, None, status.status)
+    def _handle_lost_actor_cb(self, handle, connection, status, *args, **kwargs):
+        status = status if isinstance(status, int) else status.status
+        self.send_response(handle, connection, None, status)
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
