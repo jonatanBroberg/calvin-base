@@ -1882,7 +1882,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         global ip_addr
         self.ip_addr = ip_addr
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         csruntime(ip_addr, port=5030, controlport=5031, attr={},
                   configfile="/tmp/calvin5030.conf")
         time.sleep(0.5)
@@ -1892,7 +1892,7 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
 
     def tearDown(self):
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
 
     def testLoseActorWithOnlyLocalActors(self):
         rt1 = self.runtime
@@ -1978,7 +1978,7 @@ class TestDyingRuntimes(CalvinTestBase):
         actual_snk_before = actual_tokens(rt1, snk)
         actual_replica_before = actual_tokens(rt2, replica)
 
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
         utils.lost_actor(rt1, replica)
@@ -2035,7 +2035,7 @@ class TestDyingRuntimes(CalvinTestBase):
         actual_snk_before = actual_tokens(rt1, snk)
         actual_replica_before = actual_tokens(rt2, replica)
 
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
         utils.lost_actor(rt1, replica)
@@ -2090,7 +2090,7 @@ class TestDyingRuntimes(CalvinTestBase):
         actual_snk_before = actual_tokens(rt1, snk)
         expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
 
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
         utils.lost_actor(rt1, replica)
@@ -2155,7 +2155,7 @@ class TestDyingRuntimes(CalvinTestBase):
         actual_snk_before = actual_tokens(rt1, snk)
         expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
 
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
         utils.lost_actor(rt1, replica)

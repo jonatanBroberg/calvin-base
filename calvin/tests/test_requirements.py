@@ -530,9 +530,9 @@ class TestSepDeployShadow(unittest.TestCase):
         for p in multiprocessing.active_children():
             p.terminate()
         # They will die eventually (about 5 seconds) in most cases, but this makes sure without wasting time
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5000'" % (ip_addr,))
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5001'" % (ip_addr,))
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5002'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5000'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5001'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5002'" % (ip_addr,))
         time.sleep(0.2)
 
     def verify_storage(self):
