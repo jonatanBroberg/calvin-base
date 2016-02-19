@@ -646,7 +646,7 @@ class CalvinProto(CalvinCBClass):
         if self.node.network.link_request(peer_node_id, cb):
             # Already have link just continue in _port_disconnect
             self._port_disconnect(callback=callback, port_id=port_id, peer_node_id=peer_node_id,
-                                  peer_actor_id=peer_actor_id, peer_port_name=None, peer_port_dir=None, tunnel=None)
+                                  peer_actor_id=peer_actor_id, peer_port_name=peer_port_name, peer_port_dir=peer_port_dir, tunnel=tunnel)
 
     def _port_disconnect(self, callback=None, port_id=None, peer_node_id=None, peer_port_id=None, peer_actor_id=None,
                          peer_port_name=None, peer_port_dir=None, tunnel=None):
@@ -660,7 +660,7 @@ class CalvinProto(CalvinCBClass):
             # Already have link just continue in _peer_setup
                 self._port_disconnect_handler(payload=payload)
 
-    def _port_disconnect_handler(self, payload):
+    def _port_disconnect_handler(self, payload, status=None, peer_node_id=None, uri=None):
         # Send reply
         reply = self.node.pm.disconnection_request(payload)
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
