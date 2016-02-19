@@ -1546,6 +1546,50 @@ class TestActorReplication(CalvinTestBase):
         utils.delete_actor(new_node, replica)
         utils.delete_actor(rt, snk)
 
+    def testReplicateSinkAndSource(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        snk_replica = utils.replicate(rt, snk, rt.id)
+        src_replica = utils.replicate(rt, src, rt.id)
+        time.sleep(0.2)
+
+        expected_1 = expected_tokens(rt, src, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src_replica, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(rt, snk_replica)
+
+        assert(len(actual) > 1)
+        assert(len(expected_2) > 1)
+        assert actual.count(1) == 1
+        assert actual.count(4) == 2
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual = filter(lambda x: x not in unique_elements, actual)
+        actual_replica = filter(lambda x: x not in unique_elements, actual_replica)
+
+        self.assert_list_prefix(expected, sorted(actual))
+        self.assert_list_prefix(expected, sorted(actual_replica))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, src_replica)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, snk_replica)
+
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1859,6 +1903,65 @@ class TestDyingRuntimes(CalvinTestBase):
     def tearDown(self):
         os.system("pkill -9 -f -l 'csruntime -n %s -p 5030'" % (self.ip_addr,))
 
+    def testLoseActorWithOnlyLocalActors(self):
+        rt1 = self.runtime
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk_replica = utils.replicate(rt1, snk, rt1.id)
+        src_replica = utils.replicate(rt1, src, rt1.id)
+        time.sleep(2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        expected_replica_before = expected_tokens(rt1, src_replica, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt1, snk_replica)
+
+        utils.lost_actor(rt1, snk_replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected_replica = expected_tokens(rt1, src_replica, 'std.CountTimer')
+        expected = sorted(expected + expected_replica)
+
+        actual = actual_tokens(rt1, snk)
+
+        assert len(expected) > len(expected_before)
+        assert len(expected_replica) > len(expected_replica_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        self.assert_list_prefix(filtered_expected, filtered_actual)
+
+        d.destroy()
+
     def testLoseSnkActorWithLocalSource(self):
         rt1 = self.runtime
         rt2 = self.dying_rt
@@ -1899,6 +2002,9 @@ class TestDyingRuntimes(CalvinTestBase):
                     replicas = replicas + 1
 
         assert(2 == replicas)
+
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
@@ -1953,6 +2059,9 @@ class TestDyingRuntimes(CalvinTestBase):
 
         assert(2 == replicas)
 
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
+
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
         assert len(expected) > len(expected_before)
@@ -2003,6 +2112,9 @@ class TestDyingRuntimes(CalvinTestBase):
                     replicas = replicas + 1
 
         assert(2 == replicas)
+
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
@@ -2064,6 +2176,9 @@ class TestDyingRuntimes(CalvinTestBase):
                     replicas = replicas + 1
 
         assert(2 == replicas)
+
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
 
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)

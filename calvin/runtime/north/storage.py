@@ -452,21 +452,20 @@ class Storage(object):
         """
         self.get(prefix="node-", key=node_id, cb=cb)
 
-    def delete_node(self, node, cb=None):
+    def delete_node(self, node_id, get_indexed_public, cb=None):
         """
         Delete node from storage
         """
-        self.delete(prefix="node-", key=node.id, cb=None if node.attributes.get_indexed_public() else cb)
-        if node.attributes.get_indexed_public():
-            self._delete_node_index(node, cb=cb)
+        self.delete(prefix="node-", key=node_id, cb=None if get_indexed_public else cb)
+        if get_indexed_public:
+            self._delete_node_index(node_id, get_indexed_public, cb=cb)
 
-    def _delete_node_index(self, node, cb=None):
-        indexes = node.attributes.get_indexed_public()
-        _log.analyze(self.node.id, "+", {'indexes': indexes})
+    def _delete_node_index(self, node_id, indexes, cb=None):
+        _log.analyze(self.node_id, "+", {'indexes': indexes})
         try:
             counter = [len(indexes)]  # counter value by reference used in callback
             for index in indexes:
-                self.remove_index(index, node.id, cb=CalvinCB(self._delete_node_cb, counter=counter, org_cb=cb))
+                self.remove_index(index, node_id, cb=CalvinCB(self._delete_node_cb, counter=counter, org_cb=cb))
             # The remove index gets 1 second otherwise we call the callback anyway, i.e. stop the node
             async.DelayedCall(1.0, self._delete_node_timeout_cb, counter=counter, org_cb=cb)
         except:

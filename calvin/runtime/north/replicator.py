@@ -55,18 +55,29 @@ class Replicator(object):
         cb(status=response.OK)
 
     def _send_disconnect_request(self, key, value):
-        if value:
-            for (node_id, port_id) in value['peers']:
-                if node_id == self.node.id:
-                    self.node.pm.disconnection_request({'peer_port_id': port_id, 'port_id': key})
-                else:
-                    self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id)
+        if not value:
+            return
+
+        for (node_id, port_id) in value['peers']:
+            if node_id == 'local' or node_id == self.node.id:
+                self.node.pm.disconnection_request({'peer_port_id': port_id, 'port_id': key})
+            else:
+                self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id)
 
     def _delete_lost_actor_cb(self, status, org_status, lost_actor_id, lost_actor_info, org_cb):
         self.node.storage.delete_actor_from_app(lost_actor_id, lost_actor_info['app_id'])
         self.node.storage.delete_actor(lost_actor_id)
-        # TODO handle error
+        if status.status == response.SERVICE_UNAVAILABLE:
+            self.node.storage.get_node(lost_actor_info['node_id'], self._delete_node)
+
         if not status:
             org_cb(status=response.CalvinResponse(False))
         elif org_cb:
             org_cb(status=org_status)
+
+    def _delete_node(self, key, value):
+        if not value:
+            return
+
+        indexed_public = value['attributes'].get('indexed_public')
+        self.node.storage.delete_node(key, indexed_public)

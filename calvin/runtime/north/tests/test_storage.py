@@ -239,7 +239,7 @@ class TestStorageNotStarted(object):
         value = self.q.get(timeout=0.2)
         assert value["key"] == node.id and value["value"] == {'uri': node.uri}
 
-        self.storage.delete_node(node, cb=CalvinCB(func=cb))
+        self.storage.delete_node(node, node.get_indexed_public(), cb=CalvinCB(func=cb))
         value = self.q.get(timeout=0.2)
         assert value
         assert node.id not in self.storage.localstore

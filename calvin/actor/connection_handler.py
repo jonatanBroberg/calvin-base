@@ -151,39 +151,44 @@ class ConnectionHandler(object):
             for reader in fifo['readers']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[0]
-                new_readers.append("_".join([port_id_translations[port_id], reader_parts[1]]))
+                if port_id in port_id_translations:
+                    new_readers.append("_".join([port_id_translations[port_id], reader_parts[1]]))
 
             new_tentative_read_pos = {}
             for reader in fifo['tentative_read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[0]
                 val = fifo['tentative_read_pos'][reader]
-                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
-                new_tentative_read_pos[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                    new_tentative_read_pos[new_key] = val
 
             new_read_pos = {}
             for reader in fifo['read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[0]
                 val = fifo['read_pos'][reader]
-                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
-                new_read_pos[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                    new_read_pos[new_key] = val
 
             new_fifo = {}
             for reader in fifo['fifo']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[0]
                 val = fifo['fifo'][reader]
-                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
-                new_fifo[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                    new_fifo[new_key] = val
 
             new_write_pos = {}
             for reader in fifo['write_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[0]
                 val = fifo['write_pos'][reader]
-                new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
-                new_write_pos[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([port_id_translations[port_id], reader_parts[1]])
+                    new_write_pos[new_key] = val
 
             catchup_fifo_key = fifo['readers'][0] if fifo['readers'] else None
             new_ports[port_id_translations[port['id']]] = {
@@ -215,37 +220,42 @@ class ConnectionHandler(object):
             for reader in fifo['readers']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
-                new_readers.append("_".join([reader_parts[0], port_id_translations[port_id]]))
+                if port_id in port_id_translations:
+                    new_readers.append("_".join([reader_parts[0], port_id_translations[port_id]]))
 
             new_tentative_read_pos = {}
             for reader in fifo['tentative_read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
-                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_tentative_read_pos[new_key] = fifo['tentative_read_pos'][reader]
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    new_tentative_read_pos[new_key] = fifo['tentative_read_pos'][reader]
 
             new_read_pos = {}
             for reader in fifo['read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
-                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_read_pos[new_key] = fifo['read_pos'][reader]
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    new_read_pos[new_key] = fifo['read_pos'][reader]
 
             new_write_pos = {}
             for reader in fifo['write_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 val = fifo['write_pos'][reader]
-                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_write_pos[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    new_write_pos[new_key] = val
 
             new_fifo = {}
             for reader in fifo['fifo']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 val = fifo['fifo'][reader]
-                new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                new_fifo[new_key] = val
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    new_fifo[new_key] = val
 
             new_ports[port_id_translations[port['id']]] = {
                 'name': port['name'],

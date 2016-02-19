@@ -243,7 +243,7 @@ class Node(object):
             self.storage.stop(stopped)
 
         _log.analyze(self.id, "+", {})
-        self.storage.delete_node(self, cb=deleted_node)
+        self.storage.delete_node(self.id, self.attributes.get_indexed_public(), cb=deleted_node)
 
 
 def create_node(uri, control_uri, attributes=None):
