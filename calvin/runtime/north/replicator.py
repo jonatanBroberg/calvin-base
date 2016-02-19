@@ -84,7 +84,7 @@ class Replicator(object):
         self.node.storage.delete_actor_from_app(lost_actor_id, lost_actor_info['app_id'])
         self.node.storage.delete_actor(lost_actor_id)
         if status.status == response.SERVICE_UNAVAILABLE and not lost_actor_info['node_id'] == self.node.id:
-            _log.info("\n\n\nNode is unavailable, delete it {}")
+            _log.info("Node is unavailable, delete it {}")
             self.node.storage.get_node(lost_actor_info['node_id'], self._delete_node)
 
         if not status:
