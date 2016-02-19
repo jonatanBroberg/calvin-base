@@ -1626,13 +1626,14 @@ class TestLosingActors(CalvinTestBase):
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
                 a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-
-            assert snk not in actors
+                if a:
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
 
         assert(2 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
@@ -1643,9 +1644,6 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
-
-        time.sleep(.3)
-        assert utils.get_application_actors(rt, app_id) == []
 
         d.destroy()
 
@@ -1680,13 +1678,14 @@ class TestLosingActors(CalvinTestBase):
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
                 a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-
-            assert snk2 not in actors
+                if a:
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
 
         assert(2 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk2))
+
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
@@ -1697,9 +1696,6 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
-
-        time.sleep(.3)
-        assert utils.get_application_actors(rt, app_id) == []
 
         d.destroy()
 
@@ -1736,13 +1732,14 @@ class TestLosingActors(CalvinTestBase):
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
                 a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-
-            assert snk not in actors
+                if a:
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
 
         assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
@@ -1753,9 +1750,6 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
-
-        time.sleep(.3)
-        assert utils.get_application_actors(rt, app_id) == []
 
         d.destroy()
 
@@ -1792,13 +1786,16 @@ class TestLosingActors(CalvinTestBase):
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
                 a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
+                if a:
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
 
             assert snk2 not in actors
 
         assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk2))
+
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
@@ -1809,9 +1806,6 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
-
-        time.sleep(.3)
-        assert utils.get_application_actors(rt, app_id) == []
 
         d.destroy()
 
@@ -1849,14 +1843,14 @@ class TestLosingActors(CalvinTestBase):
             actors = utils.get_application_actors(rt, app_id)
             for actor in actors:
                 a = utils.get_actor(rt, actor)
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk' and a['node_id'] == rt.id:
-                    replicas[actor] = rt
-
-            assert snk2 not in actors
-            assert snk not in actors
+                if a:
+                    name = re.sub(uuid_re, "", a['name'])
+                    if name == 'simple:snk' and a['node_id'] == rt.id:
+                        replicas[actor] = rt
 
         assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+        self.assertIsNone(utils.get_actor(rt2, snk2))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1868,9 +1862,6 @@ class TestLosingActors(CalvinTestBase):
         utils.delete_actor(rt1, src)
         for a_id, a_rt in replicas.iteritems():
             utils.delete_actor(a_rt, a_id)
-
-        time.sleep(.3)
-        assert utils.get_application_actors(rt, app_id) == []
 
         d.destroy()
 
@@ -1941,6 +1932,7 @@ class TestDyingRuntimes(CalvinTestBase):
                     replicas = replicas + 1
 
         assert(2 == replicas)
+        self.assertIsNone(utils.get_actor(rt1, snk_replica))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         expected_replica = expected_tokens(rt1, src_replica, 'std.CountTimer')
@@ -2003,6 +1995,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         assert(2 == replicas)
 
+        self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
         assert rt2.id not in utils.get_nodes(rt1)
 
@@ -2059,6 +2052,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         assert(2 == replicas)
 
+        self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
         assert rt2.id not in utils.get_nodes(rt1)
 
@@ -2113,6 +2107,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         assert(2 == replicas)
 
+        self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
         assert rt2.id not in utils.get_nodes(rt1)
 
@@ -2177,6 +2172,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         assert(2 == replicas)
 
+        self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
         assert rt2.id not in utils.get_nodes(rt1)
 
