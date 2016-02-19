@@ -1950,7 +1950,7 @@ class TestDyingRuntimes(CalvinTestBase):
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual = filter(lambda x: x not in unique_elements, actual)
 
-        self.assert_list_prefix(filtered_expected, filtered_actual)
+        self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_actual))
 
         d.destroy()
 
@@ -2124,7 +2124,7 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), filtered_actual)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
 
         time.sleep(3)
         d.destroy()
@@ -2189,7 +2189,7 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), filtered_actual)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
 
         time.sleep(3)
         d.destroy()
