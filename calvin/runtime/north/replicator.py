@@ -12,6 +12,9 @@ class Replicator(object):
         self.node = node
         self.control = control
         self.actor_id_re = actor_id_re
+        self.current_nbr_of_replicas = 0
+        self.replica_id = None
+        self.replica_value = None
 
     def _is_match(self, first, second):
         is_match = re.sub(self.actor_id_re, "", first) == re.sub(self.actor_id_re, "", second)
@@ -19,6 +22,8 @@ class Replicator(object):
         return is_match
 
     def replicate_lost_actor(self, actors, lost_actor_id, lost_actor_info, cb):
+        self.replica_id = None
+        self.replica_value = None
         _log.info("Replicating lost actor: {}".format(lost_actor_id))
         if lost_actor_id in actors:
             actors.remove(lost_actor_id)
@@ -26,27 +31,29 @@ class Replicator(object):
         self._find_and_replicate(actors, lost_actor_id, lost_actor_info, index=0, cb=cb)
 
     def _find_and_replicate(self, actors, lost_actor_id, lost_actor_info, index, cb):
-        if index > len(actors) - 1:
-            _log.warning("Could not find actor to replicate")
-            cb(status=response.CalvinResponse(False))
-            return
-        _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
-        cb = CalvinCB(self._check_for_original, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info,
-                      actors=actors, index=index, cb=cb)
-        self.node.storage.get_actor(actors[index], cb=cb)
+        if index < len(actors):
+            cb = CalvinCB(self._check_for_original, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info,
+                          actors=actors, index=index, cb=cb)
+            _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
+            self.node.storage.get_actor(actors[index], cb=cb)
+        else:
+            self._replicate(self.replica_id, self.replica_value, lost_actor_id, lost_actor_info, cb)
 
     def _check_for_original(self, key, value, lost_actor_id, lost_actor_info, actors, index, cb):
-        if not value:
-            self._find_and_replicate(actors, lost_actor_id, lost_actor_info, index + 1, cb)
-        elif self._is_match(value['name'], lost_actor_info['name']):
-            _log.debug("Found actor to replicate: {}".format(key))
-            self._replicate(key, value, lost_actor_id, lost_actor_info, cb)
-        else:
-            self._find_and_replicate(actors, lost_actor_id, lost_actor_info, index + 1, cb)
+        if value and self._is_match(value['name'], lost_actor_info['name']):
+            _log.debug("Found an replica of lost actor:".format(key))
+            self.current_nbr_of_replicas += 1
+            self.replica_id = key
+            self.replica_value = value
+        self._find_and_replicate(actors, lost_actor_id, lost_actor_info, index + 1, cb)
 
     def _replicate(self, actor_id, actor_info, lost_actor_id, lost_actor_info, cb):
-        _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
-        self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], self.node.id, cb)
+        if not self.replica_id is None:
+            _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
+            self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], self.node.id, cb)
+        else:
+            cb(status=calvinresponse.NOT_FOUND)
+            _log.warning("Could not find actor to replicate")
 
     def _delete_lost_actor(self, status, lost_actor_info, lost_actor_id, org_cb):
         self._close_actor_ports(lost_actor_id, lost_actor_info, org_cb)
@@ -54,6 +61,8 @@ class Replicator(object):
             cb = CalvinCB(self._delete_lost_actor_cb, org_status=status, lost_actor_id=lost_actor_id,
                           lost_actor_info=lost_actor_info, org_cb=org_cb)
             self.node.proto.actor_destroy(lost_actor_info['node_id'], lost_actor_id, callback=cb)
+        else:
+            org_cb(status=status)
 
     def _close_actor_ports(self, lost_actor_id, lost_actor_info, cb):
         _log.info("Closing ports of actor {}".format(lost_actor_id))

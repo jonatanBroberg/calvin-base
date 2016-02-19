@@ -1006,6 +1006,7 @@ class CalvinControl(object):
             3. Delete information about the lost actor
         """
         lost_actor_id = match.group(1)
+        _log.debug("Lost actor {}".format(lost_actor_id))
         self.node.storage.get_actor(lost_actor_id, cb=CalvinCB(func=self._handle_lost_actor, lost_actor_id=lost_actor_id,
                                                                handle=handle, connection=connection))
 

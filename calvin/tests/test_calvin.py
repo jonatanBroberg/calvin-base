@@ -1595,6 +1595,27 @@ class TestActorReplication(CalvinTestBase):
 @pytest.mark.slow
 class TestLosingActors(CalvinTestBase):
 
+    @pytest.mark.xfail
+    def testLoseLastActor(self):
+        rt = self.runtime
+        
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        # Check_response in utils should raise an exception with error 404, not found
+        utils.lost_actor(rt, snk)
+
     def testLoseOneActorFromAppRTOneReplica(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1623,13 +1644,18 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk2: rt2}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
 
         assert(2 == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk))
@@ -1675,13 +1701,18 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk: rt1}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
 
         assert(2 == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk2))
@@ -1729,13 +1760,18 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk2: rt2, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
 
         assert(3 == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk))
@@ -1783,15 +1819,18 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk: rt1, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
-
-            assert snk2 not in actors
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
 
         assert(3 == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk2))
@@ -1840,13 +1879,18 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if actor != snk and actor != snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
 
         assert(3 == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk))
