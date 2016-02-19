@@ -633,17 +633,36 @@ class CalvinProto(CalvinCBClass):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
-    def port_disconnect(self, callback=None, port_id=None, peer_node_id=None, peer_port_id=None, peer_actor_id=None, peer_port_name=None, peer_port_dir=None, tunnel=None):
+    def port_disconnect(self, callback=None, port_id=None, peer_node_id=None, peer_port_id=None, peer_actor_id=None,
+                        peer_port_name=None, peer_port_dir=None, tunnel=None):
         """ Before calling this method all needed information must be available
             see port manager for parameters
         """
-        msg = {'cmd': 'PORT_DISCONNECT', 'port_id': port_id, 'peer_actor_id': peer_actor_id, 'peer_port_name': peer_port_name, 'peer_port_id': peer_port_id, 'peer_port_dir': peer_port_dir}
-        self.network.links[peer_node_id].send_with_reply(callback, msg)
+        if not peer_node_id:
+            return
+        cb = CalvinCB(self._port_disconnect, callback=callback, port_id=port_id, peer_node_id=peer_node_id,
+                      peer_actor_id=peer_actor_id, peer_port_name=peer_port_name, peer_port_dir=peer_port_dir,
+                      tunnel=tunnel)
+        if self.node.network.link_request(peer_node_id, cb):
+            # Already have link just continue in _port_disconnect
+            self._port_disconnect(callback=callback, port_id=port_id, peer_node_id=peer_node_id,
+                                  peer_actor_id=peer_actor_id, peer_port_name=None, peer_port_dir=None, tunnel=None)
+
+    def _port_disconnect(self, callback=None, port_id=None, peer_node_id=None, peer_port_id=None, peer_actor_id=None,
+                         peer_port_name=None, peer_port_dir=None, tunnel=None):
+            msg = {'cmd': 'PORT_DISCONNECT', 'port_id': port_id, 'peer_actor_id': peer_actor_id,
+                   'peer_port_name': peer_port_name, 'peer_port_id': peer_port_id, 'peer_port_dir': peer_port_dir}
+            self.network.links[peer_node_id].send_with_reply(callback, msg)
 
     def port_disconnect_handler(self, payload):
         """ Reguest for port disconnect """
-        reply = self.node.pm.disconnection_request(payload)
+        if self.node.network.link_request(payload['to_rt_uuid'], CalvinCB(self._port_disconnect_handler, payload=payload)):
+            # Already have link just continue in _peer_setup
+                self._port_disconnect_handler(payload=payload)
+
+    def _port_disconnect_handler(self, payload):
         # Send reply
+        reply = self.node.pm.disconnection_request(payload)
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
