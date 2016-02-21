@@ -328,7 +328,7 @@ class CalvinProto(CalvinCBClass):
                     'to_node_id': to_node_id}
             self.network.links[from_node_id].send_with_reply(callback, msg)
         elif callback:
-            callback(status = status)
+            callback(status=status)
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
@@ -639,28 +639,36 @@ class CalvinProto(CalvinCBClass):
             see port manager for parameters
         """
         if not peer_node_id:
+            if callback:
+                callback(status=response.CalvinResponse(False))
             return
+
         cb = CalvinCB(self._port_disconnect, callback=callback, port_id=port_id, peer_node_id=peer_node_id,
-                      peer_actor_id=peer_actor_id, peer_port_name=peer_port_name, peer_port_dir=peer_port_dir,
-                      tunnel=tunnel)
+                      peer_port_id=peer_port_id, peer_actor_id=peer_actor_id, peer_port_name=peer_port_name,
+                      peer_port_dir=peer_port_dir)
         if self.node.network.link_request(peer_node_id, cb):
             # Already have link just continue in _port_disconnect
             self._port_disconnect(callback=callback, port_id=port_id, peer_node_id=peer_node_id,
-                                  peer_actor_id=peer_actor_id, peer_port_name=None, peer_port_dir=None, tunnel=None)
+                                  peer_port_id=peer_port_id, peer_actor_id=peer_actor_id,
+                                  peer_port_name=peer_port_name, peer_port_dir=peer_port_dir,
+                                  status=response.CalvinResponse(True))
 
-    def _port_disconnect(self, callback=None, port_id=None, peer_node_id=None, peer_port_id=None, peer_actor_id=None,
-                         peer_port_name=None, peer_port_dir=None, tunnel=None):
+    def _port_disconnect(self, callback, port_id, peer_node_id, peer_port_id, peer_actor_id, peer_port_name,
+                         peer_port_dir, status, uri=None):
+        if status:
             msg = {'cmd': 'PORT_DISCONNECT', 'port_id': port_id, 'peer_actor_id': peer_actor_id,
                    'peer_port_name': peer_port_name, 'peer_port_id': peer_port_id, 'peer_port_dir': peer_port_dir}
             self.network.links[peer_node_id].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
 
     def port_disconnect_handler(self, payload):
         """ Reguest for port disconnect """
         if self.node.network.link_request(payload['to_rt_uuid'], CalvinCB(self._port_disconnect_handler, payload=payload)):
-            # Already have link just continue in _peer_setup
-                self._port_disconnect_handler(payload=payload)
+            # Already have link just continue in _port_disconnect-handler
+                self._port_disconnect_handler(payload=payload, status=response.CalvinResponse(True))
 
-    def _port_disconnect_handler(self, payload):
+    def _port_disconnect_handler(self, payload, status=None, peer_node_id=None, uri=None):
         # Send reply
         reply = self.node.pm.disconnection_request(payload)
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
@@ -672,11 +680,12 @@ class CalvinProto(CalvinCBClass):
         """ Sends a peer setup request to the other node.
             prev_connections: list of node ids to setup a connecting with
         """
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._peer_setup, callback=callback, peers=peers)):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._peer_setup, to_rt_uuid=to_rt_uuid,
+                                                               callback=callback, peers=peers)):
             # Already have link just continue in _peer_setup
                 self._peer_setup(to_rt_uuid, callback, peers, status=response.CalvinResponse(True))
 
-    def _peer_setup(self, to_rt_uuid, callback, peers, status):
+    def _peer_setup(self, to_rt_uuid, callback, peers, status, uri=None):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'PEER_SETUP',
@@ -697,11 +706,11 @@ class CalvinProto(CalvinCBClass):
     ### RESOURCE USAGE ###
 
     def report_usage(self, to_rt_uuid, node_id, usage, callback=None):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, node_id, usage, callback)):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, to_rt_uuid, node_id, usage, callback)):
             # Already have link just continue in _actor_new
                 self._report_usage(to_rt_uuid, node_id, usage, callback, response.CalvinResponse(True))
 
-    def _report_usage(self, to_rt_uuid, node_id, usage, callback, status):
+    def _report_usage(self, to_rt_uuid, node_id, usage, callback, status, uri):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'REPORT_USAGE',
