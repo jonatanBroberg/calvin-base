@@ -150,6 +150,7 @@ class CalvinProto(CalvinCBClass):
             # or using the callback_register method.
             'ACTOR_NEW': [CalvinCB(self.actor_new_handler)],
             'ACTOR_MIGRATE': [CalvinCB(self.actor_migrate_handler)],
+            'ACTOR_DESTROY': [CalvinCB(self.actor_destroy_handler)],
             'APP_DESTROY': [CalvinCB(self.app_destroy_handler)],
             'PORT_CONNECT': [CalvinCB(self.port_connect_handler)],
             'PORT_DISCONNECT': [CalvinCB(self.port_disconnect_handler)],
@@ -278,6 +279,27 @@ class CalvinProto(CalvinCBClass):
     def _actor_migrate_handler(self, payload, status, **kwargs):
         """ Potentially migrated actor, reply to requesting node """
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
+    def actor_destroy(self, to_rt_uuid, callback, actor_id): 
+        """ Detroys an actor on a remote rt
+        """
+        if self.network.link_request(to_rt_uuid):
+            # Already have link just continue in _actor_destroy
+            self._actor_destroy(to_rt_uuid, callback, actor_id, status=response.CalvinResponse(True))
+
+    def _actor_destroy(self, to_rt_uuid, callback, actor_id, status):
+        if status:
+            msg = {'cmd': 'ACTOR_DESTROY', 'actor_id':actor_id}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def actor_destroy_handler(self, payload):
+        """ Peer requested deletion of actor 
+        """
+        reply = self.node.am.destroy_request(payload['actor_id'])
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
     #### APPS ####

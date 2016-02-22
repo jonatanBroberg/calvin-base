@@ -943,10 +943,21 @@ class CalvinControl(object):
         """
         try:
             self.node.am.destroy(match.group(1))
-            status = calvinresponse.OK
+            self.send_response(handle, connection, None, status=calvinresponse.OK)
         except:
-            _log.exception("Destroy actor failed")
-            status = calvinresponse.NOT_FOUND
+            _log.debug("No actor with id {} on this node".format(match.group(1)))
+            self.node.storage.get_actor(match.group(1), CalvinCB(self._handle_del_actor_cb, handle=handle, connection=connection))
+
+    def _handle_del_actor_other_node(self, key, value, handle, connection):
+        """ Find where the actor is running 
+        """ 
+        try:
+            self.node.proto.actor_destroy(key, value['node_id'], callback=CalvinCB(self._handle_del_actor_other_node_cb, handle=handle, connection=connection))
+        except:
+            _log.exception('Can not delete actor')
+            self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+
+    def _handle_del_actor_other_node_cb(self, handle, connection, status):
         self.send_response(handle, connection, None, status=status)
 
     def handle_get_actor_report(self, handle, connection, match, data, hdr):
