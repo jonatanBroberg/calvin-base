@@ -58,7 +58,7 @@ class Replicator(object):
         if status:
             cb = CalvinCB(self._delete_lost_actor_cb, org_status=status, lost_actor_id=lost_actor_id,
                           lost_actor_info=lost_actor_info, org_cb=org_cb)
-            self.node.proto.actor_destroy(lost_actor_info['node_id'], lost_actor_id, callback=cb)
+            self.node.proto.actor_destroy(lost_actor_info['node_id'], callback=cb, actor_id=lost_actor_id)
         else:
             org_cb(status=status)
 

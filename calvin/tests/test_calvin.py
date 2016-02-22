@@ -275,7 +275,7 @@ class TestActorDeletion(CalvinTestBase):
 
         d.destroy()
 
-    def testDeleteRemoteActor(self):
+    def testDeleteMigratedActor(self):
         rt = self.runtime
         peer = self.runtimes[0]
 
@@ -307,6 +307,67 @@ class TestActorDeletion(CalvinTestBase):
 
         d.destroy()
 
+    def testDeleteRemoteActor(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
+        utils.delete_actor(rt, snk)
+        time.sleep(3)
+
+        snk = d.actor_map['simple:snk']
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
+
+        d.destroy()
+
+    def testDeleteLocalActorRemotely(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
+        utils.delete_actor(peer, snk)
+        time.sleep(3)
+
+        snk = d.actor_map['simple:snk']
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
+
+        d.destroy()
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1272,9 +1333,12 @@ class TestActorReplication(CalvinTestBase):
         snk1 = d.actor_map['simple:snk1']
         snk2 = d.actor_map['simple:snk2']
         src = d.actor_map['simple:src']
+
         utils.migrate(rt, snk1, peer.id)
+        time.sleep(0.2)
         utils.migrate(rt, snk2, peer.id)
         time.sleep(0.2)
+
         replica_1 = utils.replicate(peer, snk1, peer.id)
         replica_2 = utils.replicate(peer, snk2, peer.id)
         time.sleep(0.2)
@@ -1613,7 +1677,6 @@ class TestLosingActors(CalvinTestBase):
         src = d.actor_map['simple:src']
         snk = d.actor_map['simple:snk']
 
-        # Check_response in utils should raise an exception with error 404, not found but doesn't due to sync problems
         utils.lost_actor(rt, snk)
 
     def testLoseOneActorFromAppRTOneReplica(self):

@@ -394,7 +394,7 @@ class CalvinProto(CalvinCBClass):
                                                                 callback=callback,
                                                                 actor_id=actor_id))
 
-    def _actor_destroy(self, to_rt_uuid, callback, actor_id, status):
+    def _actor_destroy(self, to_rt_uuid, callback, actor_id, status, peer_node_id=None, uri=None):
         if status:
             msg = {'cmd': 'ACTOR_DESTROY', 'actor_id':actor_id}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
