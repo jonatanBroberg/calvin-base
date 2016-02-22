@@ -22,8 +22,6 @@ class Replicator(object):
         return is_match
 
     def replicate_lost_actor(self, actors, lost_actor_id, lost_actor_info, cb):
-        self.replica_id = None
-        self.replica_value = None
         _log.info("Replicating lost actor: {}".format(lost_actor_id))
         if lost_actor_id in actors:
             actors.remove(lost_actor_id)

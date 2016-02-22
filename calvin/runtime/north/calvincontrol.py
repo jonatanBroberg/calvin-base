@@ -1029,7 +1029,6 @@ class CalvinControl(object):
         replicator = Replicator(self.node, self, uuid_re)
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
         replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
-        self.send_response(handle, connection, None, status=calvinresponse.OK)
 
     def _handle_lost_actor_cb(self, handle, connection, status, *args, **kwargs):
         status = status if isinstance(status, int) else status.status
