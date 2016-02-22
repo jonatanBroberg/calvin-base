@@ -18,7 +18,7 @@ class Replicator(object):
         self.uuid_re = uuid_re
         self.replica_id = None
         self.replica_value = None
-             
+
     def replicate_lost_actor(self, cb):
         _log.info("Replicating lost actor: {}".format(self.lost_actor_id))
         cb = CalvinCB(self._find_replica_nodes, cb=cb)
@@ -78,7 +78,7 @@ class Replicator(object):
                 status = response.CalvinResponse(data=self.new_replicas)
                 cb(status=status)
                 return
-            else: 
+            else:
                 available_nodes = []
                 for (node_id, link) in self.node.network.links.iteritems():
                     if node_id not in current_nodes:
@@ -107,7 +107,7 @@ class Replicator(object):
         self._close_actor_ports()
         cb = CalvinCB(self._delete_lost_actor_cb, cb=cb)
         self.node.proto.actor_destroy(self.lost_actor_info['node_id'], callback=cb, actor_id=self.lost_actor_id)
-        
+
     def _close_actor_ports(self):
         _log.info("Closing ports of actor {}".format(self.lost_actor_id))
         callback = CalvinCB(self._send_disconnect_request)
@@ -140,10 +140,12 @@ class Replicator(object):
             self.node.storage.get_node(self.lost_actor_info['node_id'], self._delete_node)
         cb()
 
-    def _delete_node(self, key, value):
+    def _delete_node(self, key, value, cb):
         _log.info("Deleting node {} with value {}".format(key, value))
         if not value:
+            cb(response.CalvinResponse(False))
             return
 
         indexed_public = value['attributes'].get('indexed_public')
         self.node.storage.delete_node(key, indexed_public)
+        cb(response.CalvinResponse(True))
