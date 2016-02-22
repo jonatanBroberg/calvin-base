@@ -1613,7 +1613,7 @@ class TestLosingActors(CalvinTestBase):
         src = d.actor_map['simple:src']
         snk = d.actor_map['simple:snk']
 
-        # Check_response in utils should raise an exception with error 404, not found
+        # Check_response in utils should raise an exception with error 404, not found but doesn't due to sync problems
         utils.lost_actor(rt, snk)
 
     def testLoseOneActorFromAppRTOneReplica(self):
