@@ -14,60 +14,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import os
 import unittest
+import time
+import pytest
+import multiprocessing
+import copy
+from collections import Counter
+
+from calvin.tests.helpers import expected_tokens, actual_tokens
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
-import time
-import multiprocessing
+from calvin.Tools.csruntime import csruntime
 from calvin.utilities import calvinconfig
 from calvin.utilities import utils
 from calvin.utilities.nodecontrol import dispatch_node
 from calvin.utilities.attribute_resolver import format_index_string
-import pytest
 from calvin.utilities import calvinlogger
 
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
 
-def actual_tokens(rt, actor_id):
-    return utils.report(rt, actor_id)
 
-def expected_counter(n):
-    return [i for i in range(1, n + 1)]
-
-def cumsum(l):
-    s = 0
-    for n in l:
-        s = s + n
-        yield s
-
-def expected_sum(n):
-    return list(cumsum(range(1, n + 1)))
-
-def expected_tokens(rt, actor_id, src_actor_type):
-    tokens = utils.report(rt, actor_id)
-
-    if src_actor_type == 'std.CountTimer':
-        return expected_counter(tokens)
-
-    if src_actor_type == 'std.Sum':
-        return expected_sum(tokens)
-
-    return None
+uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 runtime = None
 runtimes = []
 peerlist = []
 kill_peers = True
+ip_addr = None
+
+
 
 def setup_module(module):
     global runtime
     global runtimes
     global peerlist
     global kill_peers
-    ip_addr = None
+    global ip_addr
     bt_master_controluri = None
 
     try:
@@ -212,21 +198,34 @@ def teardown_module(module):
         p.terminate()
         time.sleep(0.2)
 
+
 class CalvinTestBase(unittest.TestCase):
 
-    def assertListPrefix(self, expected, actual, allow_empty=False):
+    def assert_list_prefix(self, expected, actual, allow_empty=False):
         assert actual
         if len(expected) > len(actual):
             self.assertListEqual(expected[:len(actual)], actual)
         elif len(expected) < len(actual):
             self.assertListEqual(expected, actual[:len(expected)])
-        else :
+        else:
             self.assertListEqual(expected, actual)
+
+    def assert_list_postfix(self, expected, actual):
+        assert expected
+        assert actual
+        if len(actual) > len(expected):
+            return False
+        if len(actual) == len(expected):
+            return actual == expected
+
+        index = expected.index(actual[0])
+        return self.assertListEqual(expected[index:], actual)
 
     def setUp(self):
         self.runtime = runtime
         self.runtimes = runtimes
         self.peerlist = peerlist
+
 
 @pytest.mark.slow
 @pytest.mark.essential
@@ -246,6 +245,71 @@ class TestNodeSetup(CalvinTestBase):
 
 @pytest.mark.essential
 @pytest.mark.slow
+class TestActorDeletion(CalvinTestBase):
+
+    """Testing deletion of actor"""
+
+    def testDeleteLocalActor(self):
+        rt = self.runtime
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        snk = d.actor_map['simple:snk']
+
+        assert snk in actors
+        utils.delete_actor(rt, snk)
+        time.sleep(0.2)
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        assert snk not in utils.get_application_actors(rt, app_id)
+
+        d.destroy()
+
+    def testDeleteRemoteActor(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
+        utils.delete_actor(peer, snk)
+        time.sleep(3)
+
+        snk = d.actor_map['simple:snk']
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
+
+        d.destroy()
+
+
+@pytest.mark.essential
+@pytest.mark.slow
 class TestLocalConnectDisconnect(CalvinTestBase):
 
     """Testing local connect/disconnect/re-connect"""
@@ -253,7 +317,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
     def testLocalSourceSink(self):
         """Testing local source and sink"""
 
-        rt, id_, peers = self.runtime, self.runtime.id, self.peerlist
+        rt, id_, _ = self.runtime, self.runtime.id, self.peerlist
 
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
@@ -267,7 +331,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -290,7 +354,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
@@ -314,10 +378,70 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         expected = expected_tokens(rt, src, "std.CountTimer")
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, snk)
+
+    def testLocalConnectSourceWithMultipleSinks(self):
+        """Testing local connect/disconnect/re-connect on source with multiple sinks"""
+
+        rt, rt_id = self.runtime, self.runtime.id
+
+        src = utils.new_actor(rt, "std.CountTimer", "src")
+        snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+        snk_2 = utils.new_actor_wargs(rt, "io.StandardOut", "snk_2", store_tokens=1)
+
+        utils.connect(rt, snk, "token", rt_id, src, "integer")
+        time.sleep(0.2)
+        utils.connect(rt, snk_2, "token", rt_id, src, "integer")
+        time.sleep(0.2)
+
+        utils.disconnect(rt, src)
+
+        utils.connect(rt, snk, "token", rt_id, src, "integer")
+        time.sleep(0.2)
+        utils.connect(rt, snk_2, "token", rt_id, src, "integer")
+
+        expected = expected_tokens(rt, src, "std.CountTimer")
+        actual_1 = actual_tokens(rt, snk)
+        actual_2 = actual_tokens(rt, snk)
+        self.assert_list_prefix(expected, actual_1)
+        self.assert_list_prefix(expected, actual_2)
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, snk_2)
+
+    def testLocalConnectSinkWithMultipleSources(self):
+        """Testing local connect/disconnect/re-connect on source with multiple sinks"""
+
+        rt, rt_id = self.runtime, self.runtime.id
+
+        src = utils.new_actor(rt, "std.CountTimer", "src")
+        src_2 = utils.new_actor(rt, "std.CountTimer", "src_2")
+        snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+
+        utils.connect(rt, snk, "token", rt_id, src, "integer")
+        utils.connect(rt, snk, "token", rt_id, src_2, "integer")
+        time.sleep(0.2)
+
+        utils.disconnect(rt, snk)
+
+        utils.connect(rt, snk, "token", rt_id, src, "integer")
+        time.sleep(0.2)
+        utils.connect(rt, snk, "token", rt_id, src_2, "integer")
+        time.sleep(.1)
+
+        expected_1 = expected_tokens(rt, src, "std.CountTimer")
+        expected_2 = expected_tokens(rt, src_2, "std.CountTimer")
+        expected = sorted(expected_1 + expected_2)
+        actual = sorted(actual_tokens(rt, snk))
+        self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, src_2)
 
     def testLocalConnectDisconnectFilter(self):
         """Testing local connect/disconnect/re-connect on filter"""
@@ -341,11 +465,10 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         time.sleep(0.2)
 
         utils.disconnect(rt, src)
-        # disable(rt, id_, src)
 
         expected = expected_tokens(rt, src, "std.Sum")
         actual = actual_tokens(rt, snk)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, src)
         utils.delete_actor(rt, sum_)
@@ -354,7 +477,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
     def testTimerLocalSourceSink(self):
         """Testing timer based local source and sink"""
 
-        rt, id_, peers = self.runtime, self.runtime.id, self.peerlist
+        rt, id_, = self.runtime, self.runtime.id
 
         src = utils.new_actor_wargs(
             rt, 'std.CountTimer', 'src', sleep=0.1, steps=10)
@@ -369,7 +492,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual = actual_tokens(rt, snk)
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         self.assertTrue(len(actual) > 0)
 
         utils.delete_actor(rt, src)
@@ -403,7 +526,7 @@ class TestRemoteConnection(CalvinTestBase):
         expected = expected_tokens(rt, src, 'std.Sum')
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
@@ -439,7 +562,7 @@ class TestRemoteConnection(CalvinTestBase):
         expected = list(_d())
         actual = actual_tokens(rt, snk1)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk1)
         utils.delete_actor(peer, alt)
@@ -478,18 +601,44 @@ class TestRemoteConnection(CalvinTestBase):
         expected = list(_d())
         actual = actual_tokens(rt, snk1)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         expected = range(1, 100)
         actual = actual_tokens(peer, snk2)
         assert(len(actual) > 1)
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         utils.delete_actor(rt, snk1)
         utils.delete_actor(peer, snk2)
         utils.delete_actor(peer, alt)
         utils.delete_actor(rt, src1)
         utils.delete_actor(rt, src2)
+
+    def testSinkWithMultipleRemoteSources(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+        src_1 = utils.new_actor_wargs(peer, 'std.CountTimer', 'src_1')
+        src_2 = utils.new_actor_wargs(peer, 'std.CountTimer', 'src_2')
+
+        utils.connect(rt, snk, 'token', peer.id, src_1, 'integer')
+        time.sleep(.2)
+        utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
+        time.sleep(.2)
+
+        expected_1 = expected_tokens(peer, src_1, "std.CountTimer")
+        expected_2 = expected_tokens(peer, src_2, "std.CountTimer")
+        expected = sorted(expected_1 + expected_2)
+
+        actual = sorted(actual_tokens(rt, snk))
+        assert len(actual) > 0
+        self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(peer, src_1)
+        utils.delete_actor(peer, src_2)
+        utils.delete_actor(rt, snk)
+
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -519,7 +668,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(peer, src)
@@ -548,7 +697,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -584,7 +733,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -607,13 +756,13 @@ class TestActorMigration(CalvinTestBase):
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(peer, sum_, id_)
-        time.sleep(0.2)
+        time.sleep(0.4)
 
         expected = expected_tokens(rt, src, 'std.Sum')
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(rt, sum_)
         utils.delete_actor(rt, src)
@@ -649,7 +798,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
@@ -678,11 +827,10 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer, sum_)
         utils.delete_actor(rt, src)
-
 
     def testInOutPortRemoteToRemoteMigration(self):
         """Testing out- and inport remote to remote migration"""
@@ -712,7 +860,7 @@ class TestActorMigration(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(rt, snk)
         utils.delete_actor(peer1, sum_)
         utils.delete_actor(rt, src)
@@ -743,10 +891,1352 @@ class TestActorMigration(CalvinTestBase):
         expected = [u'((( 1 )))', u'((( 2 )))', u'((( 3 )))', u'((( 4 )))', u'((( 5 )))', u'((( 6 )))', u'((( 7 )))', u'((( 8 )))']
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
         utils.delete_actor(peer0, snk)
         utils.delete_actor(peer0, wrapper)
         utils.delete_actor(rt, src)
+
+    def testMigrateSourceWithMultipleLocalSinks(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
+        utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        before_migration_1 = actual_tokens(rt, snk_1)
+        before_migration_2 = actual_tokens(rt, snk_2)
+
+        utils.migrate(rt, src, peer.id)
+        time.sleep(0.3)
+
+        expected = expected_tokens(peer, src, 'std.CountTimer')
+        actual_1 = actual_tokens(rt, snk_1)
+        actual_2 = actual_tokens(rt, snk_2)
+
+        assert(len(actual_1) > 1)
+        assert(len(actual_2) > 1)
+        assert(len(actual_1) > len(before_migration_1))
+        assert(len(actual_2) > len(before_migration_2))
+        self.assert_list_prefix(expected, actual_1)
+        self.assert_list_prefix(expected, actual_2)
+        self.assertListEqual(actual_1, actual_2)
+
+        utils.delete_actor(rt, snk_1)
+        utils.delete_actor(rt, snk_2)
+        utils.delete_actor(peer, src)
+
+    def testMigrateSourceWithMultipleRemoteAndLocalSinks(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
+        utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        before_migration_1 = actual_tokens(rt, snk_1)
+        before_migration_2 = actual_tokens(peer, snk_2)
+
+        utils.migrate(rt, src, peer.id)
+        time.sleep(0.3)
+
+        expected = expected_tokens(peer, src, 'std.CountTimer')
+        actual_1 = actual_tokens(rt, snk_1)
+        actual_2 = actual_tokens(peer, snk_2)
+
+        assert(len(actual_1) > 1)
+        assert(len(actual_2) > 1)
+        assert(len(actual_1) > len(before_migration_1))
+        assert(len(actual_2) > len(before_migration_2))
+        self.assert_list_prefix(expected, actual_1)
+        self.assert_list_prefix(expected, actual_2)
+        self.assertListEqual(actual_1, actual_2)
+
+        utils.delete_actor(rt, snk_1)
+        utils.delete_actor(peer, snk_2)
+        utils.delete_actor(peer, src)
+
+    def testMigrateSourceWithMultipleRemoteSinks(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk_1 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(peer, snk_1, 'token', rt.id, src, 'integer')
+        utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        before_migration_1 = actual_tokens(peer, snk_1)
+        before_migration_2 = actual_tokens(peer, snk_2)
+
+        utils.migrate(rt, src, peer.id)
+        time.sleep(0.3)
+
+        expected = expected_tokens(peer, src, 'std.CountTimer')
+        actual_1 = actual_tokens(peer, snk_1)
+        actual_2 = actual_tokens(peer, snk_2)
+
+        assert(len(actual_1) > 1)
+        assert(len(actual_2) > 1)
+        assert(len(actual_1) > len(before_migration_1))
+        assert(len(actual_2) > len(before_migration_2))
+        self.assert_list_prefix(expected, actual_1)
+        self.assert_list_prefix(expected, actual_2)
+        self.assertListEqual(actual_1, actual_2)
+
+        utils.delete_actor(peer, snk_1)
+        utils.delete_actor(peer, snk_2)
+        utils.delete_actor(peer, src)
+
+    def testMigrateSinkWithMultipleLocalSources(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.3)
+
+        expected_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(peer, snk)
+
+        assert(len(actual) > 1)
+        self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(rt, src_2)
+        utils.delete_actor(peer, snk)
+
+    def testMigrateSinkWithMultipleRemoteAndLocalSources(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.3)
+
+        expected_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_2 = expected_tokens(peer, src_2, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(peer, snk)
+
+        assert(len(actual) > 1)
+        self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(peer, src_2)
+        utils.delete_actor(peer, snk)
+
+    def testMigrateSinkWithMultipleRemoteSources(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(peer, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', peer.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.3)
+
+        expected_1 = expected_tokens(peer, src_1, 'std.CountTimer')
+        expected_2 = expected_tokens(peer, src_2, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(peer, snk)
+
+        assert(len(actual) > 1)
+        self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(peer, src_1)
+        utils.delete_actor(peer, src_2)
+        utils.delete_actor(peer, snk)
+
+    def testMigrateSinkWithMultipleSinkAndSources(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk_1, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk_1, 'token', rt.id, src_2, 'integer')
+        utils.connect(rt, snk_2, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk_2, 'token', rt.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        before_migration_1 = actual_tokens(rt, snk_1)
+        before_migration_2 = actual_tokens(rt, snk_2)
+
+        utils.migrate(rt, snk_1, peer.id)
+        time.sleep(0.5)
+
+        expected_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual_snk_1 = actual_tokens(peer, snk_1)
+        actual_snk_2 = actual_tokens(rt, snk_2)
+
+        assert(len(actual_snk_1) > 1)
+        assert(len(actual_snk_2) > 1)
+        assert(len(actual_snk_1) > len(before_migration_1))
+        assert(len(actual_snk_2) > len(before_migration_2))
+        self.assert_list_prefix(expected, actual_snk_1)
+        self.assert_list_prefix(expected, actual_snk_2)
+        self.assert_list_prefix(actual_snk_1, actual_snk_2)
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(rt, src_2)
+        utils.delete_actor(peer, snk_1)
+        utils.delete_actor(rt, snk_2)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestActorReplication(CalvinTestBase):
+
+    def testReplicationGetsNewName(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=123, quiet=True)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        time.sleep(0.27)
+
+        original = utils.get_actor(rt, snk)
+        replica = utils.get_actor(peer, snk_replica)
+
+        assert original['name'] != replica['name']
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(peer, snk_replica)
+
+    def testLocalToRemoteReplication(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        src = d.actor_map['simple:src']
+        replica = utils.replicate(rt, snk, peer.id)
+
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(peer, replica)
+
+        assert(len(actual_orig) > 1)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_replica)
+
+        d.destroy()
+
+    def testLocalToLocalReplication(self):
+        rt = self.runtime
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        src = d.actor_map['simple:src']
+        replica = utils.replicate(rt, snk, rt.id)
+
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(rt, replica)
+
+        assert(len(actual_orig) > 1)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_replica)
+
+        d.destroy()
+
+    def testRemoteToRemoteReplication(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        src = d.actor_map['simple:src']
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+        replica = utils.replicate(peer, snk, peer.id)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(peer, snk)
+        actual_replica = actual_tokens(peer, replica)
+
+        assert(len(actual_orig) > 1)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_replica)
+
+        d.destroy()
+
+    def testDoubleReplication(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk1 : io.StandardOut(store_tokens=1)
+            snk2 : io.StandardOut(store_tokens=1)
+            src.integer > snk1.token
+            src.integer > snk2.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk1 = d.actor_map['simple:snk1']
+        snk2 = d.actor_map['simple:snk2']
+        src = d.actor_map['simple:src']
+        utils.migrate(rt, snk1, peer.id)
+        utils.migrate(rt, snk2, peer.id)
+        time.sleep(0.2)
+        replica_1 = utils.replicate(peer, snk1, peer.id)
+        replica_2 = utils.replicate(peer, snk2, peer.id)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica_1 in actors
+        assert replica_2 in actors
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig_1 = actual_tokens(peer, snk1)
+        actual_orig_2 = actual_tokens(peer, snk2)
+        actual_replica_1 = actual_tokens(peer, replica_1)
+        actual_replica_2 = actual_tokens(peer, replica_2)
+
+        assert(len(actual_orig_1) > 1)
+        assert(len(actual_orig_2) > 1)
+        self.assert_list_prefix(expected, actual_orig_1)
+        self.assert_list_prefix(expected, actual_replica_1)
+        self.assert_list_prefix(expected, actual_orig_2)
+        self.assert_list_prefix(expected, actual_replica_2)
+
+        d.destroy()
+
+    def testRemoteToLocalReplication(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        src = d.actor_map['simple:src']
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+        replica = utils.replicate(peer, snk, rt.id)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
+
+        expected = expected_tokens(rt, src, 'std.CountTimer')
+        actual_orig = actual_tokens(peer, snk)
+        actual_replica = actual_tokens(rt, replica)
+
+        assert(len(actual_orig) > 1)
+        self.assert_list_prefix(expected, actual_orig)
+        self.assert_list_prefix(expected, actual_replica)
+
+        d.destroy()
+
+    def testReplicateSourceWithMultipleSinksToRemote(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
+        utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
+        time.sleep(0.3)
+
+        src_replica = utils.replicate(rt, src, peer.id)
+        time.sleep(0.2)
+
+        expected_src = expected_tokens(rt, src, 'std.CountTimer')
+        expected_replica = expected_tokens(peer, src_replica, 'std.CountTimer')
+        expected = sorted(expected_src + expected_replica)
+        actual_snk_1 = actual_tokens(rt, snk_1)
+        actual_snk_2 = actual_tokens(rt, snk_2)
+
+        counts = Counter(actual_snk_1)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual_snk_1 = filter(lambda x: x not in unique_elements, actual_snk_1)
+        actual_snk_2 = filter(lambda x: x not in unique_elements, actual_snk_2)
+
+        assert(len(actual_snk_1) > 1)
+        assert(len(actual_snk_2) > 1)
+        self.assert_list_prefix(expected, sorted(actual_snk_1))
+        self.assert_list_prefix(expected, sorted(actual_snk_2))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(peer, src_replica)
+        utils.delete_actor(rt, snk_1)
+        utils.delete_actor(rt, snk_2)
+
+    def testReplicateSourceWithMultipleSinksToLocal(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
+        utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
+        time.sleep(0.2)
+
+        src_replica = utils.replicate(rt, src, rt.id)
+        time.sleep(0.4)
+
+        expected_src = expected_tokens(rt, src, 'std.CountTimer')
+        expected_replica = expected_tokens(rt, src_replica, 'std.CountTimer')
+        expected = sorted(expected_src + expected_replica)
+        actual_snk_1 = actual_tokens(rt, snk_1)
+        actual_snk_2 = actual_tokens(rt, snk_2)
+
+        counts = Counter(actual_snk_1)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual_snk_1 = filter(lambda x: x not in unique_elements, actual_snk_1)
+        actual_snk_2 = filter(lambda x: x not in unique_elements, actual_snk_2)
+
+        assert(len(actual_snk_1) > 1)
+        assert(len(actual_snk_2) > 1)
+        self.assert_list_prefix(expected, sorted(actual_snk_1))
+        self.assert_list_prefix(expected, sorted(actual_snk_2))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, src_replica)
+        utils.delete_actor(rt, snk_1)
+        utils.delete_actor(rt, snk_2)
+
+    def testReplicateSinkWithMultipleSourcesToRemote(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        time.sleep(0.2)
+
+        expected_src_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_src_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+        expected = sorted(expected_src_1 + expected_src_2)
+        actual_snk = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(peer, snk_replica)
+
+        assert(len(actual_snk) > 1)
+        assert(len(actual_replica) > 1)
+        self.assert_list_prefix(expected, sorted(actual_snk))
+        self.assert_list_prefix(expected, sorted(actual_replica))
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(rt, src_2)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(peer, snk_replica)
+
+    def testReplicateSinkWithMultipleSourcesToLocal(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        snk_replica = utils.replicate(rt, snk, rt.id)
+        time.sleep(0.3)
+
+        expected_src_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_src_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+        expected = sorted(expected_src_1 + expected_src_2)
+        actual_snk = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(rt, snk_replica)
+
+        assert(len(actual_snk) > 1)
+        assert(len(actual_replica) > 1)
+        self.assert_list_prefix(expected, sorted(actual_snk))
+        self.assert_list_prefix(expected, sorted(actual_replica))
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(rt, src_2)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, snk_replica)
+
+    def testReplicateActorWithBothInportAndOutports(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        actual = utils.report(rt, snk)
+
+        replica = utils.replicate(rt, ity, rt.id)
+        time.sleep(0.3)
+
+        expected_1 = expected_tokens(rt, src, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(rt, snk)
+
+        assert(len(actual) > 1)
+        assert(len(expected_2) > 1)
+        assert actual.count(1) == 1
+        assert actual.count(4) == 2
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual = filter(lambda x: x not in unique_elements, actual)
+        self.assert_list_prefix(expected, sorted(actual))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(rt, replica)
+        utils.delete_actor(rt, snk)
+
+    def testReplicateWithoutNodeIdSelectsLeastBusyNode(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        replica = utils.replicate(rt, ity, None)
+        time.sleep(0.2)
+
+        new_node = None
+        runtimes = [rt]
+        runtimes.extend(self.runtimes)
+        for runtime in runtimes:
+            if replica in utils.get_actors(runtime):
+                new_node = runtime
+
+        assert new_node
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(new_node, replica)
+        utils.delete_actor(rt, snk)
+
+    def testReplicateSinkAndSource(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+
+        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
+        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
+
+        time.sleep(0.2)
+        snk_replica = utils.replicate(rt, snk, rt.id)
+        src_replica = utils.replicate(rt, src, rt.id)
+        time.sleep(0.2)
+
+        expected_1 = expected_tokens(rt, src, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src_replica, 'std.CountTimer')
+        expected = sorted(expected_1 + expected_2)
+        actual = actual_tokens(rt, snk)
+        actual_replica = actual_tokens(rt, snk_replica)
+
+        assert(len(actual) > 1)
+        assert(len(expected_2) > 1)
+        assert actual.count(1) == 1
+        assert actual.count(4) == 2
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        expected = filter(lambda x: x not in unique_elements, expected)
+        actual = filter(lambda x: x not in unique_elements, actual)
+        actual_replica = filter(lambda x: x not in unique_elements, actual_replica)
+
+        self.assert_list_prefix(expected, sorted(actual))
+        self.assert_list_prefix(expected, sorted(actual_replica))
+
+        utils.delete_actor(rt, src)
+        utils.delete_actor(rt, src_replica)
+        utils.delete_actor(rt, ity)
+        utils.delete_actor(rt, snk)
+        utils.delete_actor(rt, snk_replica)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestLosingActors(CalvinTestBase):
+
+    @pytest.mark.xfail
+    def testLoseLastActor(self):
+        rt = self.runtime
+        
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        # Check_response in utils should raise an exception with error 404, not found but doesn't due to sync problems
+        utils.lost_actor(rt, snk)
+
+    def testLoseOneActorFromAppRTOneReplica(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.3)
+        replicas = {snk2: rt2}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
+
+        assert(2 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
+    def testLoseOneActorFromNotAppRTOneReplica(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(rt2, snk2)
+        time.sleep(0.2)
+        replicas = {snk: rt1}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
+
+        assert(2 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk2))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
+    def testLoseOneActorFromAppRTTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt2, snk2, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.2)
+        replicas = {snk2: rt2, snk3: rt3}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
+
+        assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
+    def testLoseOneActorFromNotAppRTTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt2, snk2, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(rt2, snk2)
+        time.sleep(0.2)
+        replicas = {snk: rt1, snk3: rt3}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
+
+        assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk2))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
+    def testLoseTwoActorsTwoReplicas(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+        rt3 = self.runtimes[1]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk2 = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(rt1, snk, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(rt2, snk2)
+        utils.lost_actor(rt1, snk)
+        time.sleep(0.2)
+        replicas = {snk3: rt3}
+
+        for rt in [rt1, rt2, rt3]:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                if actor != snk and actor != snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            return
+                        except:
+                            time.sleep(0.2)
+
+        assert(3 == len(replicas))
+        self.assertIsNone(utils.get_actor(rt1, snk))
+        self.assertIsNone(utils.get_actor(rt2, snk2))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        assert len(expected) > len(expected_before)
+
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+        utils.delete_actor(rt1, src)
+        for a_id, a_rt in replicas.iteritems():
+            utils.delete_actor(a_rt, a_id)
+
+        d.destroy()
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestDyingRuntimes(CalvinTestBase):
+
+    def setUp(self):
+        self.runtime = runtime
+        self.runtimes = runtimes
+        self.peerlist = peerlist
+
+        conf = copy.deepcopy(_conf)
+        conf.set('global', 'storage_proxy', self.runtime.uri[0])
+        conf.set('global', 'storage_start', "1")
+        conf.save("/tmp/calvin5030.conf")
+
+        global ip_addr
+        self.ip_addr = ip_addr
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        csruntime(ip_addr, port=5030, controlport=5031, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.5)
+        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
+        self.dying_rt.id = utils.get_node_id(self.dying_rt)
+
+        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
+
+    def tearDown(self):
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+
+    def testLoseActorWithOnlyLocalActors(self):
+        rt1 = self.runtime
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        snk_replica = utils.replicate(rt1, snk, rt1.id)
+        src_replica = utils.replicate(rt1, src, rt1.id)
+        time.sleep(2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        expected_replica_before = expected_tokens(rt1, src_replica, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt1, snk_replica)
+
+        utils.lost_actor(rt1, snk_replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+        self.assertIsNone(utils.get_actor(rt1, snk_replica))
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected_replica = expected_tokens(rt1, src_replica, 'std.CountTimer')
+        expected = sorted(expected + expected_replica)
+
+        actual = actual_tokens(rt1, snk)
+
+        assert len(expected) > len(expected_before)
+        assert len(expected_replica) > len(expected_replica_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_actual))
+
+        d.destroy()
+
+    def testLoseSnkActorWithLocalSource(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, snk, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt2, replica)
+
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        self.assertIsNone(utils.get_actor(rt1, replica))
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+        self.assert_list_prefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
+
+        d.destroy()
+
+    def testLoseSnkActorWithRemoteSource(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+        rt3 = self.runtimes[0]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, snk, rt2.id)
+        utils.migrate(rt1, src, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt3, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        actual_replica_before = actual_tokens(rt2, replica)
+
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:snk':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        self.assertIsNone(utils.get_actor(rt1, replica))
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
+
+        expected = expected_tokens(rt3, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+        self.assert_list_prefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
+
+        d.destroy()
+
+    def testLoseSrcActorWithLocalSink(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, src, rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
+
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:src':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        self.assertIsNone(utils.get_actor(rt1, replica))
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
+
+        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+
+        time.sleep(3)
+        d.destroy()
+
+    def testLoseSrcActorWithRemoteSink(self):
+        rt1 = self.runtime
+        rt2 = self.dying_rt
+        rt3 = self.runtimes[0]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        replica = utils.replicate(rt1, src, rt2.id)
+        utils.migrate(rt1, src, rt3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(rt3, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(rt1, snk)
+        expected_replica_before = expected_tokens(rt2, replica, 'std.CountTimer')
+
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        time.sleep(0.1)
+
+        utils.lost_actor(rt1, replica)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt1, app_id)
+        replicas = 0
+        for actor in actors:
+            a = utils.get_actor(rt1, actor)
+            if a:
+                name = re.sub(uuid_re, "", a['name'])
+                if name == 'simple:src':
+                    replicas = replicas + 1
+
+        assert(2 == replicas)
+
+        self.assertIsNone(utils.get_actor(rt1, replica))
+        self.assertIsNone(utils.get_node(rt1, rt2.id))
+        assert rt2.id not in utils.get_nodes(rt1)
+
+        expected = expected_tokens(rt3, src, 'std.CountTimer')
+        actual = actual_tokens(rt1, snk)
+
+        counts = Counter(actual)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+
+        time.sleep(3)
+        d.destroy()
 
 
 @pytest.mark.essential
@@ -773,7 +2263,7 @@ class TestCalvinScript(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         expected = expected_tokens(rt, src, 'std.CountTimer')
 
-        self.assertListPrefix(expected, actual)
+        self.assert_list_prefix(expected, actual)
 
         d.destroy()
 
@@ -838,7 +2328,7 @@ class TestCalvinScript(CalvinTestBase):
             if app_id in applications:
                 print("Retrying in %s" % (retry * 0.2, ))
                 time.sleep(0.2 * retry)
-            else :
+            else:
                 break
         assert app_id not in applications
 
@@ -856,3 +2346,112 @@ class TestCalvinScript(CalvinTestBase):
 
         for actor in d.actor_map.values():
             assert actor not in actors
+
+    def testCompileWithMultipleInports(self):
+        rt = self.runtime
+
+        script = """
+      src_1 : std.CountTimer()
+      src_2 : std.CountTimer()
+      snk : io.StandardOut(store_tokens=1)
+      src_1.integer > snk.token
+      src_2.integer > snk.token
+    """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        d.deploy()
+        time.sleep(0.5)
+        src_1 = d.actor_map['simple:src_1']
+        src_2 = d.actor_map['simple:src_2']
+        snk = d.actor_map['simple:snk']
+
+        utils.disconnect(rt, src_1)
+
+        actual = actual_tokens(rt, snk)
+        expected_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+
+        self.assert_list_prefix(sorted(expected_1 + expected_2), actual)
+
+        d.destroy()
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestMultipleInports(CalvinTestBase):
+    def TestMultipleInports(self):
+        """Testing outport remote to local migration"""
+        rt = self.runtime
+
+        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+
+        utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
+        utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
+        time.sleep(0.2)
+
+        expected_src_1 = expected_tokens(rt, src_1, 'std.CountTimer')
+        expected_src_2 = expected_tokens(rt, src_2, 'std.CountTimer')
+        expected = sorted(expected_src_1 + expected_src_2)
+        actual_snk = actual_tokens(rt, snk)
+
+        assert(len(actual_snk) > 1)
+        self.assert_list_prefix(expected, sorted(actual_snk))
+
+        utils.delete_actor(rt, src_1)
+        utils.delete_actor(rt, src_2)
+        utils.delete_actor(rt, snk)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestPeerSetup(CalvinTestBase):
+
+    def testPeerSetupSinglePeer(self):
+        global ip_addr
+        rt1, _ = dispatch_node(["calvinip://%s:5020" % (ip_addr, )], "http://localhost:5021")
+        rt2, _ = dispatch_node(["calvinip://%s:5022" % (ip_addr, )], "http://localhost:5023")
+
+        peers = [rt2.uri[0]]
+        utils.peer_setup(rt1, peers)
+
+        time.sleep(0.5)
+
+        rt1_nodes = utils.get_nodes(rt1)
+        rt2_nodes = utils.get_nodes(rt2)
+
+        for peer in [rt1, rt2]:
+            utils.quit(peer)
+            time.sleep(0.2)
+
+        assert rt2.id in rt1_nodes
+        assert rt1.id in rt2_nodes
+
+    def testPeerSetupMultiplePeers(self):
+        global ip_addr
+        rt1, _ = dispatch_node(["calvinip://%s:5010" % (ip_addr, )], "http://localhost:5011")
+        rt2, _ = dispatch_node(["calvinip://%s:5012" % (ip_addr, )], "http://localhost:5013")
+        rt3, _ = dispatch_node(["calvinip://%s:5014" % (ip_addr, )], "http://localhost:5015")
+
+        peers = [rt2.uri[0], rt3.uri[0]]
+        utils.peer_setup(rt1, peers)
+
+        time.sleep(0.5)
+
+        rt1_nodes = utils.get_nodes(rt1)
+        rt2_nodes = utils.get_nodes(rt2)
+        rt3_nodes = utils.get_nodes(rt3)
+
+        for peer in [rt1, rt2, rt3]:
+            utils.quit(peer)
+            time.sleep(0.2)
+
+        assert rt2.id in rt1_nodes
+        assert rt3.id in rt1_nodes
+
+        assert rt1.id in rt2_nodes
+        assert rt3.id in rt2_nodes
+
+        assert rt1.id in rt3_nodes
+        assert rt2.id in rt3_nodes

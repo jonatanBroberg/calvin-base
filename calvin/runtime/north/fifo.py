@@ -31,24 +31,27 @@ class FIFO(object):
 
     def __init__(self, length):
         super(FIFO, self).__init__()
-        self.fifo = [Token(0)] * length
+        self.fifo = {}
         self.N = length
         self.readers = set()
         # NOTE: For simplicity, modulo operation is only used in fifo access,
         #       all read and write positions are monotonousy increasing
-        self.write_pos = 0
+        self.write_pos = {}
         self.read_pos = {}
         self.tentative_read_pos = {}
 
-    def __len__(self):
-        return self.write_pos - min(self.read_pos.values() or [0])
+    def length(self, reader):
+        return self.write_pos[reader] - self.read_pos[reader]
 
     def __str__(self):
-        return "Tokens: %s, w:%i, r:%s, tr:%s" % (self.fifo, self.write_pos, self.read_pos, self.tentative_read_pos)
+        return "Tokens: {}, w:{}, r:{}, tr:{}".format(self.fifo, self.write_pos, self.read_pos, self.tentative_read_pos)
 
     def _state(self):
+        fifo = {}
+        for reader in self.fifo:
+            fifo[reader] = [t.encode() for t in self.fifo[reader]]
         state = {
-            'fifo': [t.encode() for t in self.fifo],
+            'fifo': fifo,
             'N': self.N,
             'readers': list(self.readers),
             'write_pos': self.write_pos,
@@ -58,52 +61,62 @@ class FIFO(object):
         return state
 
     def _set_state(self, state):
-        self.fifo = [Token.decode(d) for d in state['fifo']]
+        for reader in state['fifo']:
+            if state.get('catchup_fifo_key') in self.fifo:
+                self.fifo[reader] = self.fifo[state['catchup_fifo_key']]
+                self.write_pos[reader] = self.write_pos[state['catchup_fifo_key']]
+            else:
+                if not state['fifo'][reader]:
+                    self.fifo[reader] = [Token(0)] * self.N
+                else:
+                    self.fifo[reader] = [Token.decode(token) for token in state['fifo'][reader]]
+                self.write_pos[reader] = state['write_pos'][reader]
+
         self.N = state['N']
-        self.readers = set(state['readers'])
-        self.write_pos = state['write_pos']
-        self.read_pos = state['read_pos']
-        self.tentative_read_pos = state['tentative_read_pos']
+        self.readers.update(set(state['readers']))
+        self.read_pos.update(state['read_pos'])
+        self.tentative_read_pos.update(state['tentative_read_pos'])
 
     def add_reader(self, reader):
         if not isinstance(reader, basestring):
             raise Exception('Not a string: %s' % reader)
         if reader not in self.readers:
+            self.fifo[reader] = [Token(0)] * self.N
             self.read_pos[reader] = 0
             self.tentative_read_pos[reader] = 0
             self.readers.add(reader)
+            self.write_pos[reader] = 0
 
     def remove_reader(self, reader):
         if not isinstance(reader, basestring):
             raise Exception('Not a string: %s' % reader)
         del self.read_pos[reader]
         del self.tentative_read_pos[reader]
+        del self.write_pos[reader]
         self.readers.discard(reader)
 
-    def can_write(self):
-        # See if there is space to write data
-        last_readpos = min(self.read_pos.values() or [0])
-        return not (self.write_pos + 1) % self.N == last_readpos % self.N
+    def can_write(self, reader):
+        return not (self.write_pos[reader] + 1) % self.N == self.read_pos[reader] % self.N
 
-    def write(self, data):
-        if not self.can_write():
+    def write(self, data, reader):
+        if reader and not self.can_write(reader):
             return False
-        write_pos = self.write_pos
-        self.fifo[write_pos % self.N] = data
-        self.write_pos = write_pos + 1
+
+        write_pos = self.write_pos[reader]
+        self.fifo[reader][write_pos % self.N] = data
+        self.write_pos[reader] = write_pos + 1
         return True
 
-    def available_slots(self):
+    def available_slots(self, reader):
         # See if there is space to write data
-        last_readpos = min(self.read_pos.values() or [0])
-        return self.N - ((self.write_pos - last_readpos) % self.N) - 1
+        return self.N - ((self.write_pos[reader] - self.read_pos[reader]) % self.N) - 1
 
     def available_tokens(self, reader):
         if not isinstance(reader, basestring):
             raise Exception('Not a string: %s' % reader)
         if reader not in self.readers:
             raise Exception("No reader")
-        return self.write_pos - self.tentative_read_pos[reader]
+        return self.write_pos[reader] - self.tentative_read_pos[reader]
 
     #
     # Reading is now done tentatively until committed
@@ -113,7 +126,8 @@ class FIFO(object):
             raise Exception('Not a string: %s' % reader)
         if reader not in self.readers:
             raise Exception("No reader")
-        return not self.tentative_read_pos[reader] == self.write_pos
+        ret = not self.tentative_read_pos[reader] == self.write_pos[reader]
+        return ret
 
     def read(self, reader):
         if not isinstance(reader, basestring):
@@ -122,9 +136,11 @@ class FIFO(object):
             raise Exception("Unknown reader: '%s'" % reader)
         if not self.can_read(reader):
             return None
+
         read_pos = self.tentative_read_pos[reader]
-        data = self.fifo[read_pos % self.N]
+        data = self.fifo[reader][read_pos % self.N]
         self.tentative_read_pos[reader] = read_pos + 1
+
         return data
 
     # Commit is always required after reads.
@@ -138,8 +154,10 @@ class FIFO(object):
         self.commit_reads(reader, False)
 
     def commit_one_read(self, reader, commit=True):
-        if self.read_pos[reader] < self.tentative_read_pos[reader]:
-            if commit:
-                self.read_pos[reader] += 1
-            else:
-                self.tentative_read_pos[reader] -= 1
+        if not self.read_pos[reader] < self.tentative_read_pos[reader]:
+            return
+
+        if commit:
+            self.read_pos[reader] += 1
+        else:
+            self.tentative_read_pos[reader] -= 1

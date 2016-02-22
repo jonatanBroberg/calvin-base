@@ -16,7 +16,7 @@
 
 from calvin.utilities import calvinuuid
 from calvin.runtime.north import fifo
-from calvin.runtime.south import endpoint
+from calvin.runtime.south.endpoint import Endpoint, Peer
 from calvin.utilities.calvinlogger import get_logger
 import copy
 
@@ -26,7 +26,7 @@ _log = get_logger(__name__)
 class Port(object):
     """docstring for Port"""
 
-    def __init__(self, name, owner, fifo_size=5):
+    def __init__(self, name, owner, fifo_size=10):
         super(Port, self).__init__()
         # Human readable port name
         self.name = name
@@ -51,21 +51,21 @@ class Port(object):
         self.id = state.pop('id')
         self.fifo._set_state(state.pop('fifo'))
 
-    def attach_endpoint(self, endpoint_):
+    def attach_endpoint(self, ep):
         """
         Connect port to counterpart.
         """
         raise Exception("Can't attach endpoint to  port %s.%s with id: %s" % (
             self.owner.name, self.name, self.id))
 
-    def detach_endpoint(self, endpoint_):
+    def _detach_endpoint(self, ep):
         """
         Disconnect port from counterpart.
         """
         raise Exception("Can't detach endpoint from  port %s.%s with id: %s" % (
             self.owner.name, self.name, self.id))
 
-    def disconnect(self):
+    def disconnect(self, actor_id):
         """Disconnect port from counterpart. Raises an exception if port is not connected."""
         # FIXME: Implement disconnect
         raise Exception("Can't disconnect port %s.%s with id: %s" % (
@@ -74,66 +74,115 @@ class Port(object):
 
 class InPort(Port):
 
-    """An inport can have only one endpoint."""
-
     def __init__(self, name, owner):
         super(InPort, self).__init__(name, owner)
-        self.fifo.add_reader(self.id)
-        self.endpoint = endpoint.Endpoint(self)
+        self.endpoints = []
 
     def __str__(self):
         s = super(InPort, self).__str__()
-        return s + " " + str(self.endpoint)
+        return s + " " + str(", ".join([str(ep) for ep in self.endpoints]))
 
     def is_connected(self):
-        return self.endpoint.is_connected()
+        return all([ep.is_connected() for ep in self.endpoints])
 
-    def is_connected_to(self, peer_id):
-        return self.endpoint.is_connected() and self.endpoint.get_peer()[1]==peer_id
+    def is_connected_to(self, peer_port_id):
+        for ep in self.endpoints:
+            if ep.get_peer().port_id == peer_port_id:
+                return True
+        return False
 
-    def attach_endpoint(self, endpoint_):
-        old_endpoint = self.endpoint
-        if type(old_endpoint) is not endpoint.Endpoint:
-            self.detach_endpoint(old_endpoint)
-        self.endpoint = endpoint_
+    def attach_endpoint(self, ep):
+        peer_port_id = ep.peer_port_id
+        match = [e for e in self.endpoints if e.peer_port_id == peer_port_id]
+        if not match:
+            old_endpoint = None
+        else:
+            old_endpoint = match[0]
+            self._detach_endpoint(old_endpoint)
+
+        self.fifo.add_reader(ep.fifo_key)
+        self.endpoints.append(ep)
         self.owner.did_connect(self)
         return old_endpoint
 
-    def detach_endpoint(self, endpoint_):
-        if not self.endpoint == endpoint_:
-            _log.warning("Inport: No such endpoint")
+    def _detach_endpoint(self, ep):
+        if ep not in self.endpoints:
+            _log.warning("Outport: No such endpoint")
             return
-        self.owner.did_disconnect(self)
-        self.endpoint = endpoint.Endpoint(self, former_peer_id=endpoint_.get_peer()[1])
+        self.endpoints.remove(ep)
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
+        return
 
-    def disconnect(self):
-        self.owner.did_disconnect(self)
-        endpoints = [self.endpoint]
-        self.endpoint = endpoint.Endpoint(self, former_peer_id=self.endpoint.get_peer()[1])
-        return endpoints
+    def disconnect(self, port_id):
+        """Disconnects the port endpoints associated with the given actor_id"""
+        endpoints = self.endpoints
+        self.endpoints = []
+
+        disconnected_endpoints = []
+        for ep in endpoints:
+            if not port_id or ep.peer_port_id == port_id:
+                self.fifo.commit_reads(ep.fifo_key, False)
+                disconnected_endpoints.append(ep)
+                self._detach_endpoint(ep)
+            else:
+                self.endpoints.append(ep)
+
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
+        return disconnected_endpoints
 
     def read_token(self):
-        """Used by actor (owner) to read a token from the port. Returns None if token queue is empty."""
-        return self.endpoint.read_token()
+        """Used by actor (owner) to read a token from the ports.
+        Returns the first available, or None if token queue is empty.
+        """
+        for ep in self.endpoints:
+            token = ep.read_token()
+            if token:
+                return token
+
+        return None
 
     def peek_token(self):
-        """Used by actor (owner) to peek a token from the port. Following peeks will get next token. Reset with peek_rewind."""
-        return self.endpoint.peek_token()
+        """Used by actor (owner) to peek a token from the ports. Following peeks will get next token.
+        Reset with peek_rewind.
+        """
+        tokens = []
+        for ep in self.endpoints:
+            tkns = ep.peek_token()
+            if isinstance(tkns, list):
+                tokens.extend(tkns)
+            else:
+                tokens.append(tkns)
+        return tokens
 
     def peek_rewind(self):
         """Used by actor (owner) to rewind port peeking to front token."""
-        return self.endpoint.peek_rewind()
+        r = []
+        for ep in self.endpoints:
+            r.append(ep.peek_rewind())
+        return r
 
     def commit_peek_as_read(self):
         """Used by actor (owner) to rewind port peeking to front token."""
-        return self.endpoint.commit_peek_as_read()
+        r = []
+        for ep in self.endpoints:
+            r.append(ep.commit_peek_as_read())
+        return r
 
     def available_tokens(self):
         """Used by actor (owner) to check number of tokens on the port."""
-        return self.endpoint.available_tokens()
+        available = 0
+        for ep in self.endpoints:
+            available += ep.available_tokens()
+        return available
 
-    def get_peer(self):
-        return self.endpoint.get_peer()
+    def get_peers(self):
+        peers = []
+        for ep in self.endpoints:
+            peers.append(ep.get_peer())
+
+        return peers
 
 
 class OutPort(Port):
@@ -171,56 +220,68 @@ class OutPort(Port):
                 return False
         return True
 
-    def is_connected_to(self, peer_id):
+    def is_connected_to(self, peer_port_id):
         for ep in self.endpoints:
-            if ep.get_peer()[1] == peer_id:
+            if ep.get_peer().port_id == peer_port_id:
                 return True
         return False
 
-    def attach_endpoint(self, endpoint_):
-        peer_id = endpoint_.peer_id
-        # Check if this is a reconnect after migration
-        match = [e for e in self.endpoints if e.peer_id == peer_id]
+    def attach_endpoint(self, ep):
+        peer_port_id = ep.peer_port_id
+        match = [e for e in self.endpoints if e.peer_port_id == peer_port_id]
         if not match:
             old_endpoint = None
         else:
             old_endpoint = match[0]
-            self.detach_endpoint(old_endpoint)
+            self._detach_endpoint(old_endpoint)
 
-        self.fifo.add_reader(endpoint_.peer_id)
-        self.endpoints.append(endpoint_)
+        self.fifo.add_reader(ep.fifo_key)
+        self.endpoints.append(ep)
         self.owner.did_connect(self)
         return old_endpoint
 
-    def detach_endpoint(self, endpoint_):
-        if endpoint_ not in self.endpoints:
+    def _detach_endpoint(self, ep):
+        if ep not in self.endpoints:
             _log.warning("Outport: No such endpoint")
             return
-        self.owner.did_disconnect(self)
-        self.endpoints.remove(endpoint_)
+        self.endpoints.remove(ep)
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
 
-    def disconnect(self):
-        self.owner.did_disconnect(self)
+    def disconnect(self, port_id):
+        """Disconnects the port endpoints associated with the given actor_id"""
         endpoints = self.endpoints
         self.endpoints = []
+        disconnected_endpoints = []
+
         # Rewind any tentative reads to acked reads
         # When local no effect since already equal
+
         # When tunneled transport tokens after last continuous acked token will be resent later, receiver will just ack them again if rereceived
-        for e in endpoints:
-            peer_node_id, peer_id = e.get_peer()
-            self.fifo.commit_reads(peer_id, False)
-        return endpoints
+        for ep in endpoints:
+            if not port_id or ep.peer_port_id == port_id:
+                self.fifo.commit_reads(ep.fifo_key, False)
+                disconnected_endpoints.append(ep)
+            else:
+                self.endpoints.append(ep)
+
+        if not self.endpoints:
+            self.owner.did_disconnect(self)
+        return disconnected_endpoints
 
     def write_token(self, data):
         """docstring for write_token"""
-        ok = self.fifo.write(data)
-        if not ok:
-            raise Exception("FIFO full when writing to port %s.%s with id: %s" % (
-                self.owner.name, self.name, self.id))
+        errors = []
+        for e in self.endpoints:
+            if not self.fifo.write(data, e.fifo_key):
+                errors.append("FIFO full when writing to port {}.{} from {}.{} with id {}".format(
+                    self.owner.name, self.name, e.port.owner.name, e.port.name, e.fifo_key))
+        if errors:
+            raise Exception("\n".join(errors))
 
     def available_tokens(self):
         """Used by actor (owner) to check number of token slots available on the port."""
-        return self.fifo.available_slots()
+        return sum([self.fifo.available_slots(ep.fifo_key) for ep in self.endpoints])
 
     def can_write(self):
         """Used by actor to test if writing a token is possible. Returns a boolean."""
@@ -232,8 +293,8 @@ class OutPort(Port):
             peers.append(ep.get_peer())
         if len(peers) < len(self.fifo.readers):
             all = copy.copy(self.fifo.readers)
-            all -= set([p[1] for p in peers])
-            peers.extend([(None, p) for p in all])
+            all -= set([p.port_id for p in peers])
+            peers.extend([Peer(None, port_id) for port_id in all])
         return peers
 
 

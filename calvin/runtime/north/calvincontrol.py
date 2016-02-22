@@ -17,6 +17,7 @@
 import re
 import time
 import json
+import random
 from random import randint
 from calvin.Tools import cscompiler as compiler
 from calvin.runtime.north.appmanager import Deployer
@@ -24,6 +25,7 @@ from calvin.runtime.north import metering
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.runtime.south.plugins.async import server_connection, async
+from calvin.runtime.north.replicator import Replicator
 from urlparse import urlparse
 from calvin.utilities import calvinresponse
 from calvin.actorstore.store import DocumentationStore
@@ -88,7 +90,8 @@ control_api_doc += \
         'node_id': <node_id>,
         'type': <event_type>, # event types: actor_fire, actor_new, actor_destroy, actor_migrate, application_new, application_destroy
         'actor_id',           # included in: actor_fire, actor_new, actor_destroy, actor_migrate
-        'actor.name',         # included in: actor_new
+        'actor_name',         # included in: actor_new
+        'actor_is_shadow'     # included in: actor_new
         'action_method',      # included in: actor_fire
         'consumed',           # included in: actor_fire
         'produced'            # included in: actor_fire
@@ -168,6 +171,18 @@ re_get_application = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid
 
 control_api_doc += \
     """
+    GET /application/{application-id}/actors
+    Get list of actors for application
+    Response status code: OK or NOT_FOUND
+    Response:
+    {
+         "actors": <list of actor ids>
+    }
+"""
+re_get_application_actors = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid_re + ")/actors\sHTTP/1")
+
+control_api_doc += \
+    """
     DELETE /application/{application-id}
     Stop application (only applications launched from this node)
     Response status code: OK, NOT_FOUND, INTERNAL_ERROR
@@ -217,6 +232,15 @@ re_get_actor = re.compile(r"GET /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\s
 
 control_api_doc += \
     """
+    POST /actor/{actor-id}
+    Lost an actor, replicate until required reliability is acheived if possbile
+    Response status code: OK or NOT_FOUND
+    Response: none
+"""
+re_post_lost_actor = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+
+control_api_doc += \
+    """
     DELETE /actor/{actor-id}
     Delete actor
     Response status code: OK or NOT_FOUND
@@ -249,12 +273,23 @@ control_api_doc += \
         "extend": True or False  # defaults to False, i.e. replace current requirements
         "move": True or False  # defaults to False, i.e. when possible stay on the current node
     }
-    
+
     For further details about requirements see application deploy.
     Response status code: OK, BAD_REQUEST, INTERNAL_ERROR or NOT_FOUND
     Response: none
 """
 re_post_actor_migrate = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/migrate\sHTTP/1")
+
+control_api_doc += \
+"""
+    POST /actor/{actor-id}/replicate
+    Replicate actor to (other) node
+    Body: {"peer_node_id": <node-id>}
+    Response status code: OK, INTERNAL_ERROR or NOT_FOUND
+    Response: none
+"""
+re_post_actor_replicate = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/replicate\sHTTP/1")
+
 
 control_api_doc += \
     """
@@ -344,14 +379,14 @@ control_api_doc += \
            }
     }
     Note that either a script or app_info must be supplied.
-    
+
     The matching rules are implemented as plug-ins, intended to be extended.
     The type "+" is "and"-ing rules together (actually the intersection of all
     possible nodes returned by the rules.) The type "-" is explicitly removing
     the nodes returned by this rule from the set of possible nodes. Note that
     only negative rules will result in no possible nodes, i.e. there is no
     implied "all but these."
-    
+
     A special matching rule exist, to first form a union between matching
     rules, i.e. alternative matches. This is useful for e.g. alternative
     namings, ownerships or specifying either of two specific nodes.
@@ -460,7 +495,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
             [
                 [<seconds since epoch>, <name of action>],
                 ...
@@ -479,7 +514,7 @@ control_api_doc += \
     {
         'activity':
         {
-            <actor-id>: 
+            <actor-id>:
             {
                 <action-name>: <total fire count>,
                 ...
@@ -502,7 +537,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response:
     {
-        <actor-id>: 
+        <actor-id>:
         {
             <action-name>:
             {
@@ -653,6 +688,7 @@ class CalvinControl(object):
             (re_post_peer_setup, self.handle_peer_setup),
             (re_get_applications, self.handle_get_applications),
             (re_get_application, self.handle_get_application),
+            (re_get_application_actors, self.handle_get_application_actors),
             (re_del_application, self.handle_del_application),
             (re_post_new_actor, self.handle_new_actor),
             (re_get_actors, self.handle_get_actors),
@@ -660,7 +696,9 @@ class CalvinControl(object):
             (re_del_actor, self.handle_del_actor),
             (re_get_actor_report, self.handle_get_actor_report),
             (re_post_actor_migrate, self.handle_actor_migrate),
+            (re_post_actor_replicate, self.handle_actor_replicate),
             (re_post_actor_disable, self.handle_actor_disable),
+            (re_post_lost_actor, self.handle_lost_actor),
             (re_get_port, self.handle_get_port),
             (re_get_port_state, self.handle_get_port_state),
             (re_post_connect, self.handle_connect),
@@ -765,7 +803,8 @@ class CalvinControl(object):
                 if data:
                     connection.send(data)
                 connection.close()
-            del self.connections[handle]
+            if handle in self.connections:
+                del self.connections[handle]
 
     def send_streamheader(self, handle, connection):
         """ Send response header for text/event-stream
@@ -870,10 +909,26 @@ class CalvinControl(object):
 
     def handle_peer_setup_cb(self, handle, connection, status=None, peer_node_ids=None):
         _log.analyze(self.node.id, "+", status.encode())
-        self.send_response(handle, connection,
-                           None if peer_node_ids is None else json.dumps(
-                               {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}),
-                           status=status.status)
+        if not peer_node_ids:
+            data = {}
+        else:
+            data = {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}
+
+        peers = []
+        for uri, (_, status_code) in data.iteritems():
+            # Only include successful peers
+            if status_code == 200:
+                peers.append(uri)
+
+        for uri, (node_id, status_code) in data.iteritems():
+            if status_code == 200:
+                to_send = set(peers)
+                to_send.remove(uri)
+                to_send.add(self.node.uri[0])
+                cb = CalvinCB(self.node.logging_callback)
+                self.node.proto.peer_setup(node_id, [peer for peer in to_send], callback=cb)
+
+        self.send_response(handle, connection, json.dumps(data), status=status.status)
 
     def handle_get_nodes(self, handle, connection, match, data, hdr):
         """ Get active nodes
@@ -899,14 +954,20 @@ class CalvinControl(object):
         self.node.storage.get_application(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
+    def handle_get_application_actors(self, handle, connection, match, data, hdr):
+        """ Get application from id
+        """
+        self.node.storage.get_application_actors(match.group(1), CalvinCB(
+            func=self.storage_cb, handle=handle, connection=connection))
+
     def handle_del_application(self, handle, connection, match, data, hdr):
         """ Delete application from id
         """
         try:
             self.node.app_manager.destroy(match.group(1), cb=CalvinCB(self.handle_del_application_cb,
-                                                                        handle, connection))
-        except:
-            _log.exception("Destroy application failed")
+                                                                      handle, connection))
+        except Exception as e:
+            _log.exception("Destroy application failed {}".format(e))
             self.send_response(handle, connection, None, status=calvinresponse.INTERNAL_ERROR)
 
     def handle_del_application_cb(self, handle, connection, status=None):
@@ -937,6 +998,41 @@ class CalvinControl(object):
         """
         self.node.storage.get_actor(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
+
+    def handle_lost_actor(self, handle, connection, match, data, hdr):
+        """ We lost actor, replicate if possible
+            1. Find the required reliability from the applicaiton
+            2. Replicate until required reliability is reached
+            3. Delete information about the lost actor
+        """
+        lost_actor_id = match.group(1)
+        _log.debug("Lost actor {}".format(lost_actor_id))
+        self.node.storage.get_actor(lost_actor_id, cb=CalvinCB(func=self._handle_lost_actor, lost_actor_id=lost_actor_id,
+                                                               handle=handle, connection=connection))
+
+    def _handle_lost_actor(self, key, value, lost_actor_id, handle, connection):
+        """ Get app id and actor name from actor info """
+        if not value:
+            _log.error("Failed get lost actor info from storage")
+            self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
+            return
+
+        cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id,
+                      lost_actor_info=value, handle=handle, connection=connection)
+        self.node.storage.get_application_actors(value['app_id'], cb=cb)
+
+    def _handle_lost_application_actor(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
+        """ Get required reliability from app info """
+        if not value:
+            self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+
+        replicator = Replicator(self.node, self, uuid_re)
+        cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
+        replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
+
+    def _handle_lost_actor_cb(self, handle, connection, status, *args, **kwargs):
+        status = status if isinstance(status, int) else status.status
+        self.send_response(handle, connection, None, status)
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
@@ -1001,10 +1097,29 @@ class CalvinControl(object):
                                None, status=status)
 
     def actor_migrate_cb(self, handle, connection, status, *args, **kwargs):
-        """ Migrate actor respons
+        """ Migrate actor response
         """
         self.send_response(handle, connection,
                            None, status=status.status)
+
+    def handle_actor_replicate(self, handle, connection, match, data, hdr):
+        """ Replicate actor
+        """
+        peer_node_id = data['peer_node_id']
+        if not peer_node_id:
+            _log.info("No peer node id given, selecting least busy one")
+            peer_node_id = self.node.resource_manager.least_busy()
+
+        _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
+        self.node.am.replicate(match.group(1), peer_node_id,
+                               callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+
+    def actor_replicate_cb(self, handle, connection, status, *args, **kwargs):
+        """ Replicate actor response
+        """
+        actor_id = status.data.get('actor_id') if status.data else None
+        self.send_response(handle, connection,
+                           json.dumps({'actor_id': actor_id}), status=status.status)
 
     def handle_actor_disable(self, handle, connection, match, data, hdr):
         try:
@@ -1178,7 +1293,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_timed_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_aggregated_meter(self, handle, connection, match, data, hdr):
@@ -1188,7 +1303,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_aggregated_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_get_metainfo_meter(self, handle, connection, match, data, hdr):
@@ -1198,7 +1313,7 @@ class CalvinControl(object):
         except:
             _log.exception("handle_get_metainfo_meter")
             status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, 
+        self.send_response(handle, connection,
             json.dumps(data) if status == calvinresponse.OK else None, status=status)
 
     def handle_post_index(self, handle, connection, match, data, hdr):
@@ -1275,7 +1390,7 @@ class CalvinControl(object):
         for user_id in disconnected:
             del self.loggers[user_id]
 
-    def log_actor_new(self, actor_id, actor_name, actor_type):
+    def log_actor_new(self, actor_id, actor_name, actor_type, is_shadow):
         """ Trace actor new
         """
         disconnected = []
@@ -1289,6 +1404,7 @@ class CalvinControl(object):
                     data['actor_id'] = actor_id
                     data['actor_name'] = actor_name
                     data['actor_type'] = actor_type
+                    data['is_shadow'] = is_shadow
                     if logger.connection is not None:
                         if not logger.connection.connection_lost:
                             logger.connection.send("data: %s\n\n" % json.dumps(data))
@@ -1540,6 +1656,7 @@ class CalvinControlTunnel(object):
         """ Send response header text/html
         """
         connection = self.connections[msgid]
+
         if not connection.connection_lost:
             if header is not None:
                 connection.send(str(header))

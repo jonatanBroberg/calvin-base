@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+import re
+import random
+
 from calvin.runtime.north.plugins.storage import storage_factory
 from calvin.runtime.north.plugins.coders.messages import message_coder_factory
 from calvin.runtime.south.plugins.async import async
@@ -24,7 +28,6 @@ from calvin.actor.actor import ShadowActor
 from calvin.utilities import calvinconfig
 from calvin.actorstore.store import GlobalStore
 from calvin.utilities import dynops
-import re
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
@@ -41,11 +44,11 @@ class Storage(object):
         self.localstore_sets = {}
         self.started = False
         self.node = node
-        proxy = _conf.get(None, 'storage_proxy')
-        _log.analyze(self.node.id, "+", {'proxy': proxy})
+        self.proxy = _conf.get(None, 'storage_proxy')
+        _log.analyze(self.node.id, "+", {'proxy': self.proxy})
         self.tunnel = {}
-        starting = _conf.get(None, 'storage_start')
-        self.storage = storage_factory.get("proxy" if proxy else "dht", node) if starting else None
+        self.starting = _conf.get(None, 'storage_start')
+        self.storage = storage_factory.get("proxy" if self.proxy else "dht", node) if self.starting else None
         self.coder = message_coder_factory.get("json")  # TODO: always json? append/remove requires json at the moment
         self.flush_delayedcall = None
         self.reset_flush_timeout()
@@ -78,51 +81,66 @@ class Storage(object):
             _log.debug("Flush key %s: %s" % (key, self.localstore[key]))
             self.storage.set(key=key, value=self.localstore[key],
                              cb=CalvinCB(func=self.set_cb, org_key=None, org_value=None, org_cb=None))
+
         for key, value in self.localstore_sets.iteritems():
-            if value['+']:
-                _log.debug("Flush append on key %s: %s" % (key, list(value['+'])))
-                coded_value = self.coder.encode(list(value['+']))
-                self.storage.append(key=key, value=coded_value,
-                                    cb=CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None))
-            if value['-']:
-                _log.debug("Flush remove on key %s: %s" % (key, list(value['-'])))
-                coded_value = self.coder.encode(list(value['-']))
-                self.storage.remove(key=key, value=coded_value,
-                                    cb=CalvinCB(func=self.remove_cb, org_key=None, org_value=None, org_cb=None))
+            self._flush_append(key, value['+'])
+            self._flush_remove(key, value['-'])
+
+    def _flush_append(self, key, value):
+        if not value:
+            return
+
+        _log.debug("Flush append on key %s: %s" % (key, list(value)))
+        coded_value = self.coder.encode(list(value))
+        self.storage.append(key=key, value=coded_value,
+                            cb=CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None))
+
+    def _flush_remove(self, key, value):
+        if not value:
+            return
+
+        _log.debug("Flush remove on key %s: %s" % (key, list(value)))
+        coded_value = self.coder.encode(list(value))
+        self.storage.remove(key=key, value=coded_value,
+                            cb=CalvinCB(func=self.remove_cb, org_key=None, org_value=None, org_cb=None))
 
     def started_cb(self, *args, **kwargs):
         """ Called when storage has started, flushes localstore
         """
         _log.debug("Storage started!!")
-        if args[0] == True:
-            self.started = True
-            self.trigger_flush(0)
-            if kwargs["org_cb"]:
-                async.DelayedCall(0, kwargs["org_cb"], args[0])
+        if not args[0]:
+            return
+
+        self.started = True
+        self.trigger_flush(0)
+        if kwargs["org_cb"]:
+            async.DelayedCall(0, kwargs["org_cb"], args[0])
 
     def start(self, iface='', cb=None):
         """ Start storage
         """
         _log.analyze(self.node.id, "+", None)
-        starting = _conf.get(None, 'storage_start')
-        if starting:
+        if self.starting:
             self.storage.start(iface=iface, cb=CalvinCB(self.started_cb, org_cb=cb))
-        proxy = _conf.get(None, 'storage_proxy')
-        if not proxy:
-            _log.analyze(self.node.id, "+ SERVER", None)
-            # We are not proxy client, so we can be proxy bridge/master
-            self._proxy_cmds = {'GET': self.get,
-                                'SET': self.set,
-                                'GET_CONCAT': self.get_concat,
-                                'APPEND': self.append,
-                                'REMOVE': self.remove,
-                                'DELETE': self.delete,
-                                'REPLY': self._proxy_reply}
-            try:
-                self.node.proto.register_tunnel_handler('storage', CalvinCB(self.tunnel_request_handles))
-            except:
-                # OK, then skip being a proxy server
-                pass
+
+        if not self.proxy:
+            self._init_proxy()
+
+    def _init_proxy(self):
+        _log.analyze(self.node.id, "+ SERVER", None)
+        # We are not proxy client, so we can be proxy bridge/master
+        self._proxy_cmds = {'GET': self.get,
+                            'SET': self.set,
+                            'GET_CONCAT': self.get_concat,
+                            'APPEND': self.append,
+                            'REMOVE': self.remove,
+                            'DELETE': self.delete,
+                            'REPLY': self._proxy_reply}
+        try:
+            self.node.proto.register_tunnel_handler('storage', CalvinCB(self.tunnel_request_handles))
+        except:
+            # OK, then skip being a proxy server
+            pass
 
     def stop(self, cb=None):
         """ Stop storage
@@ -139,7 +157,7 @@ class Storage(object):
     def set_cb(self, key, value, org_key, org_value, org_cb):
         """ set callback, on error store in localstore and retry after flush_timeout
         """
-        if value == True:
+        if value:
             if org_cb:
                 org_cb(key=key, value=True)
             if key in self.localstore:
@@ -159,9 +177,7 @@ class Storage(object):
         """ Set key: prefix+key value: value
         """
         _log.debug("Set key %s, value %s" % (prefix + key, value))
-        if value:
-            value = self.coder.encode(value)
-
+        value = self.coder.encode(value) if value else value
         if prefix + key in self.localstore_sets:
             del self.localstore_sets[prefix + key]
 
@@ -170,9 +186,8 @@ class Storage(object):
 
         if self.started:
             self.storage.set(key=prefix + key, value=value, cb=CalvinCB(func=self.set_cb, org_key=key, org_value=value, org_cb=cb))
-        else:
-            if cb:
-                async.DelayedCall(0, cb, key=key, value=True)
+        elif cb:
+            async.DelayedCall(0, cb, key=key, value=True)
 
     def get_cb(self, key, value, org_cb, org_key):
         """ get callback
@@ -184,18 +199,21 @@ class Storage(object):
     def get(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore
         """
-        if cb:
-            if prefix + key in self.localstore:
-                value = self.localstore[prefix + key]
-                if value:
-                    value = self.coder.decode(value)
-                async.DelayedCall(0, cb, key=key, value=value)
-            else:
-                try:
-                    self.storage.get(key=prefix + key, cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
-                except:
-                    _log.error("Failed to get: %s" % key)
-                    async.DelayedCall(0, cb, key=key, value=False)
+        _log.debug("Getting from storage: {}{}".format(prefix, key))
+        if not cb:
+            return
+
+        if prefix + key in self.localstore:
+            value = self.localstore[prefix + key]
+            if value:
+                value = self.coder.decode(value)
+            async.DelayedCall(0, cb, key=key, value=value)
+        else:
+            try:
+                self.storage.get(key=prefix + key, cb=CalvinCB(func=self.get_cb, org_cb=cb, org_key=key))
+            except:
+                _log.error("Failed to get: %s" % key)
+                async.DelayedCall(0, cb, key=key, value=False)
 
     def get_iter_cb(self, key, value, it, org_key, include_key=False):
         """ get callback
@@ -245,21 +263,22 @@ class Storage(object):
             storage and hence the return list might contain removed items,
             but also missing items.
         """
-        if cb:
-            if prefix + key in self.localstore_sets:
-                _log.analyze(self.node.id, "+ GET LOCAL", None)
-                value = self.localstore_sets[prefix + key]
-                # Return the set that we intended to append since that's all we have until it is synced
-                local_list = list(value['+'])
-            else:
-                local_list = []
-            try:
-                self.storage.get_concat(key=prefix + key,
-                                cb=CalvinCB(func=self.get_concat_cb, org_cb=cb, org_key=key, local_list=local_list))
-            except:
-                if self.started:
-                    _log.error("Failed to get: %s" % key, exc_info=True)
-                async.DelayedCall(0, cb, key=key, value=local_list if local_list else None)
+        if not cb:
+            return
+
+        if prefix + key in self.localstore_sets:
+            _log.analyze(self.node.id, "+ GET LOCAL", None)
+            value = self.localstore_sets[prefix + key]
+            # Return the set that we intended to append since that's all we have until it is synced
+            local_list = list(value['+'])
+        else:
+            local_list = []
+        try:
+            self.storage.get_concat(key=prefix + key,
+                                    cb=CalvinCB(func=self.get_concat_cb, org_cb=cb, org_key=key, local_list=local_list))
+        except:
+            _log.error("Failed to get: %s" % key, exc_info=True)
+            async.DelayedCall(0, cb, key=key, value=local_list if local_list else None)
 
     def get_concat_iter_cb(self, key, value, org_key, include_key, it):
         """ get callback
@@ -293,7 +312,7 @@ class Storage(object):
         it = dynops.List(local_list)
         try:
             self.storage.get_concat(key=prefix + key,
-                            cb=CalvinCB(func=self.get_concat_iter_cb, org_key=key, 
+                            cb=CalvinCB(func=self.get_concat_iter_cb, org_key=key,
                                         include_key=include_key, it=it))
         except:
             if self.started:
@@ -305,7 +324,7 @@ class Storage(object):
     def append_cb(self, key, value, org_key, org_value, org_cb):
         """ append callback, on error retry after flush_timeout
         """
-        if value == True:
+        if value:
             if org_cb:
                 org_cb(key=org_key, value=True)
             if key in self.localstore_sets:
@@ -378,9 +397,8 @@ class Storage(object):
             coded_value = self.coder.encode(list(self.localstore_sets[prefix + key]['-']))
             self.storage.remove(key=prefix + key, value=coded_value,
                                 cb=CalvinCB(func=self.remove_cb, org_key=key, org_value=value, org_cb=cb))
-        else:
-            if cb:
-                cb(key=key, value=True)
+        elif cb:
+            cb(key=key, value=True)
 
     def delete(self, prefix, key, cb):
         """ Delete key: prefix+key (value set to None)
@@ -434,21 +452,20 @@ class Storage(object):
         """
         self.get(prefix="node-", key=node_id, cb=cb)
 
-    def delete_node(self, node, cb=None):
+    def delete_node(self, node_id, get_indexed_public, cb=None):
         """
         Delete node from storage
         """
-        self.delete(prefix="node-", key=node.id, cb=None if node.attributes.get_indexed_public() else cb)
-        if node.attributes.get_indexed_public():
-            self._delete_node_index(node, cb=cb)
+        self.delete(prefix="node-", key=node_id, cb=None if get_indexed_public else cb)
+        if get_indexed_public:
+            self._delete_node_index(node_id, get_indexed_public, cb=cb)
 
-    def _delete_node_index(self, node, cb=None):
-        indexes = node.attributes.get_indexed_public()
-        _log.analyze(self.node.id, "+", {'indexes': indexes})
+    def _delete_node_index(self, node_id, indexes, cb=None):
+        _log.analyze(self.node_id, "+", {'indexes': indexes})
         try:
             counter = [len(indexes)]  # counter value by reference used in callback
             for index in indexes:
-                self.remove_index(index, node.id, cb=CalvinCB(self._delete_node_cb, counter=counter, org_cb=cb))
+                self.remove_index(index, node_id, cb=CalvinCB(self._delete_node_cb, counter=counter, org_cb=cb))
             # The remove index gets 1 second otherwise we call the callback anyway, i.e. stop the node
             async.DelayedCall(1.0, self._delete_node_timeout_cb, counter=counter, org_cb=cb)
         except:
@@ -478,9 +495,9 @@ class Storage(object):
                  value={"name": application.name,
                         "ns": application.ns,
                         # FIXME when all users of the actors field is updated, save the full dict only
-                        "actors": application.actors.keys(),
                         "actors_name_map": application.actors,
-                        "origin_node_id": application.origin_node_id},
+                        "origin_node_id": application.origin_node_id,
+                        "required_reliability":application.required_reliability},
                  cb=cb)
 
     def get_application(self, application_id, cb=None):
@@ -489,6 +506,12 @@ class Storage(object):
         """
         self.get(prefix="application-", key=application_id, cb=cb)
 
+    def get_application_actors(self, application_id, cb=None):
+        """
+        Get application from storage
+        """
+        return self.get_concat(prefix="app-actors-", key=application_id, cb=cb)
+
     def delete_application(self, application_id, cb=None):
         """
         Delete application from storage
@@ -496,12 +519,14 @@ class Storage(object):
         _log.debug("Delete application %s" % application_id)
         self.delete(prefix="application-", key=application_id, cb=cb)
 
-    def add_actor(self, actor, node_id, cb=None):
+    def add_actor(self, actor, node_id, app_id, cb=None):
         """
         Add actor and its ports to storage
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
-        data = {"name": actor.name, "type": actor._type, "node_id": node_id}
+
+        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id}
+
         inports = []
         for p in actor.inports.values():
             port = {"id": p.id, "name": p.name}
@@ -509,13 +534,19 @@ class Storage(object):
             self.add_port(p, node_id, actor.id, "in")
         data["inports"] = inports
         outports = []
+
         for p in actor.outports.values():
             port = {"id": p.id, "name": p.name}
             outports.append(port)
             self.add_port(p, node_id, actor.id, "out")
         data["outports"] = outports
         data["is_shadow"] = isinstance(actor, ShadowActor)
+
         self.set(prefix="actor-", key=actor.id, value=data, cb=cb)
+
+        if app_id:
+            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+            self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):
         """
@@ -529,6 +560,14 @@ class Storage(object):
         """
         _log.debug("Delete actor id %s" % (actor_id))
         self.delete(prefix="actor-", key=actor_id, cb=cb)
+
+    def delete_actor_from_app(self, app_id, actor_id):
+        """Remove actor_id from application's list of actors"""
+        if not app_id:
+            _log.warning("Cannot delete actor because app id is None: {}".format(app_id))
+            return
+
+        self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
@@ -547,14 +586,14 @@ class Storage(object):
         ), "node_id": node_id, "actor_id": actor_id, "direction": direction}
         if direction == "out":
             if port.is_connected():
-                data["peers"] = port.get_peers()
+                data["peers"] = [(peer.node_id, peer.port_id) for peer in port.get_peers()]
             else:
                 data["peers"] = []
         elif direction == "in":
             if port.is_connected():
-                data["peer"] = port.get_peer()
+                data["peers"] = [(peer.node_id, peer.port_id) for peer in port.get_peers()]
             else:
-                data["peer"] = None
+                data["peers"] = []
         self.set(prefix="port-", key=port.id, value=data, cb=cb)
 
     def get_port(self, port_id, cb=None):
@@ -719,7 +758,7 @@ class Storage(object):
         return self.get_concat_iter(prefix="index-", key=index, include_key=include_key)
 
     ### Storage proxy server ###
-    
+
     def tunnel_request_handles(self, tunnel):
         """ Incoming tunnel request for storage proxy server"""
         # TODO check if we want a tunnel first
@@ -760,14 +799,14 @@ class Storage(object):
                 else:
                     # Normal set op, but it will be encoded again in the set func when external storage, hence decode
                     payload['value']=self.coder.decode(payload['value'])
-            # Call this nodes storage methods, which could be local or DHT, 
+            # Call this nodes storage methods, which could be local or DHT,
             # prefix is empty since that is already in the key (due to these calls come from the storage plugin level).
             # If we are doing a get or get_concat then the result needs to be encoded, to correspond with what the
             # client's higher level expect from storage plugin level.
-            self._proxy_cmds[payload['cmd']](cb=CalvinCB(self._proxy_send_reply, tunnel=tunnel, 
+            self._proxy_cmds[payload['cmd']](cb=CalvinCB(self._proxy_send_reply, tunnel=tunnel,
                                                         encode=True if payload['cmd'] in ('GET', 'GET_CONCAT') else False,
                                                         msgid=payload['msg_uuid']),
-                                             prefix="", 
+                                             prefix="",
                                              **{k: v for k, v in payload.iteritems() if k in ('key', 'value')})
         else:
             _log.error("Unknown storage proxy request %s" % payload['cmd'] if 'cmd' in payload else "")

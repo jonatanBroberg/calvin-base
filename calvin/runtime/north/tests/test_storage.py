@@ -239,7 +239,7 @@ class TestStorageNotStarted(object):
         value = self.q.get(timeout=0.2)
         assert value["key"] == node.id and value["value"] == {'uri': node.uri}
 
-        self.storage.delete_node(node, cb=CalvinCB(func=cb))
+        self.storage.delete_node(node, node.get_indexed_public(), cb=CalvinCB(func=cb))
         value = self.q.get(timeout=0.2)
         assert value
         assert node.id not in self.storage.localstore
@@ -312,7 +312,7 @@ class TestStorageNotStarted(object):
         assert value["key"] == port2.id
         assert value["value"]["name"] == port2.name
         assert value["value"]["direction"] == port2.direction
-        assert value["value"]["peer"] == ["local", port1.id]
+        assert value["value"]["peers"] == [["local", port1.id]]
 
         self.storage.delete_actor(actor1.id, cb=CalvinCB(func=cb))
         value = self.q.get(timeout=0.2)

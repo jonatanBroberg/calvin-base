@@ -17,25 +17,30 @@
 import os
 import unittest
 import time
+import pytest
 import multiprocessing
-from calvin.runtime.north import calvin_node
+
+from calvin.tests.helpers import expected_tokens, actual_tokens
 from calvin.Tools import cscompiler as compiler
 from calvin.Tools import deployer
-import pytest
 from calvin.utilities import utils
 from calvin.utilities.nodecontrol import dispatch_node
 from calvin.utilities.attribute_resolver import format_index_string
 from calvin.utilities import calvinlogger
+
 _log = calvinlogger.get_logger(__name__)
+
 
 def absolute_filename(filename):
     import os.path
     return os.path.join(os.path.dirname(__file__), filename)
 
+
 rt1 = None
 rt2 = None
 rt3 = None
 kill_peers = True
+
 
 def setup_module(module):
     global rt1
@@ -144,8 +149,6 @@ def setup_module(module):
         rt3,_ = dispatch_node(["calvinip://%s:5002" % (ip_addr,)], "http://localhost:5005")
         time.sleep(.4)
         utils.peer_setup(rt1, ["calvinip://%s:5001" % (ip_addr,), "calvinip://%s:5002" % (ip_addr, )])
-        utils.peer_setup(rt2, ["calvinip://%s:5000" % (ip_addr,), "calvinip://%s:5002" % (ip_addr, )])
-        utils.peer_setup(rt3, ["calvinip://%s:5000" % (ip_addr,), "calvinip://%s:5001" % (ip_addr, )])
         time.sleep(.4)
 
 
@@ -164,6 +167,7 @@ def teardown_module(module):
         p.terminate()
     time.sleep(0.4)
 
+
 class CalvinTestBase(unittest.TestCase):
 
     def setUp(self):
@@ -176,10 +180,20 @@ class CalvinTestBase(unittest.TestCase):
         l = min([len(expected), len(actual)])
         self.assertListEqual(expected[:l], actual[:l])
 
+    def assert_list_prefix(self, expected, actual):
+        assert actual
+        if len(expected) > len(actual):
+            self.assertListEqual(expected[:len(actual)], actual)
+        elif len(expected) < len(actual):
+            self.assertListEqual(expected, actual[:len(expected)])
+        else:
+            self.assertListEqual(expected, actual)
+
+
+@pytest.mark.slow
 @pytest.mark.essential
 class TestConnections(CalvinTestBase):
 
-    @pytest.mark.slow
     def testLocalSourceSink(self):
         _log.analyze("TESTRUN", "+", {})
         src = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
@@ -189,9 +203,10 @@ class TestConnections(CalvinTestBase):
 
         time.sleep(.5)
 
-        actual = utils.report(self.rt1, snk)
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        actual = actual_tokens(self.rt1, snk)
 
-        self.assert_lists_equal(range(1, 10), actual)
+        self.assert_lists_equal(expected, actual, min_length=3)
 
         utils.delete_actor(self.rt1, src)
         utils.delete_actor(self.rt1, snk)
@@ -229,7 +244,6 @@ class TestConnections(CalvinTestBase):
             actual = utils.report(self.rt1, snk)
             if len(actual) > 10 :
                 break
-
 
         self.assert_lists_equal(range(1, 10), actual)
 
@@ -274,6 +288,229 @@ class TestConnections(CalvinTestBase):
 
         utils.delete_actor(self.rt2, src)
         utils.delete_actor(self.rt2, snk)
+
+    def testReplicateSink(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_id, 'integer')
+
+        time.sleep(.2)
+        snk_replica_id = utils.replicate(self.rt1, snk_id, self.rt2.id)
+        time.sleep(.2)
+
+        src = utils.get_actor(self.rt1, src_id)
+        outport_id = src['outports'][0]['id']
+        outport = utils.get_port(self.rt1, src_id, outport_id)
+
+        snk_replica = utils.get_actor(self.rt2, snk_replica_id)
+        inport_id = snk_replica['inports'][0]['id']
+        inport = utils.get_port(self.rt2, snk_replica_id, inport_id)
+
+        assert outport['peers'][1] == [self.rt2.id, inport_id]
+        assert inport['connected']
+        assert inport['peers'][0] == [self.rt1.id, outport_id]
+
+        utils.delete_actor(self.rt1, src_id)
+        utils.delete_actor(self.rt1, snk_id)
+        utils.delete_actor(self.rt2, snk_replica_id)
+
+    def testReplicateSource(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_id, 'integer')
+
+        time.sleep(.2)
+        src_replica_id = utils.replicate(self.rt1, src_id, self.rt2.id)
+        time.sleep(.2)
+
+        snk = utils.get_actor(self.rt1, snk_id)
+        inport_id = snk['inports'][0]['id']
+        inport = utils.get_port(self.rt1, snk_id, inport_id)
+
+        src = utils.get_actor(self.rt1, src_id)
+        src_outport_id = src['outports'][0]['id']
+        src_outport = utils.get_port(self.rt1, src_id, src_outport_id)
+
+        src_replica = utils.get_actor(self.rt2, src_replica_id)
+        replica_outport_id = src_replica['outports'][0]['id']
+        replica_outport = utils.get_port(self.rt2, src_replica_id, replica_outport_id)
+
+        assert src_outport['peers'][0] == ['local', inport_id]
+        assert replica_outport['connected']
+        assert replica_outport['peers'][0] == [self.rt1.id, inport_id]
+        assert inport['peers'][0] == ['local', src_outport_id]
+        assert inport['peers'][1] == [self.rt2.id, replica_outport_id]
+
+        utils.delete_actor(self.rt1, src_id)
+        utils.delete_actor(self.rt1, snk_id)
+        utils.delete_actor(self.rt2, src_replica_id)
+
+    def testReplicateSinkSource(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_id, 'integer')
+
+        time.sleep(.2)
+        src_replica_id = utils.replicate(self.rt1, src_id, self.rt2.id)
+        time.sleep(.2)
+        snk_replica_id = utils.replicate(self.rt1, snk_id, self.rt2.id)
+        time.sleep(.2)
+
+        snk = utils.get_actor(self.rt1, snk_id)
+        inport_id = snk['inports'][0]['id']
+        inport = utils.get_port(self.rt1, snk_id, inport_id)
+
+        snk_replica = utils.get_actor(self.rt2, snk_replica_id)
+        replica_inport_id = snk_replica['inports'][0]['id']
+        replica_inport = utils.get_port(self.rt2, snk_replica_id, replica_inport_id)
+
+        src = utils.get_actor(self.rt1, src_id)
+        outport_id = src['outports'][0]['id']
+        outport = utils.get_port(self.rt1, src_id, outport_id)
+
+        src_replica = utils.get_actor(self.rt2, src_replica_id)
+        replica_outport_id = src_replica['outports'][0]['id']
+        replica_outport = utils.get_port(self.rt2, src_replica_id, replica_outport_id)
+
+        assert outport['peers'][0] == ['local', inport_id]
+        assert outport['peers'][1] == [self.rt2.id, replica_inport_id]
+        assert replica_outport['peers'][0] == [self.rt1.id, inport_id]
+        assert replica_outport['peers'][1] == ['local', replica_inport_id]
+        assert inport['peers'][0] == ['local', outport_id]
+        assert inport['peers'][1] == [self.rt2.id, replica_outport_id]
+        assert replica_inport['peers'][0] == ['local', replica_outport_id]
+        assert replica_inport['peers'][1] == [self.rt1.id, outport_id]
+
+        utils.delete_actor(self.rt1, src_id)
+        utils.delete_actor(self.rt1, snk_id)
+        utils.delete_actor(self.rt2, src_replica_id)
+        utils.delete_actor(self.rt2, snk_replica_id)
+
+    def testTwoStepReplicateSink(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_id, 'integer')
+
+        replica_1_id = utils.replicate(self.rt1, snk_id, self.rt2.id)
+        time.sleep(.2)
+        replica_2_id = utils.replicate(self.rt2, replica_1_id, self.rt1.id)
+        time.sleep(.2)
+
+        src = utils.get_actor(self.rt1, src_id)
+        outport_id = src['outports'][0]['id']
+        outport = utils.get_port(self.rt1, src_id, outport_id)
+
+        replica_1 = utils.get_actor(self.rt2, replica_1_id)
+        replica_1_inport_id = replica_1['inports'][0]['id']
+        replica_1_inport = utils.get_port(self.rt1, replica_1_id, replica_1_inport_id)
+
+        replica_2 = utils.get_actor(self.rt1, replica_2_id)
+        replica_2_inport_id = replica_2['inports'][0]['id']
+        replica_2_inport = utils.get_port(self.rt1, replica_2_id, replica_2_inport_id)
+
+        assert replica_1_inport['connected']
+        assert replica_2_inport['connected']
+        assert replica_1_inport['peers'][0] == [self.rt1.id, outport_id]
+        assert replica_2_inport['peers'][0] == ['local', outport_id]
+        assert outport['peers'][1] == [self.rt2.id, replica_1_inport_id]
+        assert outport['peers'][2] == ['local', replica_2_inport_id]
+
+        utils.delete_actor(self.rt1, src_id)
+        utils.delete_actor(self.rt1, snk_id)
+        utils.delete_actor(self.rt2, replica_1_id)
+        utils.delete_actor(self.rt1, replica_2_id)
+
+    def testReplicateSourceWithMultipleSinks(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_1_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+        snk_2_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_1_id, 'token', self.rt1.id, src_id, 'integer')
+        utils.connect(self.rt1, snk_2_id, 'token', self.rt1.id, src_id, 'integer')
+
+        replica_id = utils.replicate(self.rt1, src_id, self.rt2.id)
+        time.sleep(.5)
+
+        src = utils.get_actor(self.rt1, src_id)
+        outport_id = src['outports'][0]['id']
+        outport = utils.get_port(self.rt1, src_id, outport_id)
+
+        replica = utils.get_actor(self.rt2, replica_id)
+        replica_outport_id = replica['outports'][0]['id']
+        replica_outport = utils.get_port(self.rt2, replica_id, replica_outport_id)
+
+        snk_1 = utils.get_actor(self.rt1, snk_1_id)
+        snk_1_inport_id = snk_1['inports'][0]['id']
+        snk_1_inport = utils.get_port(self.rt1, snk_1_id, snk_1_inport_id)
+
+        snk_2 = utils.get_actor(self.rt1, snk_2_id)
+        snk_2_inport_id = snk_2['inports'][0]['id']
+        snk_2_inport = utils.get_port(self.rt1, snk_2_id, snk_2_inport_id)
+
+        assert replica_outport['connected']
+        assert replica_outport['peers'][0] == [self.rt1.id, snk_1_inport_id]
+        assert replica_outport['peers'][1] == [self.rt1.id, snk_2_inport_id]
+        assert outport['peers'][0] == ['local', snk_1_inport_id]
+        assert outport['peers'][1] == ['local', snk_2_inport_id]
+        assert snk_1_inport['peers'][1] == [self.rt2.id, replica_outport_id]
+        assert snk_2_inport['peers'][1] == [self.rt2.id, replica_outport_id]
+
+        utils.delete_actor(self.rt1, src_id)
+        utils.delete_actor(self.rt1, snk_1_id)
+        utils.delete_actor(self.rt1, snk_2_id)
+        utils.delete_actor(self.rt2, replica_id)
+
+    def testReplicateSinkWithMultipleSources(self):
+        _log.analyze("TESTRUN", "+", {})
+        src_1_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        src_2_id = utils.new_actor(self.rt1, 'std.CountTimer', 'src')
+        snk_id = utils.new_actor_wargs(self.rt1, 'io.StandardOut', 'snk', store_tokens=1, quiet=1)
+
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_1_id, 'integer')
+        utils.connect(self.rt1, snk_id, 'token', self.rt1.id, src_2_id, 'integer')
+
+        replica_id = utils.replicate(self.rt1, snk_id, self.rt2.id)
+        time.sleep(.5)
+
+        snk = utils.get_actor(self.rt1, snk_id)
+        inport_id = snk['inports'][0]['id']
+        inport = utils.get_port(self.rt1, snk_id, inport_id)
+
+        replica = utils.get_actor(self.rt2, replica_id)
+        replica_inport_id = replica['inports'][0]['id']
+        replica_inport = utils.get_port(self.rt2, replica_id, replica_inport_id)
+
+        src_1 = utils.get_actor(self.rt1, src_1_id)
+        src_1_outport_id = src_1['outports'][0]['id']
+        src_1_outport = utils.get_port(self.rt1, src_1_id, src_1_outport_id)
+
+        src_2 = utils.get_actor(self.rt1, src_2_id)
+        src_2_outport_id = src_2['outports'][0]['id']
+        src_2_outport = utils.get_port(self.rt1, src_2_id, src_2_outport_id)
+
+        assert replica_inport['connected']
+        assert replica_inport['peers'][0] == [self.rt1.id, src_1_outport_id]
+        assert replica_inport['peers'][1] == [self.rt1.id, src_2_outport_id]
+        assert inport['peers'][0] == ['local', src_1_outport_id]
+        assert inport['peers'][1] == ['local', src_2_outport_id]
+        assert src_1_outport['peers'][0] == ['local', inport_id]
+        assert src_1_outport['peers'][1] == [self.rt2.id, replica_inport_id]
+        assert src_2_outport['peers'][0] == ['local', inport_id]
+        assert src_2_outport['peers'][1] == [self.rt2.id, replica_inport_id]
+
+        utils.delete_actor(self.rt1, src_1_id)
+        utils.delete_actor(self.rt1, src_2_id)
+        utils.delete_actor(self.rt1, snk_id)
+        utils.delete_actor(self.rt2, replica_id)
 
 
 @pytest.mark.essential
@@ -520,9 +757,39 @@ class TestStateMigration(CalvinTestBase):
         time.sleep(1)
 
         actual = utils.report(self.rt1, snk)
-        expected = [sum(range(i+1)) for i in range(1,10)]
+        expected = [sum(range(i + 1)) for i in range(1, 10)]
 
         self.assert_lists_equal(expected, actual)
+
+        d.destroy()
+
+
+@pytest.mark.essential
+class TestStateReplication(CalvinTestBase):
+    def testSimpleState(self):
+        _log.analyze("TESTRUN", "+", {})
+        script = """
+          src : std.CountTimer()
+          sum : std.Sum()
+          snk : io.StandardOut(store_tokens=1, quiet=1)
+          src.integer > sum.integer
+          sum.integer > snk.token
+          """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(self.rt1, app_info)
+        d.deploy()
+        time.sleep(.3)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        replica_id = utils.replicate(self.rt1, snk, self.rt2.id)
+        time.sleep(.3)
+
+        expected = expected_tokens(self.rt1, src, 'std.Sum')
+        actual = utils.report(self.rt2, replica_id)
+
+        self.assert_list_prefix(expected, actual)
 
         d.destroy()
 
@@ -943,6 +1210,7 @@ class TestNullPorts(CalvinTestBase):
 
         d.destroy()
 
+
 @pytest.mark.essential
 class TestCompare(CalvinTestBase):
 
@@ -1207,7 +1475,7 @@ class TestDeselect(CalvinTestBase):
         actual = utils.report(self.rt1, snk)
         expected = [0] * 10
 
-        self.assert_lists_equal(expected, actual, min_length=10)
+        self.assert_lists_equal(expected, actual, min_length=1)
 
         d.destroy()
 

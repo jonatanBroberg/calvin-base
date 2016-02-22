@@ -59,6 +59,8 @@ class Metering(object):
         self.actors_aggregated_time = {}
 
     def fired(self, actor_id, action_name):
+        if actor_id not in self.actors_meta:
+            return
         t = time.time()
         if self.aggregated_timeout > 0.0:
             # Aggregate
@@ -97,7 +99,7 @@ class Metering(object):
             _log.debug("get_timed_meter: User id not found")
             raise Exception("User id not found")
         t = time.time()
-        response = {actor_id: [d for d in data if d[0] > self.users[user_id]] 
+        response = {actor_id: [d for d in data if d[0] > self.users[user_id]]
                                 for actor_id, data in self.actors_log.iteritems()}
         self.users[user_id] = t
         self.forget(t)

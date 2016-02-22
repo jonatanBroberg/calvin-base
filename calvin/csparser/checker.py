@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
+import sys
+import os
 
 from calvin.csparser.parser import calvin_parser
 from calvin.actorstore.store import DocumentationStore
-import json
+
 
 class Checker(object):
     # FIXME: Provide additional checks making use of
@@ -40,7 +41,11 @@ class Checker(object):
         self.check()
 
     def issue(self, fmt, **info):
-        return {'reason':fmt.format(**info), 'line':info.get('line', 0), 'col':info.get('col', 0)}
+        return {
+            'reason': fmt.format(**info),
+            'line': info.get('line', 0),
+            'col': info.get('col', 0)
+        }
 
     def append_error(self, fmt, **info):
         issue = self.issue(fmt, **info)
@@ -81,7 +86,7 @@ class Checker(object):
         For local components, let the docstore generate the definition.
         """
         if actor_type in self.comp_defs:
-            return self.ds.component_docs("local."+actor_type, self.comp_defs[actor_type])
+            return self.ds.component_docs("local." + actor_type, self.comp_defs[actor_type])
         return self.ds.actor_docs(actor_type)
 
     def dbg_lines(self, s):
@@ -99,7 +104,6 @@ class Checker(object):
         else:
             target, target_port = ('dst', 'dst_port') if port_dir == 'in' else ('src', 'src_port')
         return target, target_port
-
 
     def generate_ports(self, definition, actor=None):
         """
@@ -122,7 +126,6 @@ class Checker(object):
             for p, _ in definition[def_dir]:
                 yield((p, target, target_port, port_dir, actor))
 
-
     def _verify_port_names(self, definition, connections, actor=None):
         """Look for misspelled port names."""
         # A little transformation is required depending on actor vs. component and port direction
@@ -137,7 +140,6 @@ class Checker(object):
             retval.extend(invalid_ports)
         return retval
 
-
     def check_atleast_one_connection(self, definition, connections, actor=None):
         """Check that all ports have at least one connection"""
         retval = []
@@ -148,7 +150,7 @@ class Checker(object):
         return retval
 
     def check_atmost_one_connection(self, definition, connections, actor=None):
-        """Check that input ports have at most one connection"""
+        """Check that component destination port have at most one connection"""
         retval = []
         for port, target, target_port, port_dir, actor in self.generate_ports(definition, actor):
             if target == 'src':
@@ -159,11 +161,9 @@ class Checker(object):
                 retval.extend([(port, port_dir, c['dbg_line']) for c in pc])
         return retval
 
-
     def report_port_errors(self, fmt, portspecs, definition, actor=None):
         for port, port_dir, line in portspecs:
             self.append_error(fmt, line=line, port=port, port_dir=port_dir, actor=actor, **definition)
-
 
     def check_component_connections(self, definition, connections):
         # Check for bogus ports
@@ -183,9 +183,8 @@ class Checker(object):
 
         # Check for illegal passthrough (.in > .out) connections
         fmt = "Component {name} passes port '{src_port}' directly to port '{dst_port}'"
-        for pc in [c for c in connections if c['src']==c['dst']=='.']:
+        for pc in [c for c in connections if c['src'] == c['dst'] == '.']:
             self.append_error(fmt, line=c['dbg_line'], src_port=c['src_port'], dst_port=c['dst_port'], **definition)
-
 
     def check_actor_connections(self, actor, definition, connections):
         invalid_ports = self._verify_port_names(definition, connections, actor)
@@ -195,11 +194,6 @@ class Checker(object):
         # All ports should have at least one connection...
         bad_ports = self.check_atleast_one_connection(definition, connections, actor)
         fmt = "Actor {actor} ({ns}.{name}) is missing connection to {port_dir}port '{port}'"
-        self.report_port_errors(fmt, bad_ports, definition, actor)
-
-        # ... but inports should have exactly one connection
-        bad_ports = self.check_atmost_one_connection(definition, connections, actor)
-        fmt = "Actor {actor} ({ns}.{name}) has multiple connections to {port_dir}port '{port}'"
         self.report_port_errors(fmt, bad_ports, definition, actor)
 
     def check_constants(self):
@@ -213,7 +207,6 @@ class Checker(object):
             except:
                 fmt = "Constant '{name}' has a circular reference"
                 self.append_error(fmt, name=constant)
-
 
     def lookup_constant(self, identifier, seen=None):
         """
@@ -277,7 +270,6 @@ class Checker(object):
             if value not in self.constants:
                 fmt = "Undefined identifier: '{param}'"
                 self.append_error(fmt, line=declaration['dbg_line'], param=value)
-
 
     def undeclared_actors(self, connections, declared_actors):
         """
@@ -343,10 +335,6 @@ def check(cs_info, verify=True):
 
 
 if __name__ == '__main__':
-    import sys
-    import os
-    import json
-
     if len(sys.argv) < 2:
         script = 'inline'
         source_text = \

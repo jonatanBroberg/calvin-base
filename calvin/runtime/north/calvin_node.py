@@ -35,9 +35,12 @@ from calvin.runtime.south.monitor import Event_Monitor
 from calvin.runtime.south.plugins.async import async
 from calvin.utilities.attribute_resolver import AttributeResolver
 from calvin.utilities.calvin_callback import CalvinCB
+import calvin.utilities.calvinresponse as response
 from calvin.utilities import calvinuuid
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities import calvinconfig
+from calvin.runtime.north.resource_manager import ResourceManager
+
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
@@ -57,7 +60,7 @@ class Node(object):
        such as name of node
     """
 
-    def __init__(self, uri, control_uri, attributes=None):
+    def __init__(self, uri, control_uri, attributes=None, self_start=True):
         super(Node, self).__init__()
         self.uri = uri
         self.control_uri = control_uri
@@ -85,9 +88,11 @@ class Node(object):
         self.proto = CalvinProto(self, self.network)
         self.pm = PortManager(self, self.proto)
         self.app_manager = appmanager.AppManager(self)
+        self.resource_manager = ResourceManager()
 
         # The initialization that requires the main loop operating is deferred to start function
-        async.DelayedCall(0, self.start)
+        if self_start:
+            async.DelayedCall(0, self.start)
 
     def insert_local_reply(self):
         msg_id = calvinuuid.uuid("LMSG")
@@ -127,9 +132,12 @@ class Node(object):
         _log.debug("peersetup(%s)" % (peers))
         peers_copy = peers[:]
         peer_node_ids = {}
-        self.network.join(peers,
-            callback=CalvinCB(self.logging_callback, preamble="peersetup cb") if cb is None else
-                     CalvinCB(self.peersetup_collect_cb, peers=peers_copy, peer_node_ids=peer_node_ids, org_cb=cb))
+        if not cb:
+            callback = CalvinCB(self.logging_callback, preamble="peersetup cb")
+        else:
+            callback = CalvinCB(self.peersetup_collect_cb, peers=peers_copy, peer_node_ids=peer_node_ids, org_cb=cb)
+
+        self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
         if uri in peers:
@@ -147,7 +155,8 @@ class Node(object):
     def new(self, actor_type, args, deploy_args=None, state=None, prev_connections=None, connection_list=None):
         # TODO requirements should be input to am.new
         actor_id = self.am.new(actor_type, args, state, prev_connections, connection_list,
-                        signature=deploy_args['signature'] if deploy_args and 'signature' in deploy_args else None)
+                               app_id=deploy_args['app_id'] if deploy_args else None,
+                               signature=deploy_args['signature'] if deploy_args and 'signature' in deploy_args else None)
         if deploy_args:
             app_id = deploy_args['app_id']
             if 'app_name' not in deploy_args:
@@ -167,6 +176,17 @@ class Node(object):
         # FIXME: We still need to sort out actor requirements vs. node capabilities and user permissions.
         # @TODO: Write node capabilities to storage
         return self._calvinsys
+
+    def report_resource_usage(self, usage):
+        _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
+        self.resource_manager.register(self.id, usage)
+        for peer_id in self.network.links:
+            self.proto.report_usage(peer_id, self.id, usage)
+
+    def register_resource_usage(self, node_id, usage, callback):
+        _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
+        self.resource_manager.register(node_id, usage)
+        callback(status=response.CalvinResponse(True))
 
     #
     # Event loop
@@ -194,6 +214,21 @@ class Node(object):
             if self.control_uri is not None:
                 self.control.start(node=self, uri=self.control_uri)
 
+        self._start_resource_reporter()
+
+    def _start_resource_reporter(self):
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self})
+        actor = self.am.actors[actor_id]
+        if not actor.inports or not actor.outports:
+            _log.warning("Could not set up ResourceReporter: {}".format(actor))
+            return
+
+        in_port = actor.inports['in']
+        out_port = actor.outports['out']
+        self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
+                     peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
+                     peer_port_dir='out', peer_port_id=out_port.id)
+
     def stop(self, callback=None):
         def stopped(*args):
             _log.analyze(self.id, "+", {'args': args})
@@ -208,7 +243,7 @@ class Node(object):
             self.storage.stop(stopped)
 
         _log.analyze(self.id, "+", {})
-        self.storage.delete_node(self, cb=deleted_node)
+        self.storage.delete_node(self.id, self.attributes.get_indexed_public(), cb=deleted_node)
 
 
 def create_node(uri, control_uri, attributes=None):

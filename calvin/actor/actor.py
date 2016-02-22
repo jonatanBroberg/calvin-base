@@ -16,8 +16,12 @@
 
 import wrapt
 import functools
+import re
+import time
+
 from calvin.utilities import calvinuuid
 from calvin.actor import actorport
+from calvin.actor.connection import Connection
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.utils import enum
 from calvin.runtime.north.calvin_token import Token, ExceptionToken
@@ -120,11 +124,13 @@ def condition(action_input=[], action_output=[]):
                 port = self.inports[portname]
                 tokenlist = []
                 for i in range(repeat):
-                    token = port.peek_token()
-                    is_exception = isinstance(token, ExceptionToken)
-                    if is_exception:
-                        ex.setdefault(portname, []).append(i)
-                    tokenlist.append(token if is_exception else token.value)
+                    tokens = port.peek_token()
+                    for token in filter(None, tokens):
+                        is_exception = isinstance(token, ExceptionToken)
+                        if is_exception:
+                            ex.setdefault(portname, []).append(i)
+                        tokenlist.append(token if is_exception else token.value)
+
                 args.append(tokenlist if len(tokenlist) > 1 else tokenlist[0])
 
             #
@@ -324,13 +330,14 @@ class Actor(object):
 
     # What are the arguments, really?
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None):
+                 disable_state_checks=False, actor_id=None, app_id=None):
         """Should _not_ be overridden in subclasses."""
         super(Actor, self).__init__()
         self._type = actor_type
         self.name = name  # optional: human_readable_name
         self.id = actor_id or calvinuuid.uuid("ACTOR")
         _log.debug("New actor id: %s, supplied actor id %s" % (self.id, actor_id))
+        self.app_id = app_id
         self._deployment_requirements = []
         self._signature = None
         self._component_members = set([self.id])  # We are only part of component if this is extended
@@ -340,6 +347,7 @@ class Actor(object):
         self.control = calvincontrol.get_calvincontrol()
         self.metering = metering.get_metering()
         self._migrating_to = None  # During migration while on the previous node set to the next node id
+        self._last_time_warning = 0.0
 
         self.inports = {p: actorport.InPort(p, self) for p in self.inport_names}
         self.outports = {p: actorport.OutPort(p, self) for p in self.outport_names}
@@ -477,6 +485,7 @@ class Actor(object):
 
     @verify_status([STATUS.ENABLED])
     def fire(self):
+        start_time = time.time()
         total_result = ActionResult(did_fire=False)
         while True:
             # Re-try action in list order after EVERY firing
@@ -502,6 +511,11 @@ class Actor(object):
                     break
 
             if not action_result.did_fire:
+                diff = time.time() - start_time
+                if diff > 0.2 and start_time - self._last_time_warning > 120.0:
+                    # Every other minute warn if an actor runs for longer than 200 ms
+                    self._last_time_warning = start_time
+                    _log.warning("%s (%s) actor blocked for %f sec" % (self.name, self._type, diff))
                 # We reached the end of the list without ANY firing => return
                 return total_result
         # Redundant as of now, kept as reminder for when rewriting exeption handling.
@@ -526,13 +540,17 @@ class Actor(object):
         # Manual state handling
         # Not available until after __init__ completes
         state['_managed'] = list(self._managed)
-        state['inports'] = {port: self.inports[port]._state()
-                            for port in self.inports}
-        state['outports'] = {
-            port: self.outports[port]._state() for port in self.outports}
         state['_component_members'] = list(self._component_members)
+        state['inports'] = {port: self.inports[port]._state() for port in self.inports}
+        state['outports'] = {port: self.outports[port]._state() for port in self.outports}
 
+        state.update(self._get_managed())
+
+        return state
+
+    def _get_managed(self):
         # Managed state handling
+        state = {}
         for key in self._managed:
             obj = self.__dict__[key]
             if _implements_state(obj):
@@ -540,10 +558,12 @@ class Actor(object):
             else:
                 state[key] = obj
 
+        state['app_id'] = self.app_id
+
         return state
 
     @verify_status([STATUS.LOADED, STATUS.READY, STATUS.PENDING])
-    def _set_state(self, state):
+    def set_state(self, state):
         # Managed state handling
 
         # Update since if previously a shadow actor the init has been called first
@@ -551,49 +571,56 @@ class Actor(object):
         # with the recorded state
         self._managed.update(set(state['_managed']))
 
-        for key in state['_managed']:
+        set_ports = state.get('set_ports', True)
+
+        for key in self._managed:
             if key not in self.__dict__:
                 self.__dict__[key] = state.pop(key)
-            else:
+            elif key in state:
                 obj = self.__dict__[key]
                 if _implements_state(obj):
                     obj.set_state(state.pop(key))
                 else:
                     self.__dict__[key] = state.pop(key)
 
-        # Manual state handling
-        for port in state['inports']:
-            # Uses setdefault to support shadow actor
-            self.inports.setdefault(port, actorport.InPort(port, self))._set_state(state['inports'][port])
-        for port in state['outports']:
-            # Uses setdefault to support shadow actor
-            self.outports.setdefault(port, actorport.OutPort(port, self))._set_state(state['outports'][port])
-        self._component_members= set(state['_component_members'])
+        if set_ports:
+            # Manual state handling
+            for port in state['inports']:
+                # Uses setdefault to support shadow actor
+                self.inports.setdefault(port, actorport.InPort(port, self))._set_state(state['inports'][port])
+            for port in state['outports']:
+                # Uses setdefault to support shadow actor
+                self.outports.setdefault(port, actorport.OutPort(port, self))._set_state(state['outports'][port])
+        self._component_members = set(state['_component_members'])
 
     # TODO verify status should only allow reading connections when and after being fully connected (enabled)
     @verify_status([STATUS.ENABLED, STATUS.READY, STATUS.PENDING])
     def connections(self, node_id):
         c = {'actor_id': self.id, 'actor_name': self.name}
-        inports = {}
+
+        inports = []
         for port in self.inports.values():
-            peer = port.get_peer()
-            if peer[0] == 'local':
-                peer = (node_id, peer[1])
-            inports[port.id] = peer
+            for peer in port.get_peers():
+                if peer.is_local:
+                    peer.node_id = node_id
+                inports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
         c['inports'] = inports
-        outports = {}
+
+        outports = []
         for port in self.outports.values():
-            peers = [
-                (node_id, p[1]) if p[0] == 'local' else p for p in port.get_peers()]
-            outports[port.id] = peers
+            for peer in port.get_peers():
+                if peer.is_local:
+                    peer.node_id = node_id
+                outports.append(Connection(node_id, port.id, peer.node_id, peer.port_id))
         c['outports'] = outports
+
         return c
 
     def serialize(self):
         return self.state()
 
     def deserialize(self, data):
-        self._set_state(data)
+        self.set_state(data)
 
     def exception_handler(self, action, args, context):
         """Defult handler when encountering ExceptionTokens"""
@@ -613,7 +640,7 @@ class Actor(object):
         if not isinstance(actor_ids, (set, list, tuple)):
             actor_ids = [actor_ids]
         self._component_members -= set(actor_ids)
-        
+
     def part_of_component(self):
         return len(self._component_members - set([self.id]))>0
 
@@ -637,15 +664,38 @@ class Actor(object):
         if self._signature is None:
             self._signature = signature
 
+    def replication_args(self):
+        """Returns args with a name with a random postfix based.
+
+        The name must not contain '-', this will break the web interface
+        """
+        args = self._get_managed()
+
+        args['name'] = re.sub(calvincontrol.uuid_re, "", self.name) + calvinuuid.uuid("REPLICA")
+        args['id'] = calvinuuid.uuid("ACTOR")
+
+        return args
+
+    def port_names(self):
+        """Returns a dict mapping port_id to port_name"""
+        port_names = {'inports': {}, 'outports': {}}
+        for port_name in self.inports:
+            port_names['inports'][self.inports[port_name].id] = port_name
+        for port_name in self.outports:
+            port_names['outports'][self.outports[port_name].id] = port_name
+        return port_names
+
+
 class ShadowActor(Actor):
     """A shadow actor try to behave as another actor but don't have any implementation"""
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None):
+                 disable_state_checks=False, actor_id=None, app_id=None):
         self.inport_names = []
         self.outport_names = []
-        super(ShadowActor, self).__init__(actor_type, name, allow_invalid_transitions=allow_invalid_transitions, 
+        super(ShadowActor, self).__init__(actor_type, name, allow_invalid_transitions=allow_invalid_transitions,
                                             disable_transition_checks=disable_transition_checks,
-                                            disable_state_checks=disable_state_checks, actor_id=actor_id)
+                                            disable_state_checks=disable_state_checks, actor_id=actor_id,
+                                            app_id=app_id)
 
     @manage(['_shadow_args'])
     def init(self, **args):

@@ -18,20 +18,21 @@ import unittest
 import time
 import copy
 import multiprocessing
-from calvin.runtime.north import calvin_node
-from calvin.Tools import cscompiler as compiler
-from calvin.Tools import deployer
 import pytest
-from calvin.utilities import utils
-from calvin.utilities.nodecontrol import dispatch_node, dispatch_storage_node
-from calvin.utilities import calvinuuid
-from warnings import warn
-from calvin.utilities.attribute_resolver import format_index_string
 import socket
 import os
-import json
+
+from collections import namedtuple
+
+from calvin.utilities import utils
+from calvin.utilities.attribute_resolver import format_index_string
+from calvin.Tools.cscontrol import control_deploy as deploy_app
 from calvin.utilities import calvinlogger
 from calvin.utilities import calvinconfig
+from calvin.utilities.nodecontrol import dispatch_node
+from calvin.Tools import cscompiler as compiler
+from calvin.Tools import deployer
+from calvin.utilities.nodecontrol import dispatch_node
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
@@ -42,13 +43,16 @@ except:
     import socket
     ip_addr = socket.gethostbyname(socket.gethostname())
 
+storage_node = None
 rt1 = None
 rt2 = None
 rt3 = None
+storage_node_id = None
 rt1_id = None
 rt2_id = None
 rt3_id = None
 test_script_dir = None
+
 
 def absolute_filename(filename):
     import os.path
@@ -158,9 +162,7 @@ class TestDeployScript(unittest.TestCase):
     def testDeploySimple(self):
         _log.analyze("TESTRUN", "+", {})
         self.verify_storage()
-        
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
+
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_deploy1.calvin"), attr=None,
@@ -183,8 +185,6 @@ class TestDeployScript(unittest.TestCase):
         _log.analyze("TESTRUN", "+", {})
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_deploy2.calvin"), attr=None,
@@ -210,8 +210,6 @@ class TestDeployScript(unittest.TestCase):
         _log.analyze("TESTRUN", "+", {})
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_deploy3.calvin"), attr=None,
@@ -340,8 +338,6 @@ class TestDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow1.calvin"), attr=None,
@@ -359,7 +355,7 @@ class TestDeployShadow(unittest.TestCase):
         assert result['actor_map']['test_shadow1:src'] in actors[0]
         assert result['actor_map']['test_shadow1:sum'] in actors[1]
         assert result['actor_map']['test_shadow1:snk'] in actors[0]
-        
+
         actual = utils.report(rt1, result['actor_map']['test_shadow1:snk'])
         assert len(actual) > 5
         assert all([y-x > 0 for x, y in zip(actual, actual[1:])])
@@ -374,8 +370,6 @@ class TestDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow1.calvin"), attr=None,
@@ -393,7 +387,7 @@ class TestDeployShadow(unittest.TestCase):
         assert result['actor_map']['test_shadow1:src'] in actors[0]
         assert result['actor_map']['test_shadow1:sum'] in actors[1]
         assert result['actor_map']['test_shadow1:snk'] in actors[0]
-        
+
         actual = utils.report(rt1, result['actor_map']['test_shadow1:snk'])
         assert len(actual) > 5
         assert all([y-x > 0 for x, y in zip(actual, actual[1:])])
@@ -408,8 +402,6 @@ class TestDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow3.calvin"), attr=None,
@@ -427,7 +419,7 @@ class TestDeployShadow(unittest.TestCase):
         assert result['actor_map']['test_shadow3:src'] in actors[0]
         assert result['actor_map']['test_shadow3:sum'] in actors[1]
         assert result['actor_map']['test_shadow3:snk'] in actors[0]
-        
+
         actual = utils.report(rt1, result['actor_map']['test_shadow3:snk'])
         assert len(actual) > 5
         assert all([y-x > 0 for x, y in zip(actual, actual[1:])])
@@ -438,8 +430,6 @@ class TestDeployShadow(unittest.TestCase):
         _log.analyze("TESTRUN", "+", {})
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadowcomponent1.calvin"), attr=None,
@@ -540,9 +530,9 @@ class TestSepDeployShadow(unittest.TestCase):
         for p in multiprocessing.active_children():
             p.terminate()
         # They will die eventually (about 5 seconds) in most cases, but this makes sure without wasting time
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5000'" % (ip_addr,))
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5001'" % (ip_addr,))
-        os.system("pkill -9 -f -l 'csruntime -n %s -p 5002'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5000'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5001'" % (ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5002'" % (ip_addr,))
         time.sleep(0.2)
 
     def verify_storage(self):
@@ -616,8 +606,6 @@ class TestSepDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow1.calvin"), attr=None,
@@ -636,7 +624,7 @@ class TestSepDeployShadow(unittest.TestCase):
         assert result['actor_map']['test_shadow1:src'] in actors[0]
         assert result['actor_map']['test_shadow1:sum'] in actors[1]
         assert result['actor_map']['test_shadow1:snk'] in actors[0]
-        
+
         actual = utils.report(rt1, result['actor_map']['test_shadow1:snk'])
         assert len(actual) > 5
         assert all([y-x > 0 for x, y in zip(actual, actual[1:])])
@@ -656,8 +644,6 @@ class TestSepDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5004' % ip_addr,
                           script=open(test_script_dir+"test_shadow1.calvin"), attr=None,
@@ -715,8 +701,6 @@ class TestSepDeployShadow(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5004' % ip_addr,
                           script=open(test_script_dir+"test_shadow1.calvin"), attr=None,
@@ -738,6 +722,7 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
     def setup(self, request):
         from calvin.Tools.csruntime import csruntime
         from conftest import _config_pytest
+        global storage_node
         global rt1
         global rt2
         global rt3
@@ -747,7 +732,16 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         rt1_conf = copy.deepcopy(_conf)
         rt1_conf.set('global', 'capabilities_blacklist', ['calvinsys.events.timer'])
         if use_proxy_storage:
-            rt1_conf.set('global', 'storage_start', False)
+            rt1_conf.set('global', 'storage_start', '0')
+        rt1_conf.save("/tmp/calvin4998.conf")
+        csruntime(ip_addr, port=4998, controlport=4999, configfile="/tmp/calvin4998.conf", storage=True)
+        storage_node = utils.RT("http://%s:4999" % ip_addr)
+
+        rt1_conf = copy.deepcopy(_conf)
+        rt1_conf.set('global', 'capabilities_blacklist', ['calvinsys.events.timer'])
+        if use_proxy_storage:
+            rt1_conf.set('global', 'storage_proxy', "calvinip://%s:4998" % ip_addr)
+            rt1_conf.set('global', 'storage_start', '1')
         rt1_conf.save("/tmp/calvin5000.conf")
         try:
             logfile = _config_pytest.getoption("logfile")+"5000"
@@ -766,7 +760,9 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         rt2_3_conf = copy.deepcopy(_conf)
         if use_proxy_storage:
-            rt2_3_conf.set('global', 'storage_proxy', "calvinip://%s:5000" % ip_addr)
+            rt2_3_conf.set('global', 'storage_proxy', "calvinip://%s:4998" % ip_addr)
+            rt2_3_conf.set('global', 'storage_start', "1")
+
         rt2_3_conf.save("/tmp/calvin5001.conf")
         try:
             logfile = _config_pytest.getoption("logfile")+"5001"
@@ -803,9 +799,11 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         request.addfinalizer(self.teardown)
 
     def teardown(self):
+        global storage_node
         global rt1
         global rt2
         global rt3
+        utils.quit(storage_node)
         utils.quit(rt1)
         utils.quit(rt2)
         utils.quit(rt3)
@@ -813,15 +811,22 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         for p in multiprocessing.active_children():
             p.terminate()
         # They will die eventually (about 5 seconds) in most cases, but this makes sure without wasting time
+        os.system("pkill -9 -f 'csruntime -n %s -p 4998'" % (ip_addr,))
         os.system("pkill -9 -f 'csruntime -n %s -p 5000'" % (ip_addr,))
         os.system("pkill -9 -f 'csruntime -n %s -p 5001'" % (ip_addr,))
         os.system("pkill -9 -f 'csruntime -n %s -p 5002'" % (ip_addr,))
         time.sleep(0.2)
 
     def verify_storage(self):
+        global storage_node
         global rt1
         global rt2
         global rt3
+        global storage_node_id
+        global rt1_id
+        global rt2_id
+        global rt3_id
+        storage_node_id = None
         rt1_id = None
         rt2_id = None
         rt3_id = None
@@ -829,6 +834,7 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         # Try 10 times waiting for control API to be up and running
         for i in range(10):
             try:
+                storage_node_id = storage_node_id or utils.get_node_id(storage_node)
                 rt1_id = rt1_id or utils.get_node_id(rt1)
                 rt2_id = rt2_id or utils.get_node_id(rt2)
                 rt3_id = rt3_id or utils.get_node_id(rt3)
@@ -837,6 +843,7 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
             except:
                 time.sleep(0.1)
         assert not failed
+        assert storage_node_id
         assert rt1_id
         assert rt2_id
         assert rt3_id
@@ -876,8 +883,6 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow4.calvin"), attr=None,
@@ -895,7 +900,7 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         assert result['actor_map']['test_shadow4:button'] in actors[1]
         assert result['actor_map']['test_shadow4:check'] in actors[0]
         assert result['actor_map']['test_shadow4:bell'] in actors[2]
-        
+
         actual = utils.report(rt3, result['actor_map']['test_shadow4:bell'])
         assert len(actual) > 5
         assert all([y-x > 0 for x, y in zip(actual, actual[1:])])
@@ -912,8 +917,6 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow4.calvin"), attr=None,
@@ -931,10 +934,10 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         assert result['actor_map']['test_shadow4:button'] in actors[1]
         assert result['actor_map']['test_shadow4:check'] in actors[0]
         assert result['actor_map']['test_shadow4:bell'] in actors[2]
-        
+
         actual = utils.report(rt3, result['actor_map']['test_shadow4:bell'])
         assert len(actual) > 5
-        utils.migrate_use_req(rt3, result['actor_map']['test_shadow4:bell'], 
+        utils.migrate_use_req(rt3, result['actor_map']['test_shadow4:bell'],
                                 [{
                                     "op": "node_attr_match",
                                     "kwargs": {"index": ["address", {"locality": "outside"}]},
@@ -959,8 +962,6 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow4.calvin"), attr=None,
@@ -978,10 +979,10 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         assert result['actor_map']['test_shadow4:button'] in actors[1]
         assert result['actor_map']['test_shadow4:check'] in actors[0]
         assert result['actor_map']['test_shadow4:bell'] in actors[2]
-        
+
         actual = utils.report(rt3, result['actor_map']['test_shadow4:bell'])
         assert len(actual) > 5
-        utils.migrate_app_use_req(rt3, result['application_id'], 
+        utils.migrate_app_use_req(rt3, result['application_id'],
                             {
                                 "requirements": {
                                     "button": [
@@ -1026,8 +1027,6 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_shadow5.calvin"), attr=None,
@@ -1046,10 +1045,10 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         assert result['actor_map']['test_shadow5:button:second'] in actors[1]
         assert result['actor_map']['test_shadow5:check'] in actors[0]
         assert result['actor_map']['test_shadow5:bell'] in actors[2]
-        
+
         actual = utils.report(rt3, result['actor_map']['test_shadow5:bell'])
         assert len(actual) > 5
-        utils.migrate_app_use_req(rt3, result['application_id'], 
+        utils.migrate_app_use_req(rt3, result['application_id'],
                             {
                                 "requirements": {
                                     "button": [
@@ -1094,8 +1093,6 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         self.verify_storage()
 
-        from calvin.Tools.cscontrol import control_deploy as deploy_app
-        from collections import namedtuple
         DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
         args = DeployArgs(node='http://%s:5003' % ip_addr,
                           script=open(test_script_dir+"test_deploy1.calvin"), attr=None,
@@ -1112,9 +1109,9 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
 
         actors = [utils.get_actors(rt1), utils.get_actors(rt2), utils.get_actors(rt3)]
         # src -> rt1, sum -> rt1, snk -> rt2
-        assert result['actor_map']['test_deploy1:src'] in actors[1]
+        assert result['actor_map']['test_deploy1:src'] in actors[0]
         assert result['actor_map']['test_deploy1:sum'] in actors[0]
-        assert result['actor_map']['test_deploy1:snk'] in actors[1]
+        assert result['actor_map']['test_deploy1:snk'] in actors[0]
 
         for i in range(10):
             utils.migrate_app_use_req(rt1, result['application_id'],
@@ -1141,5 +1138,117 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
             time.sleep(1)
             actors = utils.get_actors(rt2)
             assert result['actor_map']['test_deploy1:snk'] in actors
+
+        utils.delete_application(rt1, result['application_id'])
+
+    @pytest.mark.slow
+    @pytest.mark.essential
+    def testRemoteToRemoteReplicaIsAddedToApplicationsActors(self):
+        global rt1
+        global rt2
+        global rt1_id
+        global rt2_id
+        self.verify_storage()
+        rt = rt1
+        peer = rt2
+        rt.id = rt1_id
+        peer.id = rt2_id
+
+        script = """
+          src : std.CountTimer()
+          snk : io.StandardOut(store_tokens=1)
+          src.integer > snk.token
+          """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        utils.migrate(rt, snk, rt2_id)
+        time.sleep(0.2)
+        replica = utils.replicate(peer, snk, rt2_id)
+        time.sleep(0.2)
+
+        actors = utils.get_application_actors(rt, app_id)
+        assert replica in actors
+
+        actors = utils.get_application_actors(peer, app_id)
+        assert replica in actors
+
+        d.destroy()
+
+    @pytest.mark.slow
+    @pytest.mark.essential
+    def testDeleteRemoteActorRemovesActorFromApplicationsActors(self):
+        global rt1
+        global rt2
+        global rt1_id
+        global rt2_id
+        self.verify_storage()
+        rt = rt1
+        peer = rt2
+        rt.id = rt1_id
+        peer.id = rt2_id
+
+        script = """
+          src : std.CountTimer()
+          snk : io.StandardOut(store_tokens=1)
+          src.integer > snk.token
+          """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+
+        time.sleep(0.2)
+
+        snk = d.actor_map['simple:snk']
+        utils.migrate(rt, snk, rt2_id)
+        time.sleep(0.2)
+        utils.delete_actor(peer, snk)
+        time.sleep(0.2)
+
+        assert snk not in utils.get_application_actors(rt, app_id)
+        assert snk not in utils.get_application_actors(peer, app_id)
+
+        d.destroy()
+
+    def testDeploy3NodesProxyStorageGetActorInfoOnRemoteNode(self):
+        _log.analyze("TESTRUN", "+", {})
+        global rt1
+        global rt2
+        global rt3
+        global test_script_dir
+
+        self.verify_storage()
+
+        DeployArgs = namedtuple('DeployArgs', ['node', 'attr', 'script','reqs', 'check'])
+        args = DeployArgs(node='http://%s:5003' % ip_addr,
+                          script=open(test_script_dir+"test_deploy1.calvin"), attr=None,
+                                reqs=test_script_dir+"test_deploy4.deployjson", check=False)
+        result = {}
+        try:
+            result = deploy_app(args)
+        except:
+            raise Exception("Failed deployment of app %s, no use to verify if requirements fulfilled" % args.script.name)
+        print "RESULT:", result
+        time.sleep(2)
+
+        assert result['requirements_fulfilled']
+
+        actors = [utils.get_actors(rt1), utils.get_actors(rt2), utils.get_actors(rt3)]
+        # src -> rt1, sum -> rt1, snk -> rt2
+        assert result['actor_map']['test_deploy1:src'] in actors[0]
+        assert result['actor_map']['test_deploy1:sum'] in actors[0]
+        assert result['actor_map']['test_deploy1:snk'] in actors[0]
+
+        src = result['actor_map']['test_deploy1:src']
+        value = utils.get_actor(rt1, src)
+        assert value
+        assert utils.get_actor(rt2, src) == value
+        assert utils.get_actor(rt3, src) == value
 
         utils.delete_application(rt1, result['application_id'])

@@ -18,10 +18,7 @@
 import argparse
 import json
 import calvin.utilities.utils as utils
-import os
 from calvin.utilities.calvinlogger import get_logger
-from calvin.utilities import calvinresponse
-import logging
 
 _log = get_logger(__name__)
 
@@ -36,6 +33,7 @@ def get_node_info(control_uri, node_id):
     except:
         raise Exception("No node with id {} found".format(node_id))
 
+
 def get_node_control_uri(control_uri, node_id):
     nodeinfo = get_node_info(control_uri, node_id)
     return nodeinfo.get("control_uri")
@@ -44,18 +42,19 @@ def get_node_control_uri(control_uri, node_id):
 def requirements_file(path):
     """ Reads in a requirements file of JSON format with the structure:
         {<actor_name>: [(<req_op>, <req_args>), ...], ...}
-        
+
         Needs to be called after the initial deployment to get the actor_ids
     """
     reqs = None
     try:
-        reqs = json.load(open(path,'r'))
+        reqs = json.load(open(path, 'r'))
     except:
         _log.exception("Failed JSON file")
     if not reqs or not isinstance(reqs, dict):
         _log.error("Failed loading deployment requirements file %s" % path)
         return {}
     return reqs
+
 
 def control_deploy(args):
     response = None
@@ -66,6 +65,7 @@ def control_deploy(args):
     except Exception as e:
         print e
     return response
+
 
 def control_actors(args):
     if args.cmd == 'list':
@@ -82,10 +82,22 @@ def control_actors(args):
         if not args.id or not args.peer_node:
             raise Exception("No actor or peer given")
         return utils.migrate(args.node, args.id, args.peer_node)
+    elif args.cmd == 'replicate':
+        if not args.id:
+            raise Exception("No actor id given")
+        return utils.replicate(args.node, args.id, args.peer_node)
+    elif args.cmd == 'lost':
+        if not args.id:
+            raise Exception("No actor id given")
+        return utils.lost_actor(args.node, args.id)
 
 
 def control_applications(args):
-    if args.cmd == 'list':
+    if args.cmd == 'info':
+        if not args.id:
+            raise Exception("No application id given")
+        return utils.get_application(args.node, args.id)
+    elif args.cmd == 'list':
         return utils.get_applications(args.node)
     elif args.cmd == 'delete':
         if not args.id:
@@ -95,14 +107,18 @@ def control_applications(args):
 
 def control_nodes(args):
     from requests.exceptions import ConnectionError
-    if args.cmd == 'list':
+    if args.cmd == 'info':
+        if not args.peerlist:
+            raise Exception("No node id given")
+        return utils.get_node(args.node, args.peerlist[0])
+    elif args.cmd == 'list':
         return utils.get_nodes(args.node)
     elif args.cmd == 'add':
         return utils.peer_setup(args.node, *args.peerlist)
     elif args.cmd == 'stop':
         try:
             return utils.quit(args.node)
-        except ConnectionError as e:
+        except ConnectionError:
             # If the connection goes down before response that is OK
             return None
 
@@ -138,7 +154,7 @@ def parse_args():
     cmd_id.set_defaults(func=control_id)
 
     # parser for nodes cmd
-    node_commands = ['list', 'add', 'stop']
+    node_commands = ['info', 'list', 'add', 'stop']
 
     cmd_nodes = cmdparsers.add_parser('nodes', help='handle node peers')
     cmd_nodes.add_argument('cmd', metavar='<command>', choices=node_commands, type=str,
@@ -152,16 +168,16 @@ def parse_args():
     cmd_deploy.add_argument("script", metavar="<calvin script>", type=argparse.FileType('r'),
                             help="script to be deployed")
     cmd_deploy.add_argument('-c', '--no-check', dest='check', action='store_false', default=True,
-                           help='Don\'t verify if actors or components are correct, ' + 
-                                'allows deployment of actors not known on the node')
+                            help='Don\'t verify if actors or components are correct, ' +
+                                 'allows deployment of actors not known on the node')
 
     cmd_deploy.add_argument('--reqs', metavar='<reqs>', type=str,
-                           help='deploy script, currently JSON coded data file',
-                           dest='reqs')
+                            help='deploy script, currently JSON coded data file',
+                            dest='reqs')
     cmd_deploy.set_defaults(func=control_deploy)
 
     # parsers for actor commands
-    actor_commands = ['info', 'list', 'delete', 'migrate']
+    actor_commands = ['info', 'list', 'delete', 'migrate', 'replicate', 'lost']
     cmd_actor = cmdparsers.add_parser('actor', help="handle actors on node")
     cmd_actor.add_argument('cmd', metavar="<command>", choices=actor_commands, type=str,
                            help="one of %s" % (", ".join(actor_commands)))
@@ -172,7 +188,7 @@ def parse_args():
     cmd_actor.set_defaults(func=control_actors)
 
     # parser for applications
-    app_commands = ['list', 'delete']
+    app_commands = ['info', 'list', 'delete']
     cmd_apps = cmdparsers.add_parser('applications', help="handle applications deployed on node")
     cmd_apps.add_argument("cmd", metavar="<command>", choices=app_commands, type=str,
                           help="one of %s" % (", ".join(app_commands)))
@@ -183,7 +199,7 @@ def parse_args():
     storage_commands = ['get_index', 'raw_get_index']
     cmd_storage = cmdparsers.add_parser('storage', help="handle storage")
     cmd_storage.add_argument("cmd", metavar="<command>", choices=storage_commands, type=str,
-                          help="one of %s" % (", ".join(storage_commands)))
+                             help="one of %s" % (", ".join(storage_commands)))
     cmd_storage.add_argument("index", metavar="<index>",
                              help="An index e.g. '[\"owner\", {\"personOrGroup\": \"Me\"}}]'", type=str, nargs='?')
     cmd_storage.set_defaults(func=control_storage)

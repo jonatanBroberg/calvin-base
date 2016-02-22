@@ -17,18 +17,36 @@
 import unittest
 import mock
 from calvin.runtime.north.actormanager import ActorManager
+from calvin.runtime.north import metering
+import calvin.utilities.calvinresponse as response
+
+
+class DummyPortManager:
+
+    def disconnect(self, callback=None, actor_id=None, port_name=None, port_dir=None, port_id=None):
+        status = response.CalvinResponse(True)
+        if callback:
+            callback(status=status, actor_id=actor_id, port_name=port_name, port_id=port_id)
+
+    def add_ports_of_actor(self, actor):
+        pass
+
+    def remove_ports_of_actor(self, actor):
+        pass
 
 
 class DummyNode:
 
     def __init__(self):
         self.id = id(self)
-        self.pm = mock.Mock()
+        self.pm = DummyPortManager()
         self.storage = mock.Mock()
+        self.control = mock.Mock()
+        self.metering = metering.set_metering(metering.Metering(self))
+        self.app_manager = mock.Mock()
 
     def calvinsys(self):
         return None
-
 
 
 class ActorManagerTests(unittest.TestCase):
@@ -41,8 +59,8 @@ class ActorManagerTests(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def _new_actor(self, a_type, a_args, **kwargs):
-        a_id = self.am.new(a_type, a_args, **kwargs)
+    def _new_actor(self, a_type, a_args, app_id=None, **kwargs):
+        a_id = self.am.new(a_type, a_args, app_id=app_id, **kwargs)
         a = self.am.actors.get(a_id, None)
         self.assertTrue(a)
         return a, a_id
@@ -65,19 +83,18 @@ class ActorManagerTests(unittest.TestCase):
         self.assertEqual(s['id'], a_id)
         self.assertEqual(s['n'], 1)
 
-
     def testNewActorFromState(self):
         # Test basic actor state manipulation
         a_type = 'std.Constant'
         data = 42
-        a, a_id = self._new_actor(a_type, {'data':data})
+        a, a_id = self._new_actor(a_type, {'data': data})
         a.data = 43
         a.n = 2
         s = a.state()
-        self.am.destroy(a_id)
+        self.am.delete_actor(a_id)
         self.assertEqual(len(self.am.actors), 0)
 
-        b, b_id = self._new_actor(a_type, None, state = s)
+        b, b_id = self._new_actor(a_type, None, state=s)
 
         self.assertEqual(a.data, 43)
         self.assertEqual(a.n, 2)
@@ -87,6 +104,35 @@ class ActorManagerTests(unittest.TestCase):
         self.assertTrue(self.am.actors[a_id])
         self.assertEqual(len(self.am.actors), 1)
 
+    def testNewReplicaWithState(self):
+        a_type = 'io.StandardOut'
+        a, a_id = self._new_actor(a_type, {'name': 'a_name', 'store_tokens': 1})
+        a.tokens = [1, 2, 3]
+        state = a.state()
+
+        prev_connections = a.connections(self.am.node.id)
+        prev_connections['port_names'] = a.port_names()
+
+        args = a.replication_args()
+        b = self.am.new_replica(a_type, args, state, prev_connections, None, None)
+        self.assertEqual(len(self.am.actors), 2)
+
+        self.assertEqual(a.tokens, [1, 2, 3])
+        self.assertEqual(a.store_tokens, 1)
+        self.assertEqual(b.tokens, [1, 2, 3])
+        self.assertEqual(b.store_tokens, 1)
+
+        # Assert new id is assigned
+        self.assertNotEqual(b.id, a.id)
+
+        # Assert new name is assigned
+        self.assertNotEqual(b.name, a.name)
+        assert b.name.startswith(a.name)
+
+        # Assert actor database is consistent
+        self.assertTrue(self.am.actors[a_id])
+        self.assertTrue(self.am.actors[b.id])
+        self.assertEqual(len(self.am.actors), 2)
 
 
 if __name__ == '__main__':
