@@ -1,4 +1,5 @@
 import re
+import random
 
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import calvinresponse as response
@@ -8,13 +9,14 @@ _log = get_logger(__name__)
 
 
 class Replicator(object):
-    def __init__(self, node, control, actor_id_re):
+    def __init__(self, node, control, actor_id_re, required_reliability = 2):
         self.node = node
         self.control = control
         self.actor_id_re = actor_id_re
         self.current_nbr_of_replicas = 0
         self.replica_id = None
         self.replica_value = None
+        self.required_reliability = required_reliability
 
     def _is_match(self, first, second):
         is_match = re.sub(self.actor_id_re, "", first) == re.sub(self.actor_id_re, "", second)
@@ -48,11 +50,25 @@ class Replicator(object):
     def _replicate(self, actor_id, actor_info, lost_actor_id, lost_actor_info, status, cb):
         # TODO: Use status? 
         if not self.replica_id is None:
-            _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
-            self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], self.node.id, cb)
+            if self.current_nbr_of_replicas >= self.required_reliability:
+                cb(status=status)
+                return
+            else:
+                _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
+                new_cb = CalvinCB(func=self._refresh_reliability, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, cb=cb)
+                self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], self.node.id, new_cb)
         else:
             cb(status=response.NOT_FOUND)
             _log.warning("Could not find actor to replicate")
+
+    def _refresh_reliability(self, status, lost_actor_id, lost_actor_info, cb):
+        self.current_nbr_of_replicas = 0
+        new_cb = CalvinCB(self._refresh_reliability_cb, status=status, lost_actor_id=lost_actor_id, 
+                        lost_actor_info=lost_actor_info, cb=cb)
+        self.node.storage.get_application_actors(lost_actor_info['app_id'], cb=new_cb)
+        
+    def _refresh_reliability_cb(self, key, value, status, lost_actor_id, lost_actor_info, cb):
+        self._find_and_replicate(value, status, lost_actor_id, lost_actor_info, index=0, cb=cb)
 
     def _delete_lost_actor(self, lost_actor_info, lost_actor_id, cb):
         self._close_actor_ports(lost_actor_id, lost_actor_info)
@@ -64,9 +80,9 @@ class Replicator(object):
         _log.info("Closing ports of actor {}".format(lost_actor_id))
         callback = CalvinCB(self._send_disconnect_request)
         for inport in lost_actor_info['inports']:
-            self.node.storage.get_port(inport['id'])
+            self.node.storage.get_port(inport['id'], callback)
         for outport in lost_actor_info['outports']:
-            self.node.storage.get_port(outport['id'])
+            self.node.storage.get_port(outport['id'], callback)
 
     def _send_disconnect_request(self, key, value):
         if not value:

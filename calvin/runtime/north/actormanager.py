@@ -130,7 +130,7 @@ class ActorManager(object):
     def destroy_request(self, actor_id):
         reply = response.CalvinResponse(True)
         try:
-            self.delete_actor(actor_id)
+            self.delete_actor(actor_id, True)
         except:
             reply = response.CalvinResponse(False)
         return reply

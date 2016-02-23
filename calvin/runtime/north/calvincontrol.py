@@ -1017,16 +1017,25 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
             return
 
-        cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id,
+        cb = CalvinCB(func=self._handle_lost_actor_app_info, lost_actor_id=lost_actor_id,
                       lost_actor_info=value, handle=handle, connection=connection)
-        self.node.storage.get_application_actors(value['app_id'], cb=cb)
+        self.node.storage.get_application(value['app_id'], cb=cb)
 
-    def _handle_lost_application_actor(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
+    def _handle_lost_actor_app_info(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
         """ Get required reliability from app info """
         if not value:
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+        
+        cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info,
+                        required_reliability=value['required_reliability'], handle=handle, connection=connection)
+        self.node.storage.get_application_actors(lost_actor_info['app_id'], cb=cb)
 
-        replicator = Replicator(self.node, self, uuid_re)
+    def _handle_lost_application_actor(self, key, value, lost_actor_id, lost_actor_info, required_reliability, handle, connection):
+        """ Get application actors"""
+        if not value:
+            self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+
+        replicator = Replicator(self.node, self, uuid_re, required_reliability)
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
         replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
 

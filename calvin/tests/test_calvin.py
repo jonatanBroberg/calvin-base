@@ -1659,7 +1659,7 @@ class TestActorReplication(CalvinTestBase):
 @pytest.mark.slow
 class TestLosingActors(CalvinTestBase):
 
-    @pytest.mark.xfail
+    @pytest.mark.xfail(raises=Exception)
     def testLoseLastActor(self):
         rt = self.runtime
         
@@ -1709,6 +1709,7 @@ class TestLosingActors(CalvinTestBase):
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
             for actor in actors:
+                print actor
                 if not actor == snk:
                     for i in range(5):
                         try:
@@ -1720,7 +1721,9 @@ class TestLosingActors(CalvinTestBase):
                         except:
                             time.sleep(0.2)
 
-        assert(2 == len(replicas))
+        app = utils.get_application(app_id)
+        assert(2 == app['required_reliabilty'])
+
         self.assertIsNone(utils.get_actor(rt1, snk))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
