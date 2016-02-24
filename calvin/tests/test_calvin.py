@@ -2210,8 +2210,8 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
-        time.sleep(0.2)
+        new_replica = utils.lost_actor(rt1, replica)
+        time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
@@ -2230,19 +2230,22 @@ class TestDyingRuntimes(CalvinTestBase):
         assert rt2.id not in utils.get_nodes(rt1)
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
-        actual = actual_tokens(rt1, snk)
+        actual_snk = actual_tokens(rt1, snk)
+        #actual_replica = actual_tokens(rt1, new_replica)
 
-        counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        counts = Counter(actual_snk)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1 or cnt == 2 or cnt == 3]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
-        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+        filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
+        #filtered_actual_replica = filter(lambda x: x not in unique_elements, actual_replica)
 
         assert len(expected) > len(expected_before)
-        assert len(actual) > len(actual_snk_before)
-        assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+        assert len(actual_snk) > len(actual_snk_before)
+        assert len(actual_snk) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
+        #self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_replica))
 
         time.sleep(3)
         d.destroy()
@@ -2277,7 +2280,7 @@ class TestDyingRuntimes(CalvinTestBase):
         time.sleep(0.1)
 
         utils.lost_actor(rt1, replica)
-        time.sleep(0.2)
+        time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
@@ -2299,7 +2302,7 @@ class TestDyingRuntimes(CalvinTestBase):
         actual = actual_tokens(rt1, snk)
 
         counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1 or cnt == 2 or cnt == 3]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -2308,7 +2311,7 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
 
         time.sleep(3)
         d.destroy()

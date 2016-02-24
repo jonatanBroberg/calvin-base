@@ -1040,8 +1040,9 @@ class CalvinControl(object):
         replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
 
     def _handle_lost_actor_cb(self, status, handle, connection, *args, **kwargs):
+        data = None if isinstance(status, int) else json.dumps(status.data['actor_id'])
         status = status if isinstance(status, int) else status.status
-        self.send_response(handle, connection, None, status)
+        self.send_response(handle, connection, data, status)
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
