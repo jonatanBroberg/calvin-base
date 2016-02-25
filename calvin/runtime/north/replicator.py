@@ -24,12 +24,21 @@ class Replicator(object):
         _log.debug("{} and {} is match: ".format(first, second, is_match))
         return is_match
 
-    def replicate_lost_actor(self, actors, lost_actor_id, lost_actor_info, cb):
-        _log.info("Replicating lost actor: {}".format(lost_actor_id))
-        if lost_actor_id in actors:
-            actors.remove(lost_actor_id)
-        cb = CalvinCB(self._find_and_replicate, actors=actors, lost_actor_info=lost_actor_info, lost_actor_id=lost_actor_id, index=0, cb=cb)
+    def replicate_lost_actor(self, lost_actor_id, lost_actor_info, cb):
+        cb = CalvinCB(self._start_replication_, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, cb=cb)
         self._delete_lost_actor(lost_actor_info, lost_actor_id, cb=cb)
+
+    def _start_replication_(self, lost_actor_id, lost_actor_info, cb, status=response.CalvinResponse(True)):
+        cb = CalvinCB(self._find_app_actors, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, cb=cb, status=status)
+        self.node.storage.get_application_actors(lost_actor_info['app_id'], cb)
+
+    def _find_app_actors(self, key, value, lost_actor_id, lost_actor_info, cb, status):
+        if not value:
+            cb(response.NOT_FOUND)
+        _log.info("Replicating lost actor: {}".format(lost_actor_id))
+        if lost_actor_id in value:
+            value.remove(lost_actor_id)
+        self._find_and_replicate(value, response.CalvinResponse(True), lost_actor_id, lost_actor_info, index=0, cb=cb)
 
     def _find_and_replicate(self, actors, status, lost_actor_id, lost_actor_info, index, cb):
         if index < len(actors):
@@ -57,8 +66,8 @@ class Replicator(object):
             else:
                 _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
                 to_node_id = self.node.id
-                new_cb = CalvinCB(func=self._refresh_reliability, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, to_node_id=to_node_id, cb=cb)
-                self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, new_cb)
+                cb = CalvinCB(func=self._refresh_reliability, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, to_node_id=to_node_id, cb=cb)
+                self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, cb)
         else:
             cb(status=response.NOT_FOUND)
             _log.warning("Could not find actor to replicate")
@@ -67,17 +76,14 @@ class Replicator(object):
         if status in status.success_list:
             self.new_replicas[status.data['actor_id']] = to_node_id
         self.current_nbr_of_replicas = 0
-        new_cb = CalvinCB(self._refresh_reliability_cb, status=status, lost_actor_id=lost_actor_id, 
-                        lost_actor_info=lost_actor_info, cb=cb)
-        self.node.storage.get_application_actors(lost_actor_info['app_id'], cb=new_cb)
-        
-    def _refresh_reliability_cb(self, key, value, status, lost_actor_id, lost_actor_info, cb):
-        self._find_and_replicate(value, status, lost_actor_id, lost_actor_info, index=0, cb=cb)
+        cb = CalvinCB(self._find_app_actors, lost_actor_id=lost_actor_id, 
+                        lost_actor_info=lost_actor_info, cb=cb, status=status)
+        self.node.storage.get_application_actors(lost_actor_info['app_id'], cb=cb)
 
     def _delete_lost_actor(self, lost_actor_info, lost_actor_id, cb):
         self._close_actor_ports(lost_actor_id, lost_actor_info)
         cb = CalvinCB(self._delete_lost_actor_cb, lost_actor_id=lost_actor_id,
-                        lost_actor_info=lost_actor_info, org_cb=cb)
+                        lost_actor_info=lost_actor_info, cb=cb)
         self.node.proto.actor_destroy(lost_actor_info['node_id'], callback=cb, actor_id=lost_actor_id)
         
     def _close_actor_ports(self, lost_actor_id, lost_actor_info):
@@ -103,7 +109,7 @@ class Replicator(object):
                            peer_node_id {} and peer_port_id {}".format(node_id, key, node_id, port_id))
                 self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id)
 
-    def _delete_lost_actor_cb(self, status, lost_actor_id, lost_actor_info, org_cb):
+    def _delete_lost_actor_cb(self, status, lost_actor_id, lost_actor_info, cb):
         _log.info("Deleting actor {} from local storage".format(lost_actor_id))
         self.node.storage.delete_actor_from_app(lost_actor_id, lost_actor_info['app_id'])
         self.node.storage.delete_actor(lost_actor_id)
@@ -112,9 +118,9 @@ class Replicator(object):
             self.node.storage.get_node(lost_actor_info['node_id'], self._delete_node)
 
         if not status:
-            org_cb(status=response.CalvinResponse(False))
-        elif org_cb:
-            org_cb(status=status)
+            cb(status=response.CalvinResponse(False))
+        elif cb:
+            cb(status=status)
 
     def _delete_node(self, key, value):
         _log.info("Deleting node {} with value {}".format(key, value))
