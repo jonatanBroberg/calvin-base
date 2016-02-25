@@ -461,7 +461,7 @@ class Storage(object):
             self._delete_node_index(node_id, get_indexed_public, cb=cb)
 
     def _delete_node_index(self, node_id, indexes, cb=None):
-        _log.analyze(self.node_id, "+", {'indexes': indexes})
+        _log.analyze(node_id, "+", {'indexes': indexes})
         try:
             counter = [len(indexes)]  # counter value by reference used in callback
             for index in indexes:
