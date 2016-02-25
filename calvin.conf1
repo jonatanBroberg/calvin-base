@@ -1,5 +1,5 @@
 {
     "global": {
-        "storage_proxy": "calvinip://localhost:5001"
+        "storage_proxy": "calvinip://10.3.11.171:4999"
     }
 }

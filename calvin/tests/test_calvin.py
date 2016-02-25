@@ -273,9 +273,9 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         assert snk not in utils.get_application_actors(rt, app_id)
 
-        d.destroy()
+        #d.destroy()
 
-    def testDeleteRemoteActor(self):
+    def testDeleteMigratedActor(self):
         rt = self.runtime
         peer = self.runtimes[0]
 
@@ -305,8 +305,69 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         self.assertIsNone(utils.get_actor(peer, snk))
 
+        #d.destroy()
+
+    def testDeleteRemoteActor(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+        utils.migrate(rt, snk, peer.id)
+        time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
+        utils.delete_actor(rt, snk)
+        time.sleep(3)
+
+        snk = d.actor_map['simple:snk']
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
+
         d.destroy()
 
+    def testDeleteLocalActorRemotely(self):
+        rt = self.runtime
+        peer = self.runtimes[0]
+
+        script = """
+            src : std.CountTimer()
+            snk : io.StandardOut(store_tokens=1)
+            src.integer > snk.token
+        """
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+
+        snk = d.actor_map['simple:snk']
+
+        time.sleep(0.2)
+
+        assert snk in utils.get_application_actors(rt, app_id)
+        assert snk in utils.get_application_actors(peer, app_id)
+
+        utils.delete_actor(peer, snk)
+        time.sleep(3)
+
+        snk = d.actor_map['simple:snk']
+
+        self.assertIsNone(utils.get_actor(rt, snk))
+        self.assertIsNone(utils.get_actor(peer, snk))
+
+        d.destroy()
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1272,9 +1333,12 @@ class TestActorReplication(CalvinTestBase):
         snk1 = d.actor_map['simple:snk1']
         snk2 = d.actor_map['simple:snk2']
         src = d.actor_map['simple:src']
+
         utils.migrate(rt, snk1, peer.id)
+        time.sleep(0.2)
         utils.migrate(rt, snk2, peer.id)
         time.sleep(0.2)
+
         replica_1 = utils.replicate(peer, snk1, peer.id)
         replica_2 = utils.replicate(peer, snk2, peer.id)
         time.sleep(0.2)
@@ -1595,6 +1659,26 @@ class TestActorReplication(CalvinTestBase):
 @pytest.mark.slow
 class TestLosingActors(CalvinTestBase):
 
+    @pytest.mark.xfail(raises=Exception)
+    def testLoseLastActor(self):
+        rt = self.runtime
+        
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        utils.lost_actor(rt, snk)
+
     def testLoseOneActorFromAppRTOneReplica(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1623,15 +1707,22 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk2: rt2}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            break
+                        except:
+                            time.sleep(0.2)
 
-        assert(2 == len(replicas))
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == len(replicas))
+
         self.assertIsNone(utils.get_actor(rt1, snk))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1675,15 +1766,21 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk: rt1}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            break
+                        except:
+                            time.sleep(0.2)
 
-        assert(2 == len(replicas))
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk2))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1729,15 +1826,21 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk2: rt2, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            break
+                        except:
+                            time.sleep(0.2)
 
-        assert(3 == len(replicas))
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1783,17 +1886,21 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk: rt1, snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if not actor == snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            break
+                        except:
+                            time.sleep(0.2)
 
-            assert snk2 not in actors
-
-        assert(3 == len(replicas))
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == len(replicas))
         self.assertIsNone(utils.get_actor(rt1, snk2))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1840,15 +1947,22 @@ class TestLosingActors(CalvinTestBase):
         replicas = {snk3: rt3}
 
         for rt in [rt1, rt2, rt3]:
-            actors = utils.get_application_actors(rt, app_id)
+            actors = utils.get_actors(rt)
             for actor in actors:
-                a = utils.get_actor(rt, actor)
-                if a:
-                    name = re.sub(uuid_re, "", a['name'])
-                    if name == 'simple:snk' and a['node_id'] == rt.id:
-                        replicas[actor] = rt
+                if actor != snk and actor != snk2:
+                    for i in range(5):
+                        try:
+                            a = utils.get_actor(rt, actor)
+                            name = re.sub(uuid_re, "", a['name'])
+                            if name == 'simple:snk' and a['app_id'] == app_id:
+                                replicas[actor] = rt
+                            break
+                        except:
+                            time.sleep(0.2)
 
-        assert(3 == len(replicas))
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == len(replicas))
+        
         self.assertIsNone(utils.get_actor(rt1, snk))
         self.assertIsNone(utils.get_actor(rt2, snk2))
 
@@ -1864,35 +1978,6 @@ class TestLosingActors(CalvinTestBase):
             utils.delete_actor(a_rt, a_id)
 
         d.destroy()
-
-
-@pytest.mark.essential
-@pytest.mark.slow
-class TestDyingRuntimes(CalvinTestBase):
-
-    def setUp(self):
-        self.runtime = runtime
-        self.runtimes = runtimes
-        self.peerlist = peerlist
-
-        conf = copy.deepcopy(_conf)
-        conf.set('global', 'storage_proxy', self.runtime.uri[0])
-        conf.set('global', 'storage_start', "1")
-        conf.save("/tmp/calvin5030.conf")
-
-        global ip_addr
-        self.ip_addr = ip_addr
-        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
-        csruntime(ip_addr, port=5030, controlport=5031, attr={},
-                  configfile="/tmp/calvin5030.conf")
-        time.sleep(0.5)
-        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
-        self.dying_rt.id = utils.get_node_id(self.dying_rt)
-
-        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
-
-    def tearDown(self):
-        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
 
     def testLoseActorWithOnlyLocalActors(self):
         rt1 = self.runtime
@@ -1931,7 +2016,8 @@ class TestDyingRuntimes(CalvinTestBase):
                 if name == 'simple:snk':
                     replicas = replicas + 1
 
-        assert(2 == replicas)
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == replicas)
         self.assertIsNone(utils.get_actor(rt1, snk_replica))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1953,6 +2039,45 @@ class TestDyingRuntimes(CalvinTestBase):
         self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_actual))
 
         d.destroy()
+
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestDyingRuntimes(CalvinTestBase):
+
+    def setUp(self):
+        self.runtime = runtime
+        self.runtimes = runtimes
+        self.peerlist = peerlist
+
+        conf = copy.deepcopy(_conf)
+        conf.set('global', 'storage_proxy', self.runtime.uri[0])
+        conf.set('global', 'storage_start', "1")
+        conf.save("/tmp/calvin5030.conf")
+
+        global ip_addr
+        self.ip_addr = ip_addr
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        csruntime(ip_addr, port=5030, controlport=5031, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.5)
+        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
+        dying_rt_id = None
+        for i in range(5):
+            try:
+                dying_rt_id = utils.get_node_id(self.dying_rt)
+                break
+            except:
+                time.sleep(0.2)
+        if not dying_rt_id:
+            os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+            assert False
+        self.dying_rt.id = dying_rt_id
+        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
+
+    def tearDown(self):
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
 
     def testLoseSnkActorWithLocalSource(self):
         rt1 = self.runtime
@@ -1981,7 +2106,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -1993,7 +2118,8 @@ class TestDyingRuntimes(CalvinTestBase):
                 if name == 'simple:snk':
                     replicas = replicas + 1
 
-        assert(2 == replicas)
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == replicas)
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2001,11 +2127,22 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        actual_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    actual_replicas.append(actual_tokens(runtime, new_replica_id))
+
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(actual_replica_before)
+
         self.assert_list_prefix(expected, actual)
-        self.assert_list_prefix(expected, actual)
+        for actual_replica in actual_replicas:
+            assert len(actual_replica) > len(actual_replica_before)
+            self.assert_list_prefix(expected, actual_replica)
 
         d.destroy()
 
@@ -2038,7 +2175,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -2050,7 +2187,8 @@ class TestDyingRuntimes(CalvinTestBase):
                 if name == 'simple:snk':
                     replicas = replicas + 1
 
-        assert(2 == replicas)
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == replicas)
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2058,18 +2196,29 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        actual_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    actual_replicas.append(actual_tokens(runtime, snk))
+
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(actual_replica_before)
+        
         self.assert_list_prefix(expected, actual)
-        self.assert_list_prefix(expected, actual)
+        for actual_replica in actual_replicas:
+            assert len(actual_replica) > len(actual_snk_before)
+            self.assert_list_prefix(expected, actual_replica)
 
         d.destroy()
 
     def testLoseSrcActorWithLocalSink(self):
         rt1 = self.runtime
         rt2 = self.dying_rt
-
+        
         script = """
         src : std.CountTimer()
         snk : io.StandardOut(store_tokens=1)
@@ -2093,8 +2242,8 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
-        time.sleep(0.2)
+        new_replicas = utils.lost_actor(rt1, replica)
+        time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
@@ -2105,26 +2254,39 @@ class TestDyingRuntimes(CalvinTestBase):
                 if name == 'simple:src':
                     replicas = replicas + 1
 
-        assert(2 == replicas)
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == replicas)
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
         assert rt2.id not in utils.get_nodes(rt1)
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
-        actual = actual_tokens(rt1, snk)
+        actual_snk = actual_tokens(rt1, snk)
+        expected_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
-        counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        counts = Counter(actual_snk)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
-        filtered_actual = filter(lambda x: x not in unique_elements, actual)
+        filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
+        filtered_expected_replicas = []
+        for expected_replica in expected_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
 
         assert len(expected) > len(expected_before)
-        assert len(actual) > len(actual_snk_before)
-        assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+        assert len(actual_snk) > len(actual_snk_before)
+        assert len(actual_snk) > len(expected_replica_before)
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
         time.sleep(3)
         d.destroy()
@@ -2158,8 +2320,8 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
-        time.sleep(0.2)
+        new_replicas = utils.lost_actor(rt1, replica)
+        time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
@@ -2170,7 +2332,8 @@ class TestDyingRuntimes(CalvinTestBase):
                 if name == 'simple:src':
                     replicas = replicas + 1
 
-        assert(2 == replicas)
+        app = utils.get_application(rt1, app_id)
+        assert(app['required_reliability'] == replicas)
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2178,18 +2341,30 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        expected_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual = filter(lambda x: x not in unique_elements, actual)
+        filtered_expected_replicas = []
+        for expected_replica in expected_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
 
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected), sorted(filtered_actual))
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
         time.sleep(3)
         d.destroy()

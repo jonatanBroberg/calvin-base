@@ -1006,6 +1006,7 @@ class CalvinControl(object):
             3. Delete information about the lost actor
         """
         lost_actor_id = match.group(1)
+        _log.debug("Lost actor {}".format(lost_actor_id))
         self.node.storage.get_actor(lost_actor_id, cb=CalvinCB(func=self._handle_lost_actor, lost_actor_id=lost_actor_id,
                                                                handle=handle, connection=connection))
 
@@ -1016,34 +1017,43 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
             return
 
-        cb = CalvinCB(func=self._handle_lost_application_actor, lost_actor_id=lost_actor_id,
+        cb = CalvinCB(func=self._handle_lost_actor_app_info, lost_actor_id=lost_actor_id,
                       lost_actor_info=value, handle=handle, connection=connection)
-        self.node.storage.get_application_actors(value['app_id'], cb=cb)
+        self.node.storage.get_application(value['app_id'], cb=cb)
 
-    def _handle_lost_application_actor(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
+    def _handle_lost_actor_app_info(self, key, value, lost_actor_id, lost_actor_info, handle, connection):
         """ Get required reliability from app info """
         if not value:
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
 
-        replicator = Replicator(self.node, self, uuid_re)
+        replicator = Replicator(self.node, self, uuid_re, value['required_reliability'])
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
-        replicator.replicate_lost_actor(value, lost_actor_id, lost_actor_info, cb=cb)
-        self.send_response(handle, connection, None, status=calvinresponse.OK)
+        replicator.replicate_lost_actor(lost_actor_id, lost_actor_info, cb=cb)
 
-    def _handle_lost_actor_cb(self, handle, connection, status, *args, **kwargs):
+    def _handle_lost_actor_cb(self, status, handle, connection, *args, **kwargs):
+        data = None if isinstance(status, int) else json.dumps(status.data)
         status = status if isinstance(status, int) else status.status
-        self.send_response(handle, connection, None, status)
+        self.send_response(handle, connection, data, status)
 
     def handle_del_actor(self, handle, connection, match, data, hdr):
         """ Delete actor from id
         """
         try:
-            self.node.am.delete_actor(match.group(1), delete_from_app=True)
-            status = calvinresponse.OK
-        except Exception as e:
-            _log.exception("Destroy actor failed: {}".format(e))
-            status = calvinresponse.NOT_FOUND
-        self.send_response(handle, connection, None, status=status)
+            self.node.am.delete_actor(match.group(1), True)
+            self.send_response(handle, connection, None, status=calvinresponse.OK)
+        except:
+            _log.debug("No actor with id {} on this node".format(match.group(1)))
+            self.node.storage.get_actor(match.group(1), CalvinCB(self._handle_del_actor_other_node, handle=handle, connection=connection))
+
+    def _handle_del_actor_other_node(self, key, value, handle, connection):
+        """ Find where the actor is running 
+        """ 
+        try:
+            self.node.proto.actor_destroy(to_rt_uuid=value['node_id'], callback=None, actor_id=key)
+            self.send_response(handle, connection, None, status=calvinresponse.OK)
+        except:
+            _log.exception('Can not delete actor')
+            self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
 
     def handle_get_actor_report(self, handle, connection, match, data, hdr):
         """ Get report from actor
