@@ -127,14 +127,6 @@ class ActorManager(object):
 
         return a
 
-    def destroy_request(self, actor_id):
-        reply = response.CalvinResponse(True)
-        try:
-            self.delete_actor(actor_id, True)
-        except:
-            reply = response.CalvinResponse(False)
-        return reply
-
     # DEPRECATED: Enabling of an actor is dependent on wether it's connected or not
     def enable(self, actor_id):
         if actor_id in self.actors:
