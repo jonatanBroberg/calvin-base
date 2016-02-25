@@ -17,6 +17,7 @@ class Replicator(object):
         self.replica_id = None
         self.replica_value = None
         self.required_reliability = required_reliability
+        self.new_replicas = {}
 
     def _is_match(self, first, second):
         is_match = re.sub(self.actor_id_re, "", first) == re.sub(self.actor_id_re, "", second)
@@ -48,20 +49,23 @@ class Replicator(object):
         self._find_and_replicate(actors, status, lost_actor_id, lost_actor_info, index + 1, cb)
 
     def _replicate(self, actor_id, actor_info, lost_actor_id, lost_actor_info, status, cb):
-        # TODO: Use status? 
         if not self.replica_id is None:
             if self.current_nbr_of_replicas >= self.required_reliability:
+                status = response.CalvinResponse(data=self.new_replicas)
                 cb(status=status)
                 return
             else:
                 _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
-                new_cb = CalvinCB(func=self._refresh_reliability, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, cb=cb)
-                self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], self.node.id, new_cb)
+                to_node_id = self.node.id
+                new_cb = CalvinCB(func=self._refresh_reliability, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, to_node_id=to_node_id, cb=cb)
+                self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, new_cb)
         else:
             cb(status=response.NOT_FOUND)
             _log.warning("Could not find actor to replicate")
 
-    def _refresh_reliability(self, status, lost_actor_id, lost_actor_info, cb):
+    def _refresh_reliability(self, status, lost_actor_id, lost_actor_info, to_node_id, cb):
+        if status in status.success_list:
+            self.new_replicas[status.data['actor_id']] = to_node_id
         self.current_nbr_of_replicas = 0
         new_cb = CalvinCB(self._refresh_reliability_cb, status=status, lost_actor_id=lost_actor_id, 
                         lost_actor_info=lost_actor_info, cb=cb)
@@ -113,7 +117,7 @@ class Replicator(object):
             org_cb(status=status)
 
     def _delete_node(self, key, value):
-        _log.debug("Deleting node {} with value {}".format(key, value))
+        _log.info("Deleting node {} with value {}".format(key, value))
         if not value:
             return
 

@@ -273,7 +273,7 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         assert snk not in utils.get_application_actors(rt, app_id)
 
-        d.destroy()
+        #d.destroy()
 
     def testDeleteMigratedActor(self):
         rt = self.runtime
@@ -305,7 +305,7 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         self.assertIsNone(utils.get_actor(peer, snk))
 
-        d.destroy()
+        #d.destroy()
 
     def testDeleteRemoteActor(self):
         rt = self.runtime
@@ -1979,35 +1979,6 @@ class TestLosingActors(CalvinTestBase):
 
         d.destroy()
 
-
-@pytest.mark.essential
-@pytest.mark.slow
-class TestDyingRuntimes(CalvinTestBase):
-
-    def setUp(self):
-        self.runtime = runtime
-        self.runtimes = runtimes
-        self.peerlist = peerlist
-
-        conf = copy.deepcopy(_conf)
-        conf.set('global', 'storage_proxy', self.runtime.uri[0])
-        conf.set('global', 'storage_start', "1")
-        conf.save("/tmp/calvin5030.conf")
-
-        global ip_addr
-        self.ip_addr = ip_addr
-        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
-        csruntime(ip_addr, port=5030, controlport=5031, attr={},
-                  configfile="/tmp/calvin5030.conf")
-        time.sleep(0.5)
-        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
-        self.dying_rt.id = utils.get_node_id(self.dying_rt)
-
-        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
-
-    def tearDown(self):
-        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
-
     def testLoseActorWithOnlyLocalActors(self):
         rt1 = self.runtime
 
@@ -2069,6 +2040,45 @@ class TestDyingRuntimes(CalvinTestBase):
 
         d.destroy()
 
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestDyingRuntimes(CalvinTestBase):
+
+    def setUp(self):
+        self.runtime = runtime
+        self.runtimes = runtimes
+        self.peerlist = peerlist
+
+        conf = copy.deepcopy(_conf)
+        conf.set('global', 'storage_proxy', self.runtime.uri[0])
+        conf.set('global', 'storage_start', "1")
+        conf.save("/tmp/calvin5030.conf")
+
+        global ip_addr
+        self.ip_addr = ip_addr
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        csruntime(ip_addr, port=5030, controlport=5031, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.5)
+        self.dying_rt = utils.RT("http://%s:5031" % self.ip_addr)
+        dying_rt_id = None
+        for i in range(5):
+            try:
+                dying_rt_id = utils.get_node_id(self.dying_rt)
+                break
+            except:
+                time.sleep(0.2)
+        if not dying_rt_id:
+            os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+            assert False
+        self.dying_rt.id = dying_rt_id
+        utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
+
+    def tearDown(self):
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+
     def testLoseSnkActorWithLocalSource(self):
         rt1 = self.runtime
         rt2 = self.dying_rt
@@ -2096,7 +2106,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -2117,11 +2127,22 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        actual_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    actual_replicas.append(actual_tokens(runtime, new_replica_id))
+
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(actual_replica_before)
+
         self.assert_list_prefix(expected, actual)
-        self.assert_list_prefix(expected, actual)
+        for actual_replica in actual_replicas:
+            assert len(actual_replica) > len(actual_replica_before)
+            self.assert_list_prefix(expected, actual_replica)
 
         d.destroy()
 
@@ -2154,7 +2175,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -2175,18 +2196,29 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        actual_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    actual_replicas.append(actual_tokens(runtime, snk))
+
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(actual_replica_before)
+        
         self.assert_list_prefix(expected, actual)
-        self.assert_list_prefix(expected, actual)
+        for actual_replica in actual_replicas:
+            assert len(actual_replica) > len(actual_snk_before)
+            self.assert_list_prefix(expected, actual_replica)
 
         d.destroy()
 
     def testLoseSrcActorWithLocalSink(self):
         rt1 = self.runtime
         rt2 = self.dying_rt
-
+        
         script = """
         src : std.CountTimer()
         snk : io.StandardOut(store_tokens=1)
@@ -2210,7 +2242,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        new_replica = utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -2231,21 +2263,30 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
         actual_snk = actual_tokens(rt1, snk)
-        #actual_replica = actual_tokens(rt1, new_replica)
+        expected_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual_snk)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1 or cnt == 2 or cnt == 3]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
-        #filtered_actual_replica = filter(lambda x: x not in unique_elements, actual_replica)
+        filtered_expected_replicas = []
+        for expected_replica in expected_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
 
         assert len(expected) > len(expected_before)
         assert len(actual_snk) > len(actual_snk_before)
         assert len(actual_snk) > len(expected_replica_before)
         self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
-        #self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_replica))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
         time.sleep(3)
         d.destroy()
@@ -2279,7 +2320,7 @@ class TestDyingRuntimes(CalvinTestBase):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
         time.sleep(0.1)
 
-        utils.lost_actor(rt1, replica)
+        new_replicas = utils.lost_actor(rt1, replica)
         time.sleep(0.5)
 
         actors = utils.get_application_actors(rt1, app_id)
@@ -2300,18 +2341,30 @@ class TestDyingRuntimes(CalvinTestBase):
 
         expected = expected_tokens(rt3, src, 'std.CountTimer')
         actual = actual_tokens(rt1, snk)
+        expected_replicas = []
+        for new_replica_id, node_id in new_replicas.iteritems():
+            rts = [self.runtime]
+            rts.extend(self.runtimes)
+            for runtime in rts:
+                if node_id == runtime.id:
+                    expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1 or cnt == 2 or cnt == 3]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual = filter(lambda x: x not in unique_elements, actual)
+        filtered_expected_replicas = []
+        for expected_replica in expected_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
 
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
         self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
         time.sleep(3)
         d.destroy()
