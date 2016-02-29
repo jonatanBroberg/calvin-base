@@ -386,15 +386,10 @@ class CalvinProto(CalvinCBClass):
             actor_id: id of the actor
             callback: called when finished with the peer's respons as argument
         """
-        if self.network.link_request(to_rt_uuid):
+        if self.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy, to_rt_uuid=to_rt_uuid, 
+                                                            callback=callback, actor_id=actor_id)):
             # Already have link just continue in _actor_destroy
             self._actor_destroy(to_rt_uuid, callback, actor_id, status=response.CalvinResponse(True))
-        else:
-            # Request link before continue in _app_destroy
-            self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy,
-                                                                to_rt_uuid=to_rt_uuid,
-                                                                callback=callback,
-                                                                actor_id=actor_id))
 
     def _actor_destroy(self, to_rt_uuid, callback, actor_id, status, peer_node_id=None, uri=None):
         """ Got link? continue actor destruction """
