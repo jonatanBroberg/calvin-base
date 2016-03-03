@@ -88,7 +88,7 @@ class Node(object):
         self.proto = CalvinProto(self, self.network)
         self.pm = PortManager(self, self.proto)
         self.app_manager = appmanager.AppManager(self)
-        self.resource_manager = ResourceManager()
+        self.resource_manager = ResourceManager(self)
 
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:
@@ -176,6 +176,8 @@ class Node(object):
         # FIXME: We still need to sort out actor requirements vs. node capabilities and user permissions.
         # @TODO: Write node capabilities to storage
         return self._calvinsys
+
+
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))

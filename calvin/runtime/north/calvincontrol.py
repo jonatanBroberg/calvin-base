@@ -1060,7 +1060,7 @@ class CalvinControl(object):
 
     def _check_for_original(self, key, value, lost_actor_id, lost_actor_info, actors, current_nodes, replica_id, replica_info, index, cb):
         if value and self._is_match(value['name'], lost_actor_info['name']):
-            _log.info("Found an replica of lost actor: %".format(key))
+            _log.info("Found an replica of lost actor: {}".format(key))
             replica_id = key
             replica_info = value
             current_nodes.append(value['node_id'])

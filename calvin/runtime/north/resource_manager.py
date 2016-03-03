@@ -11,7 +11,8 @@ DEFAULT_HISTORY_SIZE = 5
 
 
 class ResourceManager(object):
-    def __init__(self, history_size=DEFAULT_HISTORY_SIZE):
+    def __init__(self, node, history_size=DEFAULT_HISTORY_SIZE):
+        self.node = node
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliabilities = {}
@@ -19,6 +20,7 @@ class ResourceManager(object):
     def register(self, node_id, usage):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         self.usages[node_id].append(usage)
+        self.reliabilities[node_id] = 0.8
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -45,23 +47,25 @@ class ResourceManager(object):
 
         return most_busy
 
-    #def update_reliability(self, node_id):
+    #def register_reliability(self, node_id):
         # ...
 
     def sort_nodes_reliability(self, node_ids):
-        return node_ids
-        nodes_sorted = {}
+        nodes_rel = {}
         for node_id, reliability in self.reliabilities.iteritems():
             if node_id in node_ids:
-                nodes_sorted[node_id] = reliability
-        return sorted(nodes_sorted.items(), key=operator.itemgetter(1))
+                nodes_rel[node_id] = reliability
+        nodes_sorted = []
+        for key in sorted(nodes_rel.items(), key=operator.itemgetter(1)):
+            nodes_sorted.append(key)
+        return node_ids
 
     def current_reliability(self, current_nodes):
         current = 1
         for node_id, reliability in self.reliabilities.iteritems():
             if node_id in current_nodes:
-                current *= reliability
+                current *= (1-reliability)
         if current == 1: 
             return 0 
         else:
-            return current
+            return 1 - current
