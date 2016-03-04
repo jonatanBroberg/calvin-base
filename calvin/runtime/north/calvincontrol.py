@@ -171,6 +171,18 @@ re_get_application = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid
 
 control_api_doc += \
     """
+    GET /reliability/{node-id}
+    Get reliability of the node node-id
+    Response status code: OK or NOT_FOUND
+    Response:
+    {
+         "reliability": <reliability of the node>
+    }
+"""
+re_get_reliability = re.compile(r"GET /reliability/(NODE_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+
+control_api_doc += \
+    """
     GET /application/{application-id}/actors
     Get list of actors for application
     Response status code: OK or NOT_FOUND
@@ -1026,21 +1038,31 @@ class CalvinControl(object):
         if not value:
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
 
+        cb = CalvinCB(self._replica_nodes, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info,
+                        required_reliability=value['required_reliability'], handle=handle, connection=connection) 
+        self.node.storage.get_replica_nodes(lost_actor_info['app_id'], re.sub(uuid_re, "", lost_actor_info['name']), cb)
+
+    def _replica_nodes(self, key, value, lost_actor_id, lost_actor_info, required_reliability, handle, connection):
+        print value
+        #if value:
+
+         #   self._start_replicator(value, a,a , lost_actor_id, lost_actor_info, required_reliability, handle, connection)
+        #else:
         cb = CalvinCB(self._start_replicator, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info,
-                        required_reliability=value['required_reliability'], handle=handle, connection=connection)
-        self._actor_nodes(lost_actor_id, lost_actor_info, cb)
+                            required_reliability=required_reliability, handle=handle, connection=connection)
+        self._find_replica_nodes(lost_actor_id, lost_actor_info, cb)
 
-    def _start_replicator(self, current_nodes, replica_id, replica_info, lost_actor_id, lost_actor_info, required_reliability, handle, connection):
+    def _start_replicator(self, current_nodes, replica_id, replica_node, lost_actor_id, lost_actor_info, required_reliability, handle, connection):
         replicator = Replicator(self.node, self, required_reliability, current_nodes)
-        cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
-        replicator.replicate_lost_actor(lost_actor_id, lost_actor_info, replica_id, replica_info, cb)
+        cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection, current_nodes=current_nodes)
+        replicator.replicate_lost_actor(lost_actor_id, lost_actor_info, replica_id, replica_node, cb)
 
-    def _handle_lost_actor_cb(self, status, handle, connection, *args, **kwargs):
+    def _handle_lost_actor_cb(self, status, handle, connection, current_nodes, *args, **kwargs):
         data = None if isinstance(status, int) else json.dumps(status.data)
         status = status if isinstance(status, int) else status.status
         self.send_response(handle, connection, data, status)
 
-    def _actor_nodes(self, lost_actor_id, lost_actor_info, cb):
+    def _find_replica_nodes(self, lost_actor_id, lost_actor_info, cb):
         cb = CalvinCB(self._find_app_actors, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, cb=cb)
         self.node.storage.get_application_actors(lost_actor_info['app_id'], cb)
 
@@ -1050,24 +1072,24 @@ class CalvinControl(object):
         _log.info("Replicating lost actor: {}".format(lost_actor_id))
         if lost_actor_id in value:
             value.remove(lost_actor_id)
-        self._find_replicas(value, lost_actor_id, lost_actor_info, current_nodes=[], replica_id=None, replica_info=None, index=0, cb=cb)
+        self._find_replicas(value, lost_actor_id, lost_actor_info, current_nodes=[], replica_id=None, replica_node=None, index=0, cb=cb)
 
-    def _find_replicas(self, actors, lost_actor_id, lost_actor_info, current_nodes, replica_id, replica_info, index, cb):
+    def _find_replicas(self, actors, lost_actor_id, lost_actor_info, current_nodes, replica_id, replica_node, index, cb):
         cb = CalvinCB(self._check_for_original, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, actors=actors, 
-                        current_nodes=current_nodes, replica_id=replica_id, replica_info=replica_info, index=index, cb=cb)
+                        current_nodes=current_nodes, replica_id=replica_id, replica_node=replica_node, index=index, cb=cb)
         _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
         self.node.storage.get_actor(actors[index], cb=cb)
 
-    def _check_for_original(self, key, value, lost_actor_id, lost_actor_info, actors, current_nodes, replica_id, replica_info, index, cb):
+    def _check_for_original(self, key, value, lost_actor_id, lost_actor_info, actors, current_nodes, replica_id, replica_node, index, cb):
         if value and self._is_match(value['name'], lost_actor_info['name']):
             _log.info("Found an replica of lost actor: {}".format(key))
             replica_id = key
-            replica_info = value
+            replica_node = value['node_id']
             current_nodes.append(value['node_id'])
         if index == len(actors) - 1:
-            cb(current_nodes, replica_id, replica_info)
+            cb(current_nodes, replica_id, replica_node)
         else:
-            self._find_replicas(actors, lost_actor_id, lost_actor_info, current_nodes, replica_id, replica_info, index + 1, cb)
+            self._find_replicas(actors, lost_actor_id, lost_actor_info, current_nodes, replica_id, replica_node, index + 1, cb)
 
     def _is_match(self, first, second):
         is_match = re.sub(uuid_re, "", first) == re.sub(uuid_re, "", second)

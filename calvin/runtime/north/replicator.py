@@ -13,14 +13,14 @@ class Replicator(object):
         self.control = control
         self.required_reliability = required_reliability
         self.new_replicas = {}
-        self.current_nodes =current_nodes
+        self.current_nodes = current_nodes
 
-    def replicate_lost_actor(self, lost_actor_id, lost_actor_info, replica_id, replica_info, cb):
+    def replicate_lost_actor(self, lost_actor_id, lost_actor_info, replica_id, replica_node, cb):
         cb = CalvinCB(self._replicate, lost_actor_id=lost_actor_id, lost_actor_info=lost_actor_info, 
-                        replica_id=replica_id, replica_info=replica_info, cb=cb)
+                        replica_id=replica_id, replica_node=replica_node, cb=cb)
         self._delete_lost_actor(lost_actor_info, lost_actor_id, cb=cb)
 
-    def _replicate(self, status, lost_actor_id, lost_actor_info, replica_id, replica_info, cb):
+    def _replicate(self, status, lost_actor_id, lost_actor_info, replica_id, replica_node, cb):
         available_nodes = []
         for node_id, link in self.node.network.links.iteritems():
             if node_id not in self.current_nodes:
@@ -30,9 +30,12 @@ class Replicator(object):
         while self.node.resource_manager.current_reliability(self.current_nodes) < self.required_reliability and len(available_nodes) > 0:
             to_node_id = available_nodes.pop(0)
             _log.info("Sending replication request of actor {} to node {}".format(replica_id, to_node_id))
-            self.node.proto.actor_replication_request(replica_id, replica_info['node_id'], to_node_id, cb)
+            self.node.proto.actor_replication_request(replica_id, replica_node, to_node_id, self._collect_new_replicas)
             self.current_nodes.append(to_node_id)
-        print 'Current reliability: ', self.node.resource_manager.current_reliability(self.current_nodes)
+        cb(response.OK)
+
+    def _collect_new_replicas(self, status):
+        self.new_replicas.append(status.data)
 
     def _delete_lost_actor(self, lost_actor_info, lost_actor_id, cb):
         self._close_actor_ports(lost_actor_id, lost_actor_info)

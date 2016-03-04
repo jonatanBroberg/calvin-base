@@ -1705,6 +1705,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt1, snk)
         time.sleep(0.3)
         replicas = {snk2: rt2}
+        reliability = 1
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1715,13 +1716,14 @@ class TestLosingActors(CalvinTestBase):
                             a = utils.get_actor(rt, actor)
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
+                                #reliability *= utils.get_reliability(a['node_id'])
                                 replicas[actor] = rt
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, snk))
 
