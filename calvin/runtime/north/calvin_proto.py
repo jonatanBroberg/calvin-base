@@ -382,9 +382,7 @@ class CalvinProto(CalvinCBClass):
         self.network.links[payload['from_rt_uuid']].send(msg)
 
     def actor_destroy(self, to_rt_uuid, callback, actor_id): 
-        """ Destroys an actor on to_rt_uuid node
-            actor_id: id of the actor
-            callback: called when finished with the peer's respons as argument
+        """ Detroys an actor on a remote rt
         """
         if self.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy, to_rt_uuid=to_rt_uuid, 
                                                             callback=callback, actor_id=actor_id)):
@@ -392,7 +390,6 @@ class CalvinProto(CalvinCBClass):
             self._actor_destroy(to_rt_uuid, callback, actor_id, status=response.CalvinResponse(True))
 
     def _actor_destroy(self, to_rt_uuid, callback, actor_id, status, peer_node_id=None, uri=None):
-        """ Got link? continue actor destruction """
         if status:
             msg = {'cmd': 'ACTOR_DESTROY', 'actor_id':actor_id}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
@@ -402,12 +399,7 @@ class CalvinProto(CalvinCBClass):
     def actor_destroy_handler(self, payload):
         """ Peer requested deletion of actor 
         """
-        try:
-            self.node.am.delete_actor(payload['actor_id'], delete_from_app=True)
-            reply = response.CalvinResponse(response.OK)
-        except:
-            _log.exception("Destroy actor failed")
-            reply = response.CalvinResponse(response.NOT_FOUND)
+        reply = self.node.am.destroy_request(payload['actor_id'])
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
