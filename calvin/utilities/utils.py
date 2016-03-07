@@ -283,10 +283,11 @@ def report(rt, actor_id, timeout=TIMEOUT, async=False):
     r = req.get(rt.control_uri + '/actor/' + actor_id + '/report', timeout=timeout)
     return check_response(r)
 
+
 def get_reliability(rt, node_id, timeout=TIMEOUT, async=False):
     rt = get_RT(rt)
     req = session if async else requests
-    r = req.get(rt.control_uri + '/reliability', timeout=timeout)
+    r = req.get(rt.control_uri + '/reliability/' + node_id, timeout=timeout)
     return check_response(r)
 
 
@@ -308,6 +309,13 @@ def get_application_actors(rt, application_id, timeout=TIMEOUT, async=False):
     rt = get_RT(rt)
     req = session if async else requests
     r = req.get(rt.control_uri + '/application/{}/actors'.format(application_id), timeout=timeout)
+    return check_response(r)
+
+
+def get_replica_nodes(rt, application_id, actor_name, timeout=TIMEOUT, async=False):
+    rt = get_RT(rt)
+    req = session if async else requests
+    r = req.get(rt.control_uri + '/application/{}/actor/{}'.format(application_id, actor_name), timeout=timeout)
     return check_response(r)
 
 

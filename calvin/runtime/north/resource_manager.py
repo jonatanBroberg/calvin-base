@@ -47,8 +47,8 @@ class ResourceManager(object):
 
         return most_busy
 
-    #def register_reliability(self, node_id):
-        # ...
+    def get_reliability(self, node_id):
+        return self.reliabilities[node_id]
 
     def sort_nodes_reliability(self, node_ids):
         nodes_rel = {}

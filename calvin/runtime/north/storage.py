@@ -555,7 +555,6 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
-            print app_id + ":" + re.sub(uuid_re, "", actor.name)
             self.append("replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor.name), value=[node_id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):
@@ -569,6 +568,7 @@ class Storage(object):
         Delete actor from storage
         """
         _log.debug("Delete actor id %s" % (actor_id))
+        self.get_actor(actor_id, cb=self._delete_replica_nodes)
         self.delete(prefix="actor-", key=actor_id, cb=cb)
 
     def delete_actor_from_app(self, app_id, actor_id):
@@ -578,13 +578,15 @@ class Storage(object):
             return
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
-        self.get_actor(actor_id, cb=self._delete_replica_node)
 
-    def _delete_replica_node(self, key, value):
+    def _delete_replica_nodes(self, key, value):
         """
-        Delete one instance of node_id from the replicas nodes 
+        Delete node_id from the list of replica nodes 
         """
-        print 'Deleting', key, value
+        if not value:
+            _log.warning("Cannot delete node from replica nodes, actor {} cant be found".format(key))
+            return
+
         self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
