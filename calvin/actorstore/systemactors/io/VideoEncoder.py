@@ -85,13 +85,19 @@ class VideoEncoder(Actor):
         host = self.url.split(":")[0]
         port = int(self.url.split(":")[1])
         send = True
+        frame_count = 0
         while send:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((host, port))
             success, image = self.video.read()
             if success:
                 ret, jpeg = cv2.imencode(".jpg", image)
-                s.sendall(jpeg.tobytes())
+                data = {
+                    'frame_count': frame_count,
+                    'frame': jpeg.tobytes().decode("latin-1")
+                }
+                frame_count += 1
+                s.sendall(json.dumps(data))
             else:
                 send = False
             time.sleep(0.05)
