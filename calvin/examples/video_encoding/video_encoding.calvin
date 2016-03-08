@@ -1,0 +1,18 @@
+component UDPDump(uri) -> {
+    set_uri : json.SetValue()
+    listener : net.UDPListener()
+    encoder : io.VideoEncoder()
+    get : json.GetValue()
+
+    {"command" : "listen" } > set_uri.container
+    "uri" > set_uri.key
+    uri > set_uri.value
+    set_uri.container > listener.control_in
+    listener.data_out > get.container
+    "data" > get.key
+
+    "send" > encoder.send
+    get.value > encoder.filename
+}
+
+dump : UDPDump(uri="udp://127.0.0.1:6001")
