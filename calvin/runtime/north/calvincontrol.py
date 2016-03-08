@@ -1064,9 +1064,9 @@ class CalvinControl(object):
         if not value:
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
 
-        replicator = Replicator(self.node, self, uuid_re, value['required_reliability'])
+        replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'], uuid_re)
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
-        replicator.replicate_lost_actor(lost_actor_id, lost_actor_info, cb=cb)
+        replicator.replicate_lost_actor(cb)
 
     def _handle_lost_actor_cb(self, status, handle, connection):
         """ Send response, data is a list of new replicas"""
