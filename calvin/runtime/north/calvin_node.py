@@ -88,7 +88,7 @@ class Node(object):
         self.proto = CalvinProto(self, self.network)
         self.pm = PortManager(self, self.proto)
         self.app_manager = appmanager.AppManager(self)
-        self.resource_manager = ResourceManager(self)
+        self.resource_manager = ResourceManager()
 
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:

@@ -11,8 +11,7 @@ DEFAULT_HISTORY_SIZE = 5
 
 
 class ResourceManager(object):
-    def __init__(self, node, history_size=DEFAULT_HISTORY_SIZE):
-        self.node = node
+    def __init__(self, history_size=DEFAULT_HISTORY_SIZE):
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliabilities = {}
