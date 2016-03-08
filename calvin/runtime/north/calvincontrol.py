@@ -171,6 +171,18 @@ re_get_application = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid
 
 control_api_doc += \
     """
+    GET /reliability/{node-id}
+    Get reliability of the node node-id
+    Response status code: OK or NOT_FOUND
+    Response:
+    {
+         "reliability": <reliability of the node>
+    }
+"""
+re_get_reliability = re.compile(r"GET /reliability/(NODE_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+
+control_api_doc += \
+    """
     GET /application/{application-id}/actors
     Get list of actors for application
     Response status code: OK or NOT_FOUND
@@ -180,6 +192,18 @@ control_api_doc += \
     }
 """
 re_get_application_actors = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid_re + ")/actors\sHTTP/1")
+
+control_api_doc += \
+    """
+    GET /application/{application-id}/actor/{actor-name}
+    Get list of which nodes hold a replica of actor
+    Response status code: OK or NOT_FOUND
+    Response:
+    {
+         "nodes": <list of node ids>
+    }
+"""
+re_get_replica_nodes = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid_re + ")/actor/(.*)\sHTTP/1")
 
 control_api_doc += \
     """
@@ -685,10 +709,12 @@ class CalvinControl(object):
             (re_get_node_id, self.handle_get_node_id),
             (re_get_nodes, self.handle_get_nodes),
             (re_get_node, self.handle_get_node),
+            (re_get_reliability, self.handle_get_reliability),
             (re_post_peer_setup, self.handle_peer_setup),
             (re_get_applications, self.handle_get_applications),
             (re_get_application, self.handle_get_application),
             (re_get_application_actors, self.handle_get_application_actors),
+            (re_get_replica_nodes, self.handle_get_replica_nodes),
             (re_del_application, self.handle_del_application),
             (re_post_new_actor, self.handle_new_actor),
             (re_get_actors, self.handle_get_actors),
@@ -954,10 +980,22 @@ class CalvinControl(object):
         self.node.storage.get_application(match.group(1), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
+    def handle_get_reliability(self, handle, connection, match, data, hdr):
+        """ Ge reliability of node
+        """
+        reliability = self.node.resource_manager.get_reliability(match.group(1))
+        self.send_response(handle, connection, json.dumps(reliability))
+
     def handle_get_application_actors(self, handle, connection, match, data, hdr):
         """ Get application from id
         """
         self.node.storage.get_application_actors(match.group(1), CalvinCB(
+            func=self.storage_cb, handle=handle, connection=connection))
+
+    def handle_get_replica_nodes(self, handle, connection, match, data, hdr):
+        """ Get nodes from app_id and actor_name
+        """
+        self.node.storage.get_replica_nodes(match.group(1), match.group(2), CalvinCB(
             func=self.storage_cb, handle=handle, connection=connection))
 
     def handle_del_application(self, handle, connection, match, data, hdr):
@@ -1030,7 +1068,8 @@ class CalvinControl(object):
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
         replicator.replicate_lost_actor(lost_actor_id, lost_actor_info, cb=cb)
 
-    def _handle_lost_actor_cb(self, status, handle, connection, *args, **kwargs):
+    def _handle_lost_actor_cb(self, status, handle, connection):
+        """ Send response, data is a list of new replicas"""
         data = None if isinstance(status, int) else json.dumps(status.data)
         status = status if isinstance(status, int) else status.status
         self.send_response(handle, connection, data, status)

@@ -1,5 +1,5 @@
-import re
 import random
+import re
 
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import calvinresponse as response

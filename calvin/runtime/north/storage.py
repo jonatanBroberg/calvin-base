@@ -32,6 +32,8 @@ from calvin.utilities import dynops
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
 
+uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 class Storage(object):
 
     """
@@ -512,6 +514,12 @@ class Storage(object):
         """
         return self.get_concat(prefix="app-actors-", key=application_id, cb=cb)
 
+    def get_replica_nodes(self, app_id, actor_name, cb=None):
+        """
+        Get the nodes for where there exists replicas of the actor actor_name in the app app_id
+        """
+        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "",actor_name), cb=cb)
+
     def delete_application(self, application_id, cb=None):
         """
         Delete application from storage
@@ -547,6 +555,7 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
+            self.append("replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor.name), value=[node_id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):
         """
@@ -559,6 +568,7 @@ class Storage(object):
         Delete actor from storage
         """
         _log.debug("Delete actor id %s" % (actor_id))
+        self.get_actor(actor_id, cb=self._delete_replica_nodes)
         self.delete(prefix="actor-", key=actor_id, cb=cb)
 
     def delete_actor_from_app(self, app_id, actor_id):
@@ -568,6 +578,16 @@ class Storage(object):
             return
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
+
+    def _delete_replica_nodes(self, key, value):
+        """
+        Delete node_id from the list of replica nodes 
+        """
+        if not value:
+            _log.warning("Cannot delete node from replica nodes, actor {} cant be found".format(key))
+            return
+
+        self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
