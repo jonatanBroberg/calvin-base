@@ -37,84 +37,35 @@ class VideoEncoder(Actor):
     Read a file line by line, and send each line as a token on output port
 
     Inputs:
-      filename : File to read. If file doesn't exist, an ExceptionToken is produced
-      send : #
+      in : data to encode and send
     """
 
     @manage([])
     def init(self):
         self.did_read = False
-        self.file_not_found = False
-        self.video = None
         self.use(requirement='calvinsys.io.filehandler', shorthand='file')
-        self.end_of_file = False
-        self.filename = None
-        self.handle = None
-        self.url = None
 
-    @condition(['filename'])
-    @guard(lambda self, filename: not self.video and not self.filename)
-    def open_file(self, data):
-        print "\n" * 3
-        print "opening"
-        data = json.loads(data)
-        self.url = data['url']
-        filename = data['filename']
-        self.filename = filename
-        print "filename"
-        try:
-            self.video = cv2.VideoCapture("videos/" + filename)
-            self.end_of_file = False
-            print "opened"
-        except:
-            self.video = None
-            self.file_not_found = True
-        print "\n" * 5
-        return ActionResult()
+    @condition(['in'])
+    def encode(self, data):
+        url = data['url']
+        host = url.split(":")[0]
+        port = int(url.split(":")[1])
 
-    @condition([])
-    @guard(lambda self: self.file_not_found)
-    def file_not_found(self):
-        token = ExceptionToken(value="File not found")
-        self.file_not_found = False  # Only report once
-        return ActionResult(production=(token, ))
+        frame = data.get('frame')
 
-    @condition(['send'])
-    @guard(lambda self, send: self.video and self.url and not self.end_of_file)
-    def read(self, send):
-        host = self.url.split(":")[0]
-        port = int(self.url.split(":")[1])
-        send = True
-        frame_count = 0
-        while send:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
-            success, image = self.video.read()
-            if success:
-                ret, jpeg = cv2.imencode(".jpg", image)
-                data = {
-                    'frame_count': frame_count,
-                    'frame': jpeg.tobytes().decode("latin-1")
-                }
-                frame_count += 1
-                s.sendall(json.dumps(data))
-            else:
-                send = False
-            time.sleep(0.05)
-            s.close()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+        if frame is not None:
+            ret, jpeg = cv2.imencode(".jpg", frame)
+            data['frame'] = jpeg.tobytes().decode("latin-1")
 
-        self.end_of_file = True
-        return ActionResult()
+        s.sendall(json.dumps(data))
+        time.sleep(0.05)
+        s.close()
 
-    @condition([])
-    @guard(lambda self: self.video and self.end_of_file)
-    def eof(self):
-        self.video.release()
-        self.video = None
-        self.filename = None
-        return ActionResult()  # production=(b"", ))  # EOSToken(), ))
+        return ActionResult(production=())
 
-    action_priority = (open_file, file_not_found, read, eof)
+    action_priority = (encode, )
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
