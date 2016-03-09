@@ -17,7 +17,10 @@
 import cv2
 import socket
 import time
+import base64
+import time
 import json
+import pickle
 
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
 from calvin.runtime.north.calvin_token import EOSToken, ExceptionToken
@@ -53,26 +56,26 @@ class VideoReader(Actor):
         self.filename = None
         self.handle = None
         self.url = None
+        self.active_frame = None
+        self.active_frame_index = 0
+        self.total_sent = 0
+        self.active_frame_length = 0
+        self.active_frame_data = ""
 
     @condition(['filename'])
     @guard(lambda self, filename: not self.video and not self.filename)
     def open_file(self, data):
-        print "\n" * 3
-        print "opening"
         self.frame_count = 0
         data = json.loads(data)
         self.url = data['url']
         filename = data['filename']
         self.filename = filename
-        print "filename"
         try:
             self.video = cv2.VideoCapture("videos/" + filename)
             self.end_of_file = False
-            print "opened"
         except:
             self.video = None
             self.file_not_found = True
-        print "\n" * 5
         return ActionResult()
 
     @condition([])
@@ -82,22 +85,76 @@ class VideoReader(Actor):
         self.file_not_found = False  # Only report once
         return ActionResult(production=(token, ))
 
-    @condition(['send'], ['out'])
-    @guard(lambda self, send: self.video and self.url and not self.end_of_file)
+    @condition(['send'])
+    @guard(lambda self, send: self.video and self.url and not self.end_of_file and self.active_frame is None)
     def read(self, send):
+        #print "\n"
+        #print "READ", time.time()
+        #print self.active_frame
+        #print time.time()
         success, image = self.video.read()
         data = {
             'frame_count': -1,
             'url': self.url
         }
         if success:
-            data['frame'] = image
+            #data['frame'] = image.tolist()  # [0][0:10]  # .tolist()  # dumps()  # .decode("latin-1")
+            height = len(image)
+            length = len(image[0])
+            #image = image[height / 4 : height - (height / 4), length / 4 : length - (length / 4)]
+            #image = image[100:150, 200:300]  # height / 4 : height - (height / 4), length / 4 : length - (length / 4)]
+            #data['frame'] = pickle.dumps(image, protocol=0)
+
+            self.active_frame = image
+            data_b64 = base64.b64encode(image.data)
+            self.active_frame_data = data_b64
+            self.active_frame_length = len(data_b64)
+            data['frame'] = {
+                "ndarray": data_b64,
+                "dtype": str(image.dtype),
+                "shape": image.shape
+            }
             data['frame_count'] = self.frame_count
-            self.frame_count += 1
+            #self.frame_count += 1
         else:
             self.end_of_file = True
 
-        return ActionResult(production=(data, ))
+        #time.sleep(2)  # 0.15)
+        return ActionResult(production=(), did_fire=False)  # data, ))
+
+    @condition([], ['out'])
+    @guard(lambda self: self.active_frame is not None)
+    def send(self):
+        #print "SEND", self.frame_count, time.time()
+        data = {
+            'frame': {
+                "dtype": str(self.active_frame.dtype),
+                "shape": self.active_frame.shape
+            },
+            'url': self.url,
+            'frame_count': self.frame_count,
+            'expected_length': self.active_frame_length,
+        }
+        size = 30 * 1024
+        if self.active_frame_index + size < self.active_frame_length - 1:
+            data_b64 = self.active_frame_data[self.active_frame_index : self.active_frame_index + size]
+            data['frame']['ndarray'] = data_b64
+            self.active_frame_index = self.active_frame_index + size
+            self.total_sent += len(data_b64)
+        else:
+            data_b64 = self.active_frame_data[self.active_frame_index : ]
+            self.total_sent += len(data_b64)
+            self.total_sent = 0
+            self.active_frame_data = ""
+            data['frame']["ndarray"] = data_b64
+            #data['frame_count'] = self.frame_count
+            self.frame_count += 1
+            self.active_frame_index = 0
+            self.active_frame = None
+
+        #print "sending:", len(data['frame']['ndarray'])
+        #print time.time()
+        return ActionResult(production=(data,))  # data, ))
 
     @condition([])
     @guard(lambda self: self.video and self.end_of_file)
@@ -107,7 +164,7 @@ class VideoReader(Actor):
         self.filename = None
         return ActionResult()  # production=(b"", ))  # EOSToken(), ))
 
-    action_priority = (open_file, file_not_found, read, eof)
+    action_priority = (open_file, file_not_found, send, read, eof)
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
