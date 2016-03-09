@@ -17,6 +17,8 @@ class Replicator(object):
         self.new_replicas = {}
         self.uuid_re = uuid_re
         self.current_nbr_of_replicas = 0
+        self.replica_id = None
+        self.replica_value = None
              
     def replicate_lost_actor(self, cb):
         cb = CalvinCB(self._find_replica_nodes, cb=cb)
@@ -33,7 +35,6 @@ class Replicator(object):
             _log.error("Failed to get replica nodes or no there is no replica")
             cb(response.CalvinResponse(False))
             return
-        
         current_nodes=value
         if self.lost_actor_info['node_id'] in current_nodes:
             current_nodes.remove(self.lost_actor_info['node_id'])
@@ -72,7 +73,8 @@ class Replicator(object):
 
     def _replicate(self, actor_id, actor_info, current_nodes, cb):
         if not self.replica_id is None:
-            if self.current_nbr_of_replicas >= self.required_reliability:
+            #if self.node.resource_manager.current_reliability(current_nodes) > self.required_reliability:
+            if len(current_nodes) == self.required_reliability:  #self.current_nbr_of_replicas >= self.required_reliability:
                 status = response.CalvinResponse(data=self.new_replicas)
                 cb(status=status)
                 return
@@ -87,7 +89,6 @@ class Replicator(object):
                 else:
                     _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
                     to_node_id = available_nodes.pop(0)
-                    print self.node.resource_manager.current_reliability(current_nodes)
                     cb = CalvinCB(func=self._refresh_reliability, to_node_id=to_node_id, current_nodes=current_nodes, cb=cb)
                     self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, cb)
         else:

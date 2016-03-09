@@ -568,8 +568,8 @@ class Storage(object):
         Delete actor from storage
         """
         _log.debug("Delete actor id %s" % (actor_id))
-        self.get_actor(actor_id, cb=self._delete_replica_nodes)
-        self.delete(prefix="actor-", key=actor_id, cb=cb)
+        cb = CalvinCB(self._delete_replica_nodes, cb=cb)
+        self.get_actor(actor_id, cb=cb)
 
     def delete_actor_from_app(self, app_id, actor_id):
         """Remove actor_id from application's list of actors"""
@@ -579,15 +579,16 @@ class Storage(object):
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
 
-    def _delete_replica_nodes(self, key, value):
+    def _delete_replica_nodes(self, key, value, cb):
         """
         Delete node_id from the list of replica nodes 
         """
         if not value:
-            _log.warning("Cannot delete node from replica nodes, actor {} cant be found".format(key))
+            _log.warning("Cannot delete actor {}, cant be found in storage".format(key))
             return
 
         self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
+        self.delete(prefix="actor-", key=key, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
