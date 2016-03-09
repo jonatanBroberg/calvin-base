@@ -1086,8 +1086,8 @@ class CalvinControl(object):
             self.node.storage.get_actor(match.group(1), CalvinCB(self._handle_del_actor_other_node, handle=handle, connection=connection))
 
     def _handle_del_actor_other_node(self, key, value, handle, connection):
-        """ Find where the actor is running 
-        """ 
+        """ Find where the actor is running
+        """
         try:
             self.node.proto.actor_destroy(to_rt_uuid=value['node_id'], callback=None, actor_id=key)
             self.send_response(handle, connection, None, status=calvinresponse.OK)

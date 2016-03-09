@@ -338,8 +338,9 @@ class CalvinNetwork(object):
         _log.analyze(self.node.id, "+", {'value': value}, peer_node_id=key, tb=True)
         # Test if value is None or False indicating node does not currently exist in storage
         if not value:
-            # the peer_id did not exist in storage
-            callback(status=response.CalvinResponse(response.NOT_FOUND, {'peer_node_id': key}))
+            if callback:
+                # the peer_id did not exist in storage
+                callback(status=response.CalvinResponse(response.NOT_FOUND, {'peer_node_id': key}))
             return
 
         # join the peer node
@@ -364,6 +365,9 @@ class CalvinNetwork(object):
             peer_node_id=rt_id)
         if rt_id in self.links and link == self.links[rt_id].transport:
             self.link_remove(rt_id)
+            if rt_id not in self.links:
+                _log.error("Peer disconnected: {}".format(reason))
+                self.node.lost_node(rt_id)
 
         if rt_id not in self.links:
             self.node.lost_node(rt_id)

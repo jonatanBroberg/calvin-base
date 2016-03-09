@@ -291,6 +291,9 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_handler(self, payload):
         """ Peer request new actor with state and connections """
+        if self.node.storage_node:
+            return self._actor_replication_handler(payload, status=response.CalvinResponse(False, data={}))
+
         _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
@@ -311,6 +314,7 @@ class CalvinProto(CalvinCBClass):
         from_node_id to to_node_id
         """
         _log.analyze(self.rt_id, "+", "Request replication of actor {} from {} to {}".format(actor_id, from_node_id, to_node_id))
+        _log.info("Got replication request of actor {} from {} to {}".format(actor_id, from_node_id, to_node_id))
         if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request,
                                                                  actor_id=actor_id,
                                                                  from_node_id=from_node_id,
@@ -337,7 +341,14 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
         """Potentially requested a successfull replication"""
-        resp = response.CalvinResponse(status=status.status, data={'actor_id':status.data.get('actor_id')})
+        print status
+        print args
+        print kwargs
+        if status.data:
+            resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
+        else:
+            resp = response.CalvinResponse(status=response.CalvinResponse(False))
+            # status.status, data={'actor_id': status.data.get('actor_id')})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
@@ -381,7 +392,7 @@ class CalvinProto(CalvinCBClass):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
-    def actor_destroy(self, to_rt_uuid, callback, actor_id): 
+    def actor_destroy(self, to_rt_uuid, callback, actor_id):
         """ Destroys an actor on to_rt_uuid node
             actor_id: id of the actor
             callback: called when finished with the peer's respons as argument
@@ -405,7 +416,7 @@ class CalvinProto(CalvinCBClass):
             callback(status=status)
 
     def actor_destroy_handler(self, payload):
-        """ Peer requested deletion of actor 
+        """ Peer requested deletion of actor
         """
         try:
             self.node.am.delete_actor(payload['actor_id'], delete_from_app=True)

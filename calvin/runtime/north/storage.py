@@ -562,6 +562,8 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
+            print "\n\n\n\n\nADDING:"
+            print app_id + ":" + re.sub(uuid_re, "", actor.name)
             self.append("replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor.name), value=[node_id], cb=cb)
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)

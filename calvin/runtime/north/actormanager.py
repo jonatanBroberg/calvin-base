@@ -104,6 +104,7 @@ class ActorManager(object):
 
     def _delete_actor_disconnected(self, actor, delete_from_app, actor_id, status, *args, **kwargs):
         if not status:
+            del self.actors[actor.id]
             _log.warning("Disconnecting of actor {} failed: {}".format(actor_id, status))
             return
         # @TOOD - check order here
@@ -262,6 +263,7 @@ class ActorManager(object):
                 actor_id, node_id))
             # Can only replicate actors from our node
             if callback:
+                _log.warning("Can only replicate actors from our node")
                 callback(status=response.CalvinResponse(False))
             return
 
