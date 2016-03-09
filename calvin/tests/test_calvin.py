@@ -2165,7 +2165,7 @@ class TestDyingRuntimes(CalvinTestBase):
             rts.extend(self.runtimes)
             for runtime in rts:
                 if node_id == runtime.id:
-                    actual_replicas.append(actual_tokens(runtime, snk))
+                    actual_replicas.append(actual_tokens(runtime, new_replica_id))
 
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)

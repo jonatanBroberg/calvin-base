@@ -17,7 +17,11 @@ class Replicator(object):
         self.new_replicas = {}
         self.uuid_re = uuid_re
         self.current_nbr_of_replicas = 0
-
+        self.available = []
+        for (node_id, link) in self.node.network.links.iteritems():
+            if node_id != lost_actor_info['node_id']:
+                self.available.append(node_id)
+             
     def _is_match(self, first, second):
         is_match = re.sub(self.uuid_re, "", first) == re.sub(self.uuid_re, "", second)
         _log.debug("{} and {} is match: ".format(first, second, is_match))
@@ -63,11 +67,7 @@ class Replicator(object):
                 return
             else:
                 _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
-                """nodes = []
-                for (node_id, link) in self.node.network.links.iteritems():
-                    if node_id != self.
-                """
-                to_node_id = self.node.id
+                to_node_id = self.available.pop(0)
                 cb = CalvinCB(func=self._refresh_reliability, to_node_id=to_node_id, cb=cb)
                 self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, cb)
         else:
