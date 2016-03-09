@@ -23,11 +23,10 @@ class Replicator(object):
                 self.available.append(node_id)
              
     def replicate_lost_actor(self, cb):
-        #cb = CalvinCB(self._start_replication_, cb=cb)
         cb = CalvinCB(self._find_replica_nodes, cb=cb)
         self._delete_lost_actor(cb=cb)
 
-    def _find_replica_nodes(self, cb, status=response.CalvinResponse(True)):
+    def _find_replica_nodes(self, cb):
         cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
         self.node.storage.get_replica_nodes(self.lost_actor_info['app_id'], self.lost_actor_info['name'], cb)
 
@@ -42,45 +41,39 @@ class Replicator(object):
         current_nodes=value
         if self.lost_actor_info['node_id'] in current_nodes:
             current_nodes.remove(self.lost_actor_info['node_id'])
-        print current_nodes
-        #cb = CalvinCB(self._find_app_actors, current_nodes=value, cb=cb)
-        cb = CalvinCB(self._find_app_actors, cb=cb, status=response.OK)
+        cb = CalvinCB(self._find_app_actors, current_nodes=value, cb=cb)
         self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb)
 
-    def _start_replication_(self, cb, status=response.CalvinResponse(True)):
-        cb = CalvinCB(self._find_app_actors, cb=cb, status=status)
-        self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb)
-
-    def _find_app_actors(self, key, value, cb, status):
+    def _find_app_actors(self, key, value, current_nodes, cb):
         if not value:
             cb(response.NOT_FOUND)
         _log.info("Replicating lost actor: {}".format(self.lost_actor_id))
         if self.lost_actor_id in value:
             value.remove(self.lost_actor_id)
-        self._find_and_replicate(value, response.CalvinResponse(True), index=0, cb=cb)
+        self._find_and_replicate(value, current_nodes, index=0, cb=cb)
 
-    def _find_and_replicate(self, actors, status, index, cb):
+    def _find_and_replicate(self, actors, current_nodes, index, cb):
         if index < len(actors):
-            cb = CalvinCB(self._check_for_original, status=status, actors=actors, index=index, cb=cb)
+            cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes, index=index, cb=cb)
             _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
             self.node.storage.get_actor(actors[index], cb=cb)
         else:
-            self._replicate(self.replica_id, self.replica_value, status, cb)
+            self._replicate(self.replica_id, self.replica_value, current_nodes, cb)
 
-    def _check_for_original(self, key, value, status, actors, index, cb):
+    def _check_for_original(self, key, value, actors, current_nodes, index, cb):
         if value and self._is_match(value['name'], self.lost_actor_info['name']):
             _log.debug("Found an replica of lost actor:".format(key))
             self.current_nbr_of_replicas += 1
             self.replica_id = key
             self.replica_value = value
-        self._find_and_replicate(actors, status, index + 1, cb)
+        self._find_and_replicate(actors, current_nodes, index + 1, cb)
 
     def _is_match(self, first, second):
         is_match = re.sub(self.uuid_re, "", first) == re.sub(self.uuid_re, "", second)
         _log.debug("{} and {} is match: ".format(first, second, is_match))
         return is_match
 
-    def _replicate(self, actor_id, actor_info, status, cb):
+    def _replicate(self, actor_id, actor_info, current_nodes, cb):
         if not self.replica_id is None:
             if self.current_nbr_of_replicas >= self.required_reliability:
                 status = response.CalvinResponse(data=self.new_replicas)
@@ -89,19 +82,17 @@ class Replicator(object):
             else:
                 _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
                 to_node_id = self.available.pop(0)
-                cb = CalvinCB(func=self._refresh_reliability, to_node_id=to_node_id, cb=cb)
+                cb = CalvinCB(func=self._refresh_reliability, to_node_id=to_node_id, current_nodes=current_nodes, cb=cb)
                 self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, cb)
         else:
             cb(status=response.NOT_FOUND)
             _log.warning("Could not find actor to replicate")
 
-    def _refresh_reliability(self, status, to_node_id, cb):
-        print status
-
+    def _refresh_reliability(self, status, current_nodes, to_node_id, cb):
         if status in status.success_list:
             self.new_replicas[status.data['actor_id']] = to_node_id
         self.current_nbr_of_replicas = 0
-        cb = CalvinCB(self._find_app_actors, cb=cb, status=status)
+        cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, cb=cb)
         self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb=cb)
 
     def _delete_lost_actor(self, cb):
@@ -139,11 +130,7 @@ class Replicator(object):
         if status.status == response.SERVICE_UNAVAILABLE and not self.lost_actor_info['node_id'] == self.node.id:
             _log.info("Node is unavailable, delete it {}".format(self.lost_actor_info['node_id']))
             self.node.storage.get_node(self.lost_actor_info['node_id'], self._delete_node)
-
-        if not status:
-            cb(status=response.CalvinResponse(False))
-        elif cb:
-            cb(status=status)
+        cb()
 
     def _delete_node(self, key, value):
         _log.info("Deleting node {} with value {}".format(key, value))
