@@ -1679,6 +1679,34 @@ class TestLosingActors(CalvinTestBase):
 
         utils.lost_actor(rt, snk)
 
+        d.destroy()
+
+    def testReplicaNodeList(self):
+        rt1 = self.runtime
+        rt2 = self.runtimes[0]
+
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(rt1, app_info)
+        app_id = d.deploy()
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+
+        snk_replica = utils.replicate(rt1, snk, rt2.id)
+
+        snk_info = utils.get_actor(rt1, snk)
+        nodes = utils.get_replica_nodes(rt1, app_id, snk_info['name'])
+        assert(len(nodes) == 2)
+
+        d.destroy()
+
     def testLoseOneActorFromAppRTOneReplica(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1705,6 +1733,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt1, snk)
         time.sleep(0.3)
         replicas = {snk2: rt2}
+        reliability = 0
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1716,12 +1745,13 @@ class TestLosingActors(CalvinTestBase):
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
                                 replicas[actor] = rt
+                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, snk))
 
@@ -1764,6 +1794,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt2, snk2)
         time.sleep(0.2)
         replicas = {snk: rt1}
+        reliability = 0
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1775,12 +1806,13 @@ class TestLosingActors(CalvinTestBase):
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
                                 replicas[actor] = rt
+                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
         self.assertIsNone(utils.get_actor(rt1, snk2))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1824,6 +1856,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt1, snk)
         time.sleep(0.2)
         replicas = {snk2: rt2, snk3: rt3}
+        reliability = 0
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1835,12 +1868,13 @@ class TestLosingActors(CalvinTestBase):
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
                                 replicas[actor] = rt
+                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
         self.assertIsNone(utils.get_actor(rt1, snk))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1884,6 +1918,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt2, snk2)
         time.sleep(0.2)
         replicas = {snk: rt1, snk3: rt3}
+        reliability = 0
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1894,13 +1929,14 @@ class TestLosingActors(CalvinTestBase):
                             a = utils.get_actor(rt, actor)
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
+                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
                                 replicas[actor] = rt
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
         self.assertIsNone(utils.get_actor(rt1, snk2))
 
         expected = expected_tokens(rt1, src, 'std.CountTimer')
@@ -1945,6 +1981,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(rt1, snk)
         time.sleep(0.2)
         replicas = {snk3: rt3}
+        reliability = 0
 
         for rt in [rt1, rt2, rt3]:
             actors = utils.get_actors(rt)
@@ -1956,12 +1993,13 @@ class TestLosingActors(CalvinTestBase):
                             name = re.sub(uuid_re, "", a['name'])
                             if name == 'simple:snk' and a['app_id'] == app_id:
                                 replicas[actor] = rt
+                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
                             break
                         except:
                             time.sleep(0.2)
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == len(replicas))
+        assert(reliability > app['required_reliability'])
         
         self.assertIsNone(utils.get_actor(rt1, snk))
         self.assertIsNone(utils.get_actor(rt2, snk2))
@@ -1978,68 +2016,6 @@ class TestLosingActors(CalvinTestBase):
             utils.delete_actor(a_rt, a_id)
 
         d.destroy()
-
-    def testLoseActorWithOnlyLocalActors(self):
-        rt1 = self.runtime
-
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
-        time.sleep(0.2)
-
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk_replica = utils.replicate(rt1, snk, rt1.id)
-        src_replica = utils.replicate(rt1, src, rt1.id)
-        time.sleep(2)
-
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
-        expected_replica_before = expected_tokens(rt1, src_replica, 'std.CountTimer')
-        actual_snk_before = actual_tokens(rt1, snk)
-        actual_replica_before = actual_tokens(rt1, snk_replica)
-
-        utils.lost_actor(rt1, snk_replica)
-        time.sleep(0.2)
-
-        actors = utils.get_application_actors(rt1, app_id)
-        replicas = 0
-        for actor in actors:
-            a = utils.get_actor(rt1, actor)
-            if a:
-                name = re.sub(uuid_re, "", a['name'])
-                if name == 'simple:snk':
-                    replicas = replicas + 1
-
-        app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == replicas)
-        self.assertIsNone(utils.get_actor(rt1, snk_replica))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
-        expected_replica = expected_tokens(rt1, src_replica, 'std.CountTimer')
-        expected = sorted(expected + expected_replica)
-
-        actual = actual_tokens(rt1, snk)
-
-        assert len(expected) > len(expected_before)
-        assert len(expected_replica) > len(expected_replica_before)
-        assert len(actual) > len(actual_snk_before)
-        assert len(actual) > len(actual_replica_before)
-
-        counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt == 1]
-        filtered_expected = filter(lambda x: x not in unique_elements, expected)
-        filtered_actual = filter(lambda x: x not in unique_elements, actual)
-
-        self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_actual))
-
-        d.destroy()
-
 
 
 @pytest.mark.essential
@@ -2111,15 +2087,17 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
+        reliability = 0
         for actor in actors:
             a = utils.get_actor(rt1, actor)
             if a:
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk':
                     replicas = replicas + 1
+                    reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt1, a['node_id'])))
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == replicas)
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2180,15 +2158,17 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
+        reliability = 0
         for actor in actors:
             a = utils.get_actor(rt1, actor)
             if a:
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:snk':
                     replicas = replicas + 1
+                    reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt1, a['node_id'])))
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == replicas)
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2202,7 +2182,7 @@ class TestDyingRuntimes(CalvinTestBase):
             rts.extend(self.runtimes)
             for runtime in rts:
                 if node_id == runtime.id:
-                    actual_replicas.append(actual_tokens(runtime, snk))
+                    actual_replicas.append(actual_tokens(runtime, new_replica_id))
 
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
@@ -2247,15 +2227,17 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
+        reliability = 0
         for actor in actors:
             a = utils.get_actor(rt1, actor)
             if a:
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:src':
                     replicas = replicas + 1
+                    reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt1, a['node_id'])))
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == replicas)
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2272,7 +2254,7 @@ class TestDyingRuntimes(CalvinTestBase):
                     expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual_snk)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < replicas]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -2284,7 +2266,10 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual_snk) > len(actual_snk_before)
         assert len(actual_snk) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
+        filtered_expected_total = [x for x in filtered_expected]
+        for i in range(1,replicas):
+            filtered_expected_total += filtered_expected
+        self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual_snk))
         for filtered_expected_replica in filtered_expected_replicas:
             self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
@@ -2325,15 +2310,17 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors = utils.get_application_actors(rt1, app_id)
         replicas = 0
+        reliability = 0
         for actor in actors:
             a = utils.get_actor(rt1, actor)
             if a:
                 name = re.sub(uuid_re, "", a['name'])
                 if name == 'simple:src':
                     replicas = replicas + 1
+                    reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt1, a['node_id'])))
 
         app = utils.get_application(rt1, app_id)
-        assert(app['required_reliability'] == replicas)
+        assert(reliability > app['required_reliability'])
 
         self.assertIsNone(utils.get_actor(rt1, replica))
         self.assertIsNone(utils.get_node(rt1, rt2.id))
@@ -2350,7 +2337,7 @@ class TestDyingRuntimes(CalvinTestBase):
                     expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < replicas]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -2362,7 +2349,11 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
+        filtered_expected_total = [x for x in filtered_expected]
+        for i in range(1, replicas):
+            filtered_expected_total += filtered_expected
+            print filtered_expected
+        self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual))
         for filtered_expected_replica in filtered_expected_replicas:
             self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
