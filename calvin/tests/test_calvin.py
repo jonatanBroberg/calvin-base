@@ -1679,6 +1679,8 @@ class TestLosingActors(CalvinTestBase):
 
         utils.lost_actor(rt, snk)
 
+        d.destroy()
+
     def testReplicaNodeList(self):
         rt1 = self.runtime
         rt2 = self.runtimes[0]
@@ -1703,6 +1705,7 @@ class TestLosingActors(CalvinTestBase):
         nodes = utils.get_replica_nodes(rt1, app_id, snk_info['name'])
         assert(len(nodes) == 2)
 
+        d.destroy()
 
     def testLoseOneActorFromAppRTOneReplica(self):
         rt1 = self.runtime

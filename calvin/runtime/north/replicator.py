@@ -55,7 +55,7 @@ class Replicator(object):
             _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
             self.node.storage.get_actor(actors[index], cb=cb)
         else:
-            self._replicate(self.replica_id, self.replica_value, current_nodes, cb)
+            self._replicate(current_nodes, cb)
 
     def _check_for_original(self, key, value, actors, current_nodes, index, cb):
         if value and self._is_match(value['name'], self.lost_actor_info['name']):
@@ -69,7 +69,7 @@ class Replicator(object):
         _log.debug("{} and {} is match: ".format(first, second, is_match))
         return is_match
 
-    def _replicate(self, actor_id, actor_info, current_nodes, cb):
+    def _replicate(self, current_nodes, cb):
         if not self.replica_id is None:
             if self.node.resource_manager.current_reliability(current_nodes) > self.required_reliability:
                 status = response.CalvinResponse(data=self.new_replicas)
@@ -84,10 +84,10 @@ class Replicator(object):
                     cb(response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
                     _log.info("Not enough available nodes")
                 else:
-                    _log.info("Sending replication request of actor {} to node {}".format(actor_id, actor_info['node_id']))
+                    _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
                     to_node_id = available_nodes.pop(0)
                     cb = CalvinCB(func=self._refresh_reliability, to_node_id=to_node_id, current_nodes=current_nodes, cb=cb)
-                    self.node.proto.actor_replication_request(actor_id, actor_info['node_id'], to_node_id, cb)
+                    self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
         else:
             cb(response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             _log.warning("Could not find actor to replicate")
@@ -96,8 +96,7 @@ class Replicator(object):
         if status in status.success_list:
             self.new_replicas[status.data['actor_id']] = to_node_id
             current_nodes.append(to_node_id)
-        cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, cb=cb)
-        self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb=cb)
+        self._replicate(current_nodes, cb)
 
     ### Delete information about lost actor ###
 
