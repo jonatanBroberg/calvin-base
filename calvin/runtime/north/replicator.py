@@ -16,7 +16,6 @@ class Replicator(object):
         self.required_reliability = required_reliability
         self.new_replicas = {}
         self.uuid_re = uuid_re
-        self.current_nbr_of_replicas = 0
         self.replica_id = None
         self.replica_value = None
              
@@ -61,7 +60,6 @@ class Replicator(object):
     def _check_for_original(self, key, value, actors, current_nodes, index, cb):
         if value and self._is_match(value['name'], self.lost_actor_info['name']):
             _log.debug("Found an replica of lost actor:".format(key))
-            self.current_nbr_of_replicas += 1
             self.replica_id = key
             self.replica_value = value
         self._find_and_replicate(actors, current_nodes, index + 1, cb)
@@ -73,8 +71,7 @@ class Replicator(object):
 
     def _replicate(self, actor_id, actor_info, current_nodes, cb):
         if not self.replica_id is None:
-            #if self.node.resource_manager.current_reliability(current_nodes) > self.required_reliability:
-            if len(current_nodes) == self.required_reliability:  #self.current_nbr_of_replicas >= self.required_reliability:
+            if self.node.resource_manager.current_reliability(current_nodes) > self.required_reliability:
                 status = response.CalvinResponse(data=self.new_replicas)
                 cb(status=status)
                 return
@@ -99,9 +96,10 @@ class Replicator(object):
         if status in status.success_list:
             self.new_replicas[status.data['actor_id']] = to_node_id
             current_nodes.append(to_node_id)
-        self.current_nbr_of_replicas = 0
         cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, cb=cb)
         self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb=cb)
+
+    ### Delete information about lost actor ###
 
     def _delete_lost_actor(self, cb):
         self._close_actor_ports()
