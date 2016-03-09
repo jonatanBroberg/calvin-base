@@ -2235,7 +2235,7 @@ class TestDyingRuntimes(CalvinTestBase):
                     expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual_snk)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 3]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -2247,7 +2247,7 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual_snk) > len(actual_snk_before)
         assert len(actual_snk) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual_snk))
         for filtered_expected_replica in filtered_expected_replicas:
             self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 
@@ -2313,7 +2313,7 @@ class TestDyingRuntimes(CalvinTestBase):
                     expected_replicas.append(expected_tokens(runtime, new_replica_id, 'std.CountTimer'))
 
         counts = Counter(actual)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 4]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < 3]
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -2325,7 +2325,7 @@ class TestDyingRuntimes(CalvinTestBase):
         assert len(expected) > len(expected_before)
         assert len(actual) > len(actual_snk_before)
         assert len(actual) > len(expected_replica_before)
-        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
+        self.assert_list_prefix(sorted(filtered_expected + filtered_expected + filtered_expected), sorted(filtered_actual))
         for filtered_expected_replica in filtered_expected_replicas:
             self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
 

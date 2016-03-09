@@ -22,14 +22,30 @@ class Replicator(object):
             if node_id != lost_actor_info['node_id']:
                 self.available.append(node_id)
              
-    def _is_match(self, first, second):
-        is_match = re.sub(self.uuid_re, "", first) == re.sub(self.uuid_re, "", second)
-        _log.debug("{} and {} is match: ".format(first, second, is_match))
-        return is_match
-
     def replicate_lost_actor(self, cb):
-        cb = CalvinCB(self._start_replication_, cb=cb)
+        #cb = CalvinCB(self._start_replication_, cb=cb)
+        cb = CalvinCB(self._find_replica_nodes, cb=cb)
         self._delete_lost_actor(cb=cb)
+
+    def _find_replica_nodes(self, cb, status=response.CalvinResponse(True)):
+        cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
+        self.node.storage.get_replica_nodes(self.lost_actor_info['app_id'], self.lost_actor_info['name'], cb)
+
+    ### Find a replica to replicate ###
+
+    def _find_replica_nodes_cb(self, key, value, cb):
+        if not value:
+            _log.error("Failed to get replica nodes or no there is no replica")
+            cb(response.CalvinResponse(False))
+            return
+        
+        current_nodes=value
+        if self.lost_actor_info['node_id'] in current_nodes:
+            current_nodes.remove(self.lost_actor_info['node_id'])
+        print current_nodes
+        #cb = CalvinCB(self._find_app_actors, current_nodes=value, cb=cb)
+        cb = CalvinCB(self._find_app_actors, cb=cb, status=response.OK)
+        self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb)
 
     def _start_replication_(self, cb, status=response.CalvinResponse(True)):
         cb = CalvinCB(self._find_app_actors, cb=cb, status=status)
@@ -59,6 +75,11 @@ class Replicator(object):
             self.replica_value = value
         self._find_and_replicate(actors, status, index + 1, cb)
 
+    def _is_match(self, first, second):
+        is_match = re.sub(self.uuid_re, "", first) == re.sub(self.uuid_re, "", second)
+        _log.debug("{} and {} is match: ".format(first, second, is_match))
+        return is_match
+
     def _replicate(self, actor_id, actor_info, status, cb):
         if not self.replica_id is None:
             if self.current_nbr_of_replicas >= self.required_reliability:
@@ -75,6 +96,8 @@ class Replicator(object):
             _log.warning("Could not find actor to replicate")
 
     def _refresh_reliability(self, status, to_node_id, cb):
+        print status
+
         if status in status.success_list:
             self.new_replicas[status.data['actor_id']] = to_node_id
         self.current_nbr_of_replicas = 0
@@ -111,7 +134,7 @@ class Replicator(object):
 
     def _delete_lost_actor_cb(self, status, cb):
         _log.info("Deleting actor {} from local storage".format(self.lost_actor_id))
-        self.node.storage.delete_actor_from_app(self.lost_actor_id, self.lost_actor_info['app_id'])
+        self.node.storage.delete_actor_from_app(self.lost_actor_info['app_id'], self.lost_actor_id)
         self.node.storage.delete_actor(self.lost_actor_id)
         if status.status == response.SERVICE_UNAVAILABLE and not self.lost_actor_info['node_id'] == self.node.id:
             _log.info("Node is unavailable, delete it {}".format(self.lost_actor_info['node_id']))
