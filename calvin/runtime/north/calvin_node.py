@@ -34,6 +34,7 @@ from calvin.runtime.north.portmanager import PortManager
 from calvin.runtime.north.replicator import Replicator
 from calvin.runtime.south.monitor import Event_Monitor
 from calvin.runtime.south.plugins.async import async
+from calvin.runtime.north.replicator import Replicator
 from calvin.utilities.attribute_resolver import AttributeResolver
 from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
@@ -85,6 +86,9 @@ class Node(object):
         # TODO: be able to specify the interfaces
         # @TODO: Store capabilities
         self.storage = storage.Storage(self)
+
+        self.peer_uris = {}
+        self._lost_nodes = []
 
         self.network = CalvinNetwork(self)
         self.proto = CalvinProto(self, self.network)
@@ -155,6 +159,7 @@ class Node(object):
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
+        self.peer_uris[peer_node_id] = uri
         if uri in peers:
             peers.remove(uri)
             peer_node_ids[uri] = (peer_node_id, status)
@@ -194,26 +199,37 @@ class Node(object):
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
-        self.resource_manager.register(self.id, usage)
+        self.resource_manager.register(self.id, usage, self.uri)
         for peer_id in self.network.links:
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
 
     def _report_resource_usage_cb(self, peer_id, status):
         _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
-        if not status:
-            self.lost_node(peer_id)
 
     def register_resource_usage(self, node_id, usage, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
-        self.resource_manager.register(node_id, usage)
+        uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
+        self.resource_manager.register(node_id, usage, uri)
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):
         if node_id in self._lost_nodes:
+            _log.info("Got multiple lost node signals")
             return
-        _log.info("\n\nLost node {}".format(node_id))
-        print self._lost_nodes
+
+        try:
+            self.resource_manager.lost_node(node_id, self.peer_uris[node_id])
+        except:
+            _log.info(self.id)
+            _log.info(node_id)
+            _log.info(self.peer_uris)
+
+        if self.storage_node:
+            _log.info("Is storage node, ignoring lost node")
+            return
+
+        _log.info("Lost node {}".format(node_id))
         highest_prio_node = self._highest_prio_node(node_id)
         if highest_prio_node == self.id:
             self._lost_nodes.append(node_id)
@@ -232,8 +248,10 @@ class Node(object):
     def _lost_node_cb(self, status):
         if not status:
             _log.error("Failed to handle lost node: {}".format(status))
+        _log.info("Successfully handled lost node")
 
     def _highest_prio_node(self, node_id):
+        _log.info("Getting highest_prio_node")
         node_ids = self.network.list_links()
         if node_id in node_ids:
             node_ids.remove(node_id)
@@ -241,18 +259,21 @@ class Node(object):
         if not self.storage_node and self.id not in node_ids:
             node_ids.append(self.id)
 
-        print "\n\n\n\nI AM STORAGE NODE {}? {}:\n\n\n\n{}\n\n\n".format(self.id, self.is_storage_node(self.id), node_ids)
-        node_ids = [node_id for node_id in node_ids if not self.is_storage_node(node_id)]
-        print "{}:\n\n".format(node_ids)
+        node_ids = [n_id for n_id in node_ids if not self.is_storage_node(n_id)]
         if not node_ids:
             return None
 
-        print "returning: {}".format(sorted(node_ids)[0])
+        _log.info("highest prio node: {}".format(sorted(node_ids)[0]))
         return sorted(node_ids)[0]
 
     def replicate_node_actors(self, node_id, cb):
         _log.info("Fetching actors for lost node: {}".format(node_id))
-        self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors, node_id=node_id, cb=cb))
+        try:
+            self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors, node_id=node_id, cb=cb))
+        except AttributeError as e:
+            _log.warning("Failed to get node actors: {}".format(e))
+            # We are the deleted node
+            pass
 
     def _replicate_node_actors(self, key, value, node_id, cb):
         _log.info("Replicating lost actors {}".format(value))
@@ -274,7 +295,7 @@ class Node(object):
 
     def _replicate_node_actor(self, key, value, lost_node_id, lost_actor_id, cb):
         """ Get app id and actor name from actor info """
-        _log.info("Replicating actor {}: {}".format(key, value))
+        _log.info("Replicating node actor {}: {}".format(key, value))
         if not value:
             _log.error("Failed get lost actor info from storage")
             cb(response.CalvinResponse(False))

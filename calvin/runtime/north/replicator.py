@@ -38,10 +38,18 @@ class Replicator(object):
             _log.error("Failed to get replica nodes or no there is no replica")
             cb(response.CalvinResponse(False))
             return
+
         current_nodes = value
-        print "\n\nCURRENT NODES: ", current_nodes
+        _log.info("Current replica nodes: {}".format(current_nodes))
         if self.lost_actor_info['node_id'] in current_nodes:
+            _log.info("Removing lost node from current nodes")
             current_nodes.remove(self.lost_actor_info['node_id'])
+        elif self.lost_node in current_nodes:
+            _log.info("Removing lost node from current nodes")
+            current_nodes.remove(self.lost_node)
+
+        _log.info("\n\n\nlost node {}. Current nodes {}".format(self.lost_node, current_nodes))
+
         cb = CalvinCB(self._find_app_actors, current_nodes=value, cb=cb)
         self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb)
 
@@ -63,6 +71,7 @@ class Replicator(object):
             self._replicate(current_nodes, cb)
 
     def _check_for_original(self, key, value, actors, current_nodes, index, cb):
+        _log.info("Check for original: {} - {}".format(key, value))
         if value and self._is_match(value['name'], self.lost_actor_info['name']):
             _log.debug("Found an replica of lost actor:".format(key))
             self.replica_id = key
@@ -73,12 +82,10 @@ class Replicator(object):
 
     def _is_match(self, first, second):
         is_match = re.sub(self.uuid_re, "", first) == re.sub(self.uuid_re, "", second)
-        _log.debug("{} and {} is match: ".format(first, second, is_match))
+        _log.debug("{} and {} is match: {}".format(first, second, is_match))
         return is_match
 
     def _replicate(self, current_nodes, cb):
-        print "\n\nIN _REPLICATE"
-        print self
         if self.replica_id is not None:
             current_rel = self.node.resource_manager.current_reliability(current_nodes)
             _log.info("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
@@ -89,10 +96,15 @@ class Replicator(object):
             else:
                 available_nodes = []
                 for (node_id, link) in self.node.network.links.iteritems():
+                    _log.debug("Connected to node {}".format(node_id))
                     if (node_id not in current_nodes and node_id not in self.pending_replications and
                             node_id not in self.failed_requests and node_id != self.lost_node and
                             not self.node.is_storage_node(node_id)):
+                        _log.debug("Adding to available nodes")
                         available_nodes.append(node_id)
+                _log.debug("Available nodes: {}".format(available_nodes))
+                available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes)
+                _log.debug("Available nodes after sorting: {}".format(available_nodes))
                 if len(available_nodes) == 0:
                     cb(response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
                     _log.info("Not enough available nodes")
@@ -139,9 +151,8 @@ class Replicator(object):
 
         _log.debug("Sending disconnect request for port {}".format(key))
         for (node_id, port_id) in value['peers']:
-            print "disconnect request?"
-            print (node_id, port_id, self.node.id)
             if self.lost_node and node_id == self.lost_node:
+                _log.debug("No need to send to lost node")
                 continue
             if node_id == 'local' or node_id == self.node.id:
                 print "1"

@@ -68,7 +68,7 @@ class CalvinLink(object):
         try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))
-        except Exception as e:
+        except Exception:
             # We ignore unknown replies
             return
 
@@ -368,9 +368,6 @@ class CalvinNetwork(object):
             if rt_id not in self.links:
                 _log.error("Peer disconnected: {}".format(reason))
                 self.node.lost_node(rt_id)
-
-        if rt_id not in self.links:
-            self.node.lost_node(rt_id)
 
     def link_remove(self, peer_id):
         """ Removes a link to peer id """

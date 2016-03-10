@@ -17,11 +17,23 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliabilities = {}
         self.reliability_calculator = ReliabilityCalculator()
+        self.failure_counts = defaultdict(lambda: 0)
+        self.node_uris = {}
 
-    def register(self, node_id, usage):
-        _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
-        self.usages[node_id].append(usage)
-        self._update_reliability(node_id)
+    def register(self, node_id, usage, uri):
+        _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
+        self.node_uris[node_id] = uri
+        if usage:
+            self.usages[node_id].append(usage)
+        self.reliabilities[node_id] = 0.8
+
+    def lost_node(self, node_id, uri):
+        self.node_uris[node_id] = uri
+
+        _log.info("Lost node: {}/{}".format(node_id, uri))
+        for key in self.failure_counts:
+            _log.info("Failure count: {}: {}".format(key, self.failure_counts[key]))
+        self.failure_counts[uri] += 1
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -55,21 +67,18 @@ class ResourceManager(object):
         return self.reliabilities[node_id]
 
     def sort_nodes_reliability(self, node_ids):
-        nodes_rel = {}
-        for node_id, reliability in self.reliabilities.iteritems():
-            if node_id in node_ids:
-                nodes_rel[node_id] = reliability
-        nodes_sorted = []
-        for key in sorted(nodes_rel.items(), key=operator.itemgetter(1)):
-            nodes_sorted.append(key)
+        """Sorts after number of failures"""
+        node_ids = [(node_id, self.failure_counts[self.node_uris.get(node_id)]) for node_id in node_ids]
+        node_ids.sort(key=lambda x: x[1])
+        node_ids = [x[0] for x in node_ids]
         return node_ids
 
     def current_reliability(self, current_nodes):
         current = 1
         for node_id, reliability in self.reliabilities.iteritems():
             if node_id in current_nodes:
-                current *= (1-reliability)
-        if current == 1: 
-            return 0 
+                current *= (1 - reliability)
+        if current == 1:
+            return 0
         else:
             return 1 - current

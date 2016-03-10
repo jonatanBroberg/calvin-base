@@ -325,6 +325,7 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
+        _log.info("Sending actor replication request to {}".format(to_node_id))
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                     'actor_id': actor_id,
@@ -336,19 +337,16 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
+        _log.info("Handle actor replication request")
         _log.analyze(self.rt_id, "+", "Handle of request of a replication request {}".format(payload))
         self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback=CalvinCB(self._actor_replication_request_handler, payload))
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
         """Potentially requested a successfull replication"""
-        print status
-        print args
-        print kwargs
         if status.data:
             resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
         else:
             resp = response.CalvinResponse(status=response.CalvinResponse(False))
-            # status.status, data={'actor_id': status.data.get('actor_id')})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
@@ -697,7 +695,7 @@ class CalvinProto(CalvinCBClass):
             # Already have link just continue in _peer_setup
                 self._peer_setup(to_rt_uuid, callback, peers, status=response.CalvinResponse(True))
 
-    def _peer_setup(self, to_rt_uuid, callback, peers, status, uri=None):
+    def _peer_setup(self, to_rt_uuid, callback, peers, status, uri=None, *args, **kwargs):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'PEER_SETUP',
