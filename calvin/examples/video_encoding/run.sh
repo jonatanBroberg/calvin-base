@@ -1,4 +1,4 @@
-nodes=`cscontrol http://localhost:5002 nodes add calvinip://localhost:5003 calvinip://localhost:5005`
+nodes=`cscontrol http://localhost:5002 nodes add calvinip://localhost:5003 calvinip://localhost:5005 calvinip://localhost:5007 calvinip://localhost:5009`
 a=`cscontrol http://localhost:5002 deploy video_encoding.calvin`
 echo $a
 reader_id=`echo $a | perl -nle"print $& if m{(?<=reader': u').*?(?=')}"`
@@ -15,12 +15,12 @@ echo "encoder id: $encoder_id"
 echo "reader id: $reader_id"
 echo "5003: $node_5003"
 echo "5005: $node_5005"
-echo "5005: $node_5007"
+echo "5007: $node_5007"
 
 cscontrol http://localhost:5002 actor replicate $encoder_id $node_5003
 cscontrol http://localhost:5002 actor replicate $encoder_id $node_5005
 #cscontrol http://localhost:5002 actor replicate $encoder_id $node_5007
-cscontrol http://localhost:5002 actor replicate $reader_id $node_5003
+#cscontrol http://localhost:5002 actor replicate $reader_id $node_5003
 echo ":)"
 #cscontrol http://localhost:5002 actor replicate $reader_id $node_5003
 #cscontrol http://localhost:5002 actor replicate $encoder_id $node_id

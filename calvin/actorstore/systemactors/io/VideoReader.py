@@ -41,9 +41,9 @@ class VideoReader(Actor):
 
     Inputs:
       filename : File to read. If file doesn't exist, an ExceptionToken is produced
-      send : #
+      trigger : #
     Outputs:
-        out : data with frame, frame count and url to send it to
+      out : data with frame, frame count and url to send it to
     """
 
     @manage([])
@@ -61,6 +61,7 @@ class VideoReader(Actor):
         self.total_sent = 0
         self.active_frame_length = 0
         self.active_frame_data = ""
+        self.ready_to_read = True
 
     @condition(['filename'])
     @guard(lambda self, filename: not self.video and not self.filename)
@@ -85,9 +86,9 @@ class VideoReader(Actor):
         self.file_not_found = False  # Only report once
         return ActionResult(production=(token, ))
 
-    @condition(['send'])
-    @guard(lambda self, send: self.video and self.url and not self.end_of_file and self.active_frame is None)
-    def read(self, send):
+    @condition([])
+    @guard(lambda self: self.video and self.url and not self.end_of_file and self.active_frame is None and self.ready_to_read)
+    def read(self):
         #print "\n"
         #print "READ", time.time()
         #print self.active_frame
@@ -120,7 +121,14 @@ class VideoReader(Actor):
             self.end_of_file = True
 
         #time.sleep(2)  # 0.15)
+        self.ready_to_read = False
         return ActionResult(production=(), did_fire=False)  # data, ))
+
+    @condition(['trigger'])
+    @guard(lambda self, token: not self.ready_to_read)
+    def trigger(self, token):
+        self.ready_to_read = True
+        return ActionResult(production=())
 
     @condition([], ['out'])
     @guard(lambda self: self.active_frame is not None)
@@ -164,7 +172,7 @@ class VideoReader(Actor):
         self.filename = None
         return ActionResult()  # production=(b"", ))  # EOSToken(), ))
 
-    action_priority = (open_file, file_not_found, send, read, eof)
+    action_priority = (open_file, file_not_found, send, read, eof, trigger)
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"

@@ -55,6 +55,8 @@ class VideoEncoder(Actor):
 
     Inputs:
       in : data to encode and send
+    Outputs:
+      done : #
     """
 
     @manage([])
@@ -62,6 +64,7 @@ class VideoEncoder(Actor):
         self.did_read = False
         self.use(requirement='calvinsys.io.filehandler', shorthand='file')
         self.frame_buffer = {}
+        self.done_sending = False
 
     @condition(['in'])
     def encode(self, data):
@@ -120,6 +123,7 @@ class VideoEncoder(Actor):
             #print "failed to send..", e
             pass
         #t6 = time.time()
+        self.done_sending = True
         s.close()
 
         #print "socket ", t2 - t1
@@ -130,7 +134,13 @@ class VideoEncoder(Actor):
 
         return ActionResult(production=())
 
-    action_priority = (encode, )
+    @condition([], ['done'])
+    @guard(lambda self: self.done_sending)
+    def done(self):
+        self.done_sending = False
+        return ActionResult(production=(True, ))
+
+    action_priority = (encode, done)
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
