@@ -587,8 +587,8 @@ class Storage(object):
             _log.warning("Cannot delete actor {}, cant be found in storage".format(key))
             self.delete(prefix="actor-", key=key, cb=cb)
             return
-
-        self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
+        if value['app_id']:
+            self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
         self.delete(prefix="actor-", key=key, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):

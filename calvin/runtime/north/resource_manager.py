@@ -2,6 +2,7 @@ import sys
 import operator
 
 from collections import defaultdict, deque
+from calvin.runtime.north.reliability_calculator import ReliabilityCalculator
 
 from calvin.utilities.calvinlogger import get_logger
 
@@ -15,11 +16,12 @@ class ResourceManager(object):
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliabilities = {}
+        self.reliability_calculator = ReliabilityCalculator()
 
     def register(self, node_id, usage):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         self.usages[node_id].append(usage)
-        self.reliabilities[node_id] = 0.8
+        self._update_reliability(node_id)
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -45,6 +47,9 @@ class ResourceManager(object):
                 most_busy = node_id
 
         return most_busy
+
+    def _update_reliability(self, node_id):
+        self.reliabilities[node_id] = self.reliability_calculator.calculate_reliability(1.0, 10)
 
     def get_reliability(self, node_id):
         return self.reliabilities[node_id]

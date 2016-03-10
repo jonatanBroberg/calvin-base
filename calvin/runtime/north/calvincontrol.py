@@ -1063,6 +1063,7 @@ class CalvinControl(object):
         """ Get required reliability from app info """
         if not value:
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+            return
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'], uuid_re)
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
