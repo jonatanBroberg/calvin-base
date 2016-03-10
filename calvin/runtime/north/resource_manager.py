@@ -49,7 +49,7 @@ class ResourceManager(object):
         return most_busy
 
     def _update_reliability(self, node_id):
-        self.reliabilities[node_id] = self.reliability_calculator.calculate_reliability(1.0, 10)
+        self.reliabilities[node_id] = self.reliability_calculator.calculate_reliability(1, 10)
 
     def get_reliability(self, node_id):
         return self.reliabilities[node_id]
