@@ -39,7 +39,9 @@ class Replicator(object):
             cb(response.CalvinResponse(False))
             return
 
-        current_nodes = value
+        connected_nodes = self.node.network.list_links()
+        current_nodes = filter(lambda n: n in connected_nodes, value)
+
         _log.info("Current replica nodes: {}".format(current_nodes))
         if self.lost_actor_info['node_id'] in current_nodes:
             _log.info("Removing lost node from current nodes")
@@ -48,9 +50,7 @@ class Replicator(object):
             _log.info("Removing lost node from current nodes")
             current_nodes.remove(self.lost_node)
 
-        _log.info("\n\n\nlost node {}. Current nodes {}".format(self.lost_node, current_nodes))
-
-        cb = CalvinCB(self._find_app_actors, current_nodes=value, cb=cb)
+        cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, cb=cb)
         self.node.storage.get_application_actors(self.lost_actor_info['app_id'], cb)
 
     def _find_app_actors(self, key, value, current_nodes, cb):
@@ -87,6 +87,8 @@ class Replicator(object):
 
     def _replicate(self, current_nodes, cb):
         if self.replica_id is not None:
+            _log.info("current nodes: {}".format(current_nodes))
+            _log.info("connected to: {}".format(self.node.network.list_links()))
             current_rel = self.node.resource_manager.current_reliability(current_nodes)
             _log.info("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
             if current_rel > self.required_reliability:
@@ -107,17 +109,21 @@ class Replicator(object):
                 _log.debug("Available nodes after sorting: {}".format(available_nodes))
                 if len(available_nodes) == 0:
                     cb(response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
-                    _log.info("Not enough available nodes")
+                    _log.error("Not enough available nodes")
                 else:
-                    _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
+                    replica_node = self.replica_value['node_id']
                     to_node_id = available_nodes.pop(0)
                     self.pending_replications.append(to_node_id)
-                    cb = CalvinCB(func=self.collect_new_replicas, to_node_id=to_node_id, current_nodes=current_nodes, cb=cb)
-                    self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
+                    cb = CalvinCB(func=self.collect_new_replicas, to_node_id=to_node_id, current_nodes=current_nodes,
+                                  cb=cb)
+                    if replica_node == self.node.id:
+                        self.node.am.replicate(self.replica_id, to_node_id, cb)
+                    else:
+                        _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
+                        self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
         else:
             cb(response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             _log.warning("Could not find actor to replicate")
-        print "after _replicate\n\n"
 
     def collect_new_replicas(self, status, current_nodes, to_node_id, cb):
         self.pending_replications.remove(to_node_id)
@@ -135,7 +141,11 @@ class Replicator(object):
     def _delete_lost_actor(self, cb):
         self._close_actor_ports()
         cb = CalvinCB(self._delete_lost_actor_cb, cb=cb)
-        self.node.proto.actor_destroy(self.lost_actor_info['node_id'], callback=cb, actor_id=self.lost_actor_id)
+        actor_node = self.lost_actor_info['node_id']
+        if self.lost_node == actor_node:
+            cb(status=response.CalvinResponse(response.SERVICE_UNAVAILABLE))
+        else:
+            self.node.proto.actor_destroy(actor_node, callback=cb, actor_id=self.lost_actor_id)
 
     def _close_actor_ports(self):
         _log.info("Closing ports of actor {}".format(self.lost_actor_id))
@@ -155,31 +165,27 @@ class Replicator(object):
                 _log.debug("No need to send to lost node")
                 continue
             if node_id == 'local' or node_id == self.node.id:
-                print "1"
                 _log.debug("Node {} is local. Asking port manager to close peer_port_id {}, port_id {}".format(
                     node_id, port_id, key))
                 self.node.pm.disconnection_request({'peer_port_id': port_id, 'port_id': key})
-                print "11"
             else:
-                print "2"
                 _log.debug("Node {} is remote. Sending port disconnect request for port_id {}, \
                            peer_node_id {} and peer_port_id {}".format(node_id, key, node_id, port_id))
                 self.node.proto.port_disconnect(port_id=key, peer_node_id=node_id, peer_port_id=port_id)
-                print "22"
 
     def _delete_lost_actor_cb(self, status, cb):
         _log.info("Deleting actor {} from local storage".format(self.lost_actor_id))
         self.node.storage.delete_actor_from_app(self.lost_actor_info['app_id'], self.lost_actor_id)
         self.node.storage.delete_actor(self.lost_actor_id)
-        if status.status == response.SERVICE_UNAVAILABLE and not self.lost_actor_info['node_id'] == self.node.id:
-            _log.info("Node is unavailable, delete it {}".format(self.lost_actor_info['node_id']))
-            self.node.storage.get_node(self.lost_actor_info['node_id'], self._delete_node)
+        #if status.status == response.SERVICE_UNAVAILABLE and not self.lost_actor_info['node_id'] == self.node.id:
+        #    _log.info("Node is unavailable, delete it {}".format(self.lost_actor_info['node_id']))
+        #    self.node.storage.get_node(self.lost_actor_info['node_id'], self._delete_node)
         cb()
 
-    def _delete_node(self, key, value):
-        _log.info("Deleting node {} with value {}".format(key, value))
-        if not value:
-            return
+    #def _delete_node(self, key, value):
+    #    _log.info("Deleting node {} with value {}".format(key, value))
+    #    if not value:
+    #        return
 
-        indexed_public = value['attributes'].get('indexed_public')
-        self.node.storage.delete_node(key, indexed_public)
+    #    indexed_public = value['attributes'].get('indexed_public')
+    #    self.node.storage.delete_node(key, indexed_public)

@@ -78,7 +78,7 @@ class CalvinTunnel(object):
         old_id = self.id
         self.id = id
         self.tunnels[self.peer_node_id].pop(old_id)
-        self.tunnels[self.peer_node_id][self.id]=self
+        self.tunnels[self.peer_node_id][self.id] = self
 
     def _setup_ack(self, reply):
         """ Gets called when the tunnel request is acknowledged by the other side """
@@ -325,15 +325,24 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
-        _log.info("Sending actor replication request to {}".format(to_node_id))
+        _log.info("Sending actor replication request to {}".format(from_node_id))
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
-                    'actor_id': actor_id,
-                    #'from_node_id': from_node_id,
-                    'to_node_id': to_node_id}
-            self.network.links[from_node_id].send_with_reply(callback, msg)
+                   'actor_id': actor_id,
+                   #'from_node_id': from_node_id,
+                   'to_node_id': to_node_id}
+            if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request_send,
+                                                                     from_node_id=from_node_id,
+                                                                     callback=callback, msg=msg)):
+                self.network.links[from_node_id].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
+
+    def _actor_replication_request_send(self, from_node_id, callback, msg, *args, **kwargs):
+        print "sending to: {}".format(from_node_id)
+        print args
+        print kwargs
+        self.network.links[from_node_id].send_with_reply(callback, msg)
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""

@@ -30,9 +30,9 @@ class ResourceManager(object):
     def lost_node(self, node_id, uri):
         self.node_uris[node_id] = uri
 
-        _log.info("Lost node: {}/{}".format(node_id, uri))
-        for key in self.failure_counts:
-            _log.info("Failure count: {}: {}".format(key, self.failure_counts[key]))
+        #_log.info("Lost node: {}/{}".format(node_id, uri))
+        #for key in self.failure_counts:
+        #    _log.info("Failure count: {}: {}".format(key, self.failure_counts[key]))
         self.failure_counts[uri] += 1
 
     def _average(self, node_id):
@@ -68,6 +68,14 @@ class ResourceManager(object):
 
     def sort_nodes_reliability(self, node_ids):
         """Sorts after number of failures"""
+        #_log.info("node uris: {}".format(self.node_uris))
+        #_log.info("failure counts: {}".format(self.failure_counts))
+        print self.failure_counts
+        print self.node_uris
+        print node_ids
+        uris = [self.node_uris.get(node_id) for node_id in node_ids]
+        print uris
+        print [self.failure_counts.get(uri) for uri in uris]
         node_ids = [(node_id, self.failure_counts[self.node_uris.get(node_id)]) for node_id in node_ids]
         node_ids.sort(key=lambda x: x[1])
         node_ids = [x[0] for x in node_ids]

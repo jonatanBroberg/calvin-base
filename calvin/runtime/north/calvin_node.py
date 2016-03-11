@@ -233,9 +233,8 @@ class Node(object):
         highest_prio_node = self._highest_prio_node(node_id)
         if highest_prio_node == self.id:
             self._lost_nodes.append(node_id)
-            _log.info("We have highest id, replicate actors")
-            self.replicate_node_actors(node_id, cb=CalvinCB(self._lost_node_cb))
-            self.storage.get_node(node_id, self._delete_node)
+            #_log.info("We have highest id, replicate actors")
+            self.replicate_node_actors(node_id, cb=CalvinCB(self._lost_node_cb, node_id=node_id))
 
     def _delete_node(self, key, value):
         _log.info("Deleting node {} with value {}".format(key, value))
@@ -245,14 +244,23 @@ class Node(object):
         indexed_public = value['attributes'].get('indexed_public')
         self.storage.delete_node(key, indexed_public)
 
-    def _lost_node_cb(self, status):
+    def _lost_node_cb(self, status, node_id):
         if not status:
             _log.error("Failed to handle lost node: {}".format(status))
-        _log.info("Successfully handled lost node")
+        else:
+            _log.info("Successfully handled lost node")
+        self.storage.get_node(node_id, self._delete_node)
+        if node_id in self._lost_nodes:
+            self._lost_nodes.remove(node_id)
 
     def _highest_prio_node(self, node_id):
-        _log.info("Getting highest_prio_node")
+        _log.debug("Getting highest_prio_node")
         node_ids = self.network.list_links()
+        if not node_ids:
+            _log.info("We are not connected to anyone")
+            # We are not connected to anyone
+            return None
+
         if node_id in node_ids:
             node_ids.remove(node_id)
 
@@ -263,7 +271,7 @@ class Node(object):
         if not node_ids:
             return None
 
-        _log.info("highest prio node: {}".format(sorted(node_ids)[0]))
+        _log.debug("highest prio node: {}".format(sorted(node_ids)[0]))
         return sorted(node_ids)[0]
 
     def replicate_node_actors(self, node_id, cb):
@@ -278,12 +286,11 @@ class Node(object):
     def _replicate_node_actors(self, key, value, node_id, cb):
         _log.info("Replicating lost actors {}".format(value))
         if value is None:
-            self._lost_nodes.remove(node_id)
-            _log.debug("Storage returned None when fetching node actors")
-            cb(status=response.CalvinResponse(True))
+            _log.warning("Storage returned None when fetching node actors for node: {} - {}".format(
+                node_id, self.resource_manager.node_uris[node_id]))
+            cb(status=response.CalvinResponse(False))
             return
         elif value == []:
-            self._lost_nodes.remove(node_id)
             _log.debug("No value returned from storage when fetching node actors")
             cb(status=response.CalvinResponse(True))
             return
@@ -291,7 +298,6 @@ class Node(object):
         for actor_id in value:
             self.storage.get_actor(actor_id, cb=CalvinCB(self._replicate_node_actor, lost_node_id=node_id,
                                    lost_actor_id=actor_id, cb=cb))
-        self._lost_nodes.remove(node_id)
 
     def _replicate_node_actor(self, key, value, lost_node_id, lost_actor_id, cb):
         """ Get app id and actor name from actor info """

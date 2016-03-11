@@ -257,7 +257,7 @@ class Storage(object):
             value = value if value else []
             org_cb(org_key, list(set(value + local_list)))
         else:
-            org_cb(org_key, local_list if local_list else None)
+            org_cb(org_key, local_list if local_list else [])
 
     def get_concat(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore
@@ -519,7 +519,7 @@ class Storage(object):
         """
         Get the nodes for where there exists replicas of the actor actor_name in the app app_id
         """
-        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "",actor_name), cb=cb)
+        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor_name), cb=cb)
 
     def get_node_actors(self, node_id, cb=None):
         """
@@ -606,7 +606,10 @@ class Storage(object):
             self.delete(prefix="actor-", key=key, cb=cb)
             return
         if value['app_id']:
+            _log.info("Deleting from node {} replica nodes of actor {}".format(value['node_id'], value['name']))
             self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
+        else:
+            raise Exception("Cannot delete from replica nodes.")
         self.delete(prefix="actor-", key=key, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):

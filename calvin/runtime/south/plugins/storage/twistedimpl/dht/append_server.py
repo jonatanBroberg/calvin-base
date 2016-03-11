@@ -294,7 +294,8 @@ class AppendServer(Server):
 
         def remove_(nodes):
             # if this node is close too, then store here as well
-            if self.node.distanceTo(node) < max([n.distanceTo(node) for n in nodes]):
+            max_distance = max([n.distanceTo(node) for n in nodes]) if nodes else sys.maxint
+            if self.node.distanceTo(node) < max_distance:
                 try:
                     pvalue = json.loads(value)
                     self.set_keys.add(dkey)
