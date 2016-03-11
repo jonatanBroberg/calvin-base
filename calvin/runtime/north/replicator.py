@@ -24,10 +24,6 @@ class Replicator(object):
 
     def replicate_lost_actor(self, cb):
         _log.info("Replicating lost actor: {}".format(self.lost_actor_id))
-        cb = CalvinCB(self._find_replica_nodes, cb=cb)
-        self._delete_lost_actor(cb=cb)
-
-    def _find_replica_nodes(self, cb):
         cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
         self.node.storage.get_replica_nodes(self.lost_actor_info['app_id'], self.lost_actor_info['name'], cb)
 
@@ -136,6 +132,8 @@ class Replicator(object):
             self.failed_requests.append(to_node_id)
         self._replicate(current_nodes, cb)
 
+
+class ActorDestroyer(object):
     ### Delete information about lost actor ###
 
     def _delete_lost_actor(self, cb):
