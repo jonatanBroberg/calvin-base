@@ -25,7 +25,6 @@ from calvin.runtime.north import metering
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.runtime.south.plugins.async import server_connection, async
-from calvin.runtime.north.replicator import Replicator
 from urlparse import urlparse
 from calvin.utilities import calvinresponse
 from calvin.actorstore.store import DocumentationStore
@@ -33,7 +32,7 @@ from calvin.utilities import calvinuuid
 
 _log = get_logger(__name__)
 
-uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+uuid_re = calvinuuid.uuid_re
 
 control_api_doc = ""
 
@@ -1065,9 +1064,8 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
             return
 
-        replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'], uuid_re)
         cb = CalvinCB(self._handle_lost_actor_cb, handle=handle, connection=connection)
-        replicator.replicate_lost_actor(cb)
+        self.node.lost_actor(lost_actor_id, lost_actor_info, value['required_reliability'], cb)
 
     def _handle_lost_actor_cb(self, status, handle, connection):
         """ Send response, data is a list of new replicas"""

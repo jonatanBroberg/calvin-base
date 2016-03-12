@@ -21,6 +21,7 @@ import random
 from calvin.runtime.north.plugins.storage import storage_factory
 from calvin.runtime.north.plugins.coders.messages import message_coder_factory
 from calvin.runtime.south.plugins.async import async
+from calvin.utilities import calvinuuid
 from calvin.utilities import calvinlogger
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.actor import actorport
@@ -31,8 +32,6 @@ from calvin.utilities import dynops
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
-
-uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 class Storage(object):
 
@@ -109,7 +108,6 @@ class Storage(object):
     def started_cb(self, *args, **kwargs):
         """ Called when storage has started, flushes localstore
         """
-        _log.debug("Storage started!!")
         if not args[0]:
             return
 
@@ -519,7 +517,7 @@ class Storage(object):
         """
         Get the nodes for where there exists replicas of the actor actor_name in the app app_id
         """
-        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor_name), cb=cb)
+        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor_name), cb=cb)
 
     def get_node_actors(self, node_id, cb=None):
         """
@@ -540,7 +538,7 @@ class Storage(object):
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
 
-        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id}
+        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
 
         inports = []
         for p in actor.inports.values():
@@ -562,9 +560,7 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
-            print "\n\n\n\n\nADDING:"
-            print app_id + ":" + re.sub(uuid_re, "", actor.name)
-            self.append("replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor.name), value=[node_id], cb=cb)
+            self.append("replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor.name), value=[node_id], cb=cb)
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
 
@@ -606,10 +602,9 @@ class Storage(object):
             self.delete(prefix="actor-", key=key, cb=cb)
             return
         if value['app_id']:
-            _log.info("Deleting from node {} replica nodes of actor {}".format(value['node_id'], value['name']))
-            self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
-        else:
-            raise Exception("Cannot delete from replica nodes.")
+            _log.debug("Deleting from node {} replica nodes of actor {}".format(value['node_id'], value['name']))
+            self.remove("replica-nodes-", key=value['app_id'] + ":" + calvinuuid.remove_uuid(value['name']), value=[value['node_id']], cb=None)
+
         self.delete(prefix="actor-", key=key, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):

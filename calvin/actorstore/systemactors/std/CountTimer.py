@@ -27,11 +27,16 @@ class CountTimer(Actor):
     """
 
     @manage(exclude=['timer'])
-    def init(self, sleep=0.1, steps=sys.maxint):
+    def init(self, sleep=0.1, steps=sys.maxint, replicate=False):
         self.count = 0
         self.sleep = sleep
         self.steps = steps
+        self._replicate = replicate
         self.setup()
+
+    @property
+    def replicate(self):
+        return self._replicate
 
     def setup(self):
         self.use("calvinsys.events.timer", shorthand="timer")

@@ -31,6 +31,7 @@ from calvin.runtime.north import metering
 from calvin.runtime.north.calvin_network import CalvinNetwork
 from calvin.runtime.north.calvin_proto import CalvinProto
 from calvin.runtime.north.portmanager import PortManager
+from calvin.runtime.north.app_monitor import AppMonitor
 from calvin.runtime.north.replicator import Replicator
 from calvin.runtime.south.monitor import Event_Monitor
 from calvin.runtime.south.plugins.async import async
@@ -93,8 +94,8 @@ class Node(object):
         self.resource_manager = ResourceManager()
 
         self.peer_uris = {}
-        self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage,
-                                                 calvincontrol.uuid_re)
+        self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
+        self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
 
         # The initialization that requires the main loop operating is deferred to start function
@@ -203,6 +204,8 @@ class Node(object):
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
 
+        self.app_monitor.check_reliabilities()
+
     def _report_resource_usage_cb(self, peer_id, status):
         _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
@@ -213,11 +216,18 @@ class Node(object):
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):
+        _log.analyze(self.id, "+", "Lost node {}".format(node_id))
         if self.storage_node:
-            _log.info("Is storage node, ignoring lost node")
+            _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
         self.lost_node_handler.handle_lost_node(node_id)
+
+    def lost_actor(self, lost_actor_id, lost_actor_info, required_reliability, cb):
+        _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
+        replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
+        replicator.replicate_lost_actor(cb)
+        self.am.delete_actor(lost_actor_id)
 
     #
     # Event loop

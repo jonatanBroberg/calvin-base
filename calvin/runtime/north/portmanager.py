@@ -516,7 +516,7 @@ class PortManager(object):
         self.node.storage.add_port(outport, self.node.id, outport.owner.id, "out")
 
     def close_all_ports_to_node(self, actors, node_id):
-        _log.info("Closing all ports to node {}".format(node_id))
+        _log.debug("Closing all ports to node {}".format(node_id))
         disconnected = []
         for actor in actors:
             for inport in actor.inports.values():
@@ -667,7 +667,8 @@ class PortManager(object):
             pass
         if not reply:
             # Got failed response do callback, but also remove port from dictionary indicating we have sent the callback
-            self.disconnecting_ports.pop(state['port_id'])
+            if state['port_id'] in self.disconnecting_ports:
+                self.disconnecting_ports.pop(state['port_id'])
             if state['callback']:
                 state['callback'](status=response.CalvinResponse(False), **state)
         if state['port_id'] in self.disconnecting_ports:

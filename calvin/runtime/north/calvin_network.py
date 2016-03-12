@@ -61,7 +61,7 @@ class CalvinLink(object):
             # Cancel timeout
             self.replies_timeout.pop(payload['msg_uuid']).cancel()
         except Exception as e:
-            _log.warning("cancel exception {}\n\n".format(e))
+            _log.warning("cancel exception {}".format(e))
             # We ignore any errors in cancelling timeout
             pass
 
@@ -363,10 +363,10 @@ class CalvinNetwork(object):
             'reason': reason,
             'links_equal': link == self.links[rt_id].transport if rt_id in self.links else "Gone"},
             peer_node_id=rt_id)
+        _log.debug("Peer {} disconnected from {}".format(rt_id, self.node.id))
         if rt_id in self.links and link == self.links[rt_id].transport:
             self.link_remove(rt_id)
             if rt_id not in self.links:
-                _log.error("Peer disconnected: {}".format(reason))
                 self.node.lost_node(rt_id)
 
     def link_remove(self, peer_id):

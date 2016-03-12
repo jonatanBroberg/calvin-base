@@ -362,6 +362,10 @@ class Actor(object):
                              disable_state_checks=disable_state_checks)
         self.metering.add_actor_info(self)
 
+    @property
+    def replicate(self):
+        return False
+
     @verify_status([STATUS.LOADED])
     def setup_complete(self):
         self.fsm.transition_to(Actor.STATUS.READY)
@@ -671,7 +675,7 @@ class Actor(object):
         """
         args = self._get_managed()
 
-        args['name'] = re.sub(calvincontrol.uuid_re, "", self.name) + calvinuuid.uuid("REPLICA")
+        args['name'] = calvinuuid.remove_uuid(self.name) + calvinuuid.uuid("REPLICA")
         args['id'] = calvinuuid.uuid("ACTOR")
 
         return args

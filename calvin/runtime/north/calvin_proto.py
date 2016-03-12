@@ -161,6 +161,7 @@ class CalvinProto(CalvinCBClass):
             'PORT_COMMIT_MIGRATE': [CalvinCB(self.not_impl_handler)],
             'PORT_CANCEL_MIGRATE': [CalvinCB(self.not_impl_handler)],
             'PEER_SETUP': [CalvinCB(self.peer_setup_handler)],
+            'LOST_NODE': [CalvinCB(self.lost_node_handler)],
             'TUNNEL_NEW': [CalvinCB(self.tunnel_new_handler)],
             'TUNNEL_DESTROY': [CalvinCB(self.tunnel_destroy_handler)],
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
@@ -314,7 +315,6 @@ class CalvinProto(CalvinCBClass):
         from_node_id to to_node_id
         """
         _log.analyze(self.rt_id, "+", "Request replication of actor {} from {} to {}".format(actor_id, from_node_id, to_node_id))
-        _log.info("Got replication request of actor {} from {} to {}".format(actor_id, from_node_id, to_node_id))
         if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request,
                                                                  actor_id=actor_id,
                                                                  from_node_id=from_node_id,
@@ -329,19 +329,17 @@ class CalvinProto(CalvinCBClass):
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                    'actor_id': actor_id,
-                   #'from_node_id': from_node_id,
+                   'from_node_id': from_node_id,
                    'to_node_id': to_node_id}
             if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request_send,
                                                                      from_node_id=from_node_id,
                                                                      callback=callback, msg=msg)):
                 self.network.links[from_node_id].send_with_reply(callback, msg)
         elif callback:
+            _log.warning("Failed to send actor replication request: {}".format(status))
             callback(status=status)
 
     def _actor_replication_request_send(self, from_node_id, callback, msg, *args, **kwargs):
-        print "sending to: {}".format(from_node_id)
-        print args
-        print kwargs
         self.network.links[from_node_id].send_with_reply(callback, msg)
 
     def actor_replication_request_handler(self, payload):
@@ -718,6 +716,35 @@ class CalvinProto(CalvinCBClass):
         self.node.peersetup(payload['peers'], cb=CalvinCB(self._peer_setup_handler, payload))
 
     def _peer_setup_handler(self, payload, status, **kwargs):
+        """ Potentially created actor, reply to requesting node """
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
+    def lost_node(self, to_rt_uuid, node_id, callback):
+        """ Sends a peer setup request to the other node.
+            prev_connections: list of node ids to setup a connecting with
+        """
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._peer_setup, to_rt_uuid=to_rt_uuid,
+                                                               callback=callback, node_id=node_id)):
+            # Already have link just continue in _peer_setup
+                self._lost_node(to_rt_uuid, callback, node_id, status=response.CalvinResponse(True))
+
+    def _lost_node(self, to_rt_uuid, callback, node_id, status, uri=None, *args, **kwargs):
+        """ Got link? continue actor new """
+        if status:
+            msg = {'cmd': 'LOST_NODE',
+                   'node_id': node_id}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def lost_node_handler(self, payload):
+        """ Peer request new actor with state and connections """
+        self.node.lost_node(payload['node_id'])
+        #cb=CalvinCB(self._lost_node_handler, payload))
+        self._lost_node_handler(payload, status=response.CalvinResponse(True))
+
+    def _lost_node_handler(self, payload, status, **kwargs):
         """ Potentially created actor, reply to requesting node """
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)

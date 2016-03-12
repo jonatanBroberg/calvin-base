@@ -9,38 +9,39 @@ _log = get_logger(__name__)
 
 class LostNodeHandler(object):
 
-    def __init__(self, node, resource_manager, port_manager, actor_manager, storage, uuid_re):
+    def __init__(self, node, resource_manager, port_manager, actor_manager, storage):
         self.node = node
         self._lost_nodes = []
         self.resource_manager = resource_manager
         self.pm = port_manager
         self.am = actor_manager
         self.storage = storage
-        self.uuid_re = uuid_re
 
     def handle_lost_node(self, node_id):
+        _log.debug("Handling lost node {}".format(node_id))
         if node_id in self._lost_nodes:
-            _log.info("Got multiple lost node signals")
+            _log.debug("Got multiple lost node signals, ignoring")
             return
 
         try:
-            self.resource_manager.lost_node(node_id, self.node.peer_uris[node_id])
+            self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
         except:
-            _log.info(self.node.id)
-            _log.info(node_id)
-            _log.info(self.node.peer_uris)
+            pass
 
-        _log.info("Lost node {}".format(node_id))
         highest_prio_node = self._highest_prio_node(node_id)
+        _log.debug("Highest prio node: {}".format(highest_prio_node))
         if highest_prio_node == self.node.id:
+            _log.debug("We have highest id, replicate actors")
             self._lost_nodes.append(node_id)
-            #_log.info("We have highest id, replicate actors")
             self.replicate_node_actors(node_id, cb=CalvinCB(self._lost_node_cb, node_id=node_id))
+        elif highest_prio_node:
+            _log.debug("Sending lost node msg")
+            self.node.proto.lost_node(highest_prio_node, node_id, CalvinCB(self._lost_node_cb, node_id=node_id))
 
         self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
 
     def _delete_node(self, key, value):
-        _log.info("Deleting node {} with value {}".format(key, value))
+        _log.debug("Deleting node {} with value {}".format(key, value))
         if not value:
             return
 
@@ -51,7 +52,7 @@ class LostNodeHandler(object):
         if not status:
             _log.error("Failed to handle lost node: {}".format(status))
         else:
-            _log.info("Successfully handled lost node")
+            _log.debug("Successfully handled lost node")
         self.storage.get_node(node_id, self._delete_node)
         if node_id in self._lost_nodes:
             self._lost_nodes.remove(node_id)
@@ -60,7 +61,6 @@ class LostNodeHandler(object):
         _log.debug("Getting highest_prio_node")
         node_ids = self.node.network.list_links()
         if not node_ids:
-            _log.info("We are not connected to anyone")
             # We are not connected to anyone
             return None
 
@@ -78,7 +78,7 @@ class LostNodeHandler(object):
         return sorted(node_ids)[0]
 
     def replicate_node_actors(self, node_id, cb):
-        _log.info("Fetching actors for lost node: {}".format(node_id))
+        _log.debug("Fetching actors for lost node: {}".format(node_id))
         try:
             self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors, node_id=node_id, cb=cb))
         except AttributeError as e:
@@ -104,7 +104,7 @@ class LostNodeHandler(object):
 
     def _replicate_node_actor(self, key, value, lost_node_id, lost_actor_id, cb):
         """ Get app id and actor name from actor info """
-        _log.info("Replicating node actor {}: {}".format(key, value))
+        _log.debug("Replicating node actor {}: {}".format(key, value))
         if not value:
             _log.error("Failed get lost actor info from storage")
             cb(response.CalvinResponse(False))
@@ -121,13 +121,14 @@ class LostNodeHandler(object):
             return
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'],
-                                self.uuid_re, lost_node=lost_node_id)
+                                lost_node=lost_node_id)
         cb = CalvinCB(self._delete_actor, actor_id=lost_actor_id, app_id=lost_actor_info['app_id'], cb=cb,
                       lost_node_id=lost_node_id)
         replicator.replicate_lost_actor(cb)
 
     def _delete_actor(self, status, lost_node_id, actor_id, app_id, cb):
-        _log.info("Deleting actor {} from local storage".format(actor_id))
+        _log.debug("Replicated lost actor {}: {}".format(actor_id, status))
+        _log.debug("Deleting actor {} from local storage".format(actor_id))
         self.storage.delete_actor_from_app(app_id, actor_id)
         self.storage.delete_actor(actor_id)
         cb(status=status, node_id=lost_node_id)
