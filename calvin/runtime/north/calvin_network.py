@@ -30,6 +30,8 @@ _conf = calvinconfig.get()
 # FIXME should be read from calvin config
 TRANSPORT_PLUGIN_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), *['south', 'plugins', 'transports'])
 TRANSPORT_PLUGIN_NS = "calvin.runtime.south.plugins.transports"
+DEFAULT_TIMEOUT = 5.0
+
 
 class CalvinLink(object):
     """ CalvinLink class manage one RT to RT link between
@@ -58,14 +60,15 @@ class CalvinLink(object):
         try:
             # Cancel timeout
             self.replies_timeout.pop(payload['msg_uuid']).cancel()
-        except:
+        except Exception as e:
+            _log.warning("cancel exception {}".format(e))
             # We ignore any errors in cancelling timeout
             pass
 
         try:
             # Call the registered callback,for the reply message id, with the reply data as argument
             self.replies.pop(payload['msg_uuid'])(response.CalvinResponse(encoded=payload['value']))
-        except Exception as e:
+        except Exception:
             # We ignore unknown replies
             return
 
@@ -86,13 +89,16 @@ class CalvinLink(object):
         """ Adds a message id to the message and send it,
             also registers the callback for the reply.
         """
+        if not self.transport.is_connected():
+            callback(status=response.SERVICE_UNAVAILABLE)
+
         msg_id = calvinuuid.uuid("MSGID")
         self.replies[msg_id] = callback
         self.replies_timeout[msg_id] = async.DelayedCall(10.0, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
         self.send(msg)
 
-    def send(self, msg):
+    def send(self, msg, timeout=DEFAULT_TIMEOUT):
         """ Adds the from and to node ids to the message and
             sends the message using the transport.
 
@@ -332,8 +338,9 @@ class CalvinNetwork(object):
         _log.analyze(self.node.id, "+", {'value': value}, peer_node_id=key, tb=True)
         # Test if value is None or False indicating node does not currently exist in storage
         if not value:
-            # the peer_id did not exist in storage
-            callback(status=response.CalvinResponse(response.NOT_FOUND, {'peer_node_id': key}))
+            if callback:
+                # the peer_id did not exist in storage
+                callback(status=response.CalvinResponse(response.NOT_FOUND, {'peer_node_id': key}))
             return
 
         # join the peer node
@@ -352,19 +359,23 @@ class CalvinNetwork(object):
         return None
 
     def peer_disconnected(self, link, rt_id, reason):
-        _log.analyze(self.node.id, "+", {'reason': reason,
-                                         'links_equal': link == self.links[rt_id].transport if rt_id in self.links else "Gone"},
-                                         peer_node_id=rt_id)
+        _log.analyze(self.node.id, "+", {
+            'reason': reason,
+            'links_equal': link == self.links[rt_id].transport if rt_id in self.links else "Gone"},
+            peer_node_id=rt_id)
+        _log.debug("Peer {} disconnected from {}".format(rt_id, self.node.id))
         if rt_id in self.links and link == self.links[rt_id].transport:
             self.link_remove(rt_id)
+            if rt_id not in self.links:
+                self.node.lost_node(rt_id)
 
     def link_remove(self, peer_id):
         """ Removes a link to peer id """
         _log.analyze(self.node.id, "+", {}, peer_node_id=peer_id)
         try:
             self.links.pop(peer_id)
-        except:
-            pass
+        except Exception as e:
+            _log.error("Failed to remove {} from links: {}".format(peer_id, e))
 
     def link_check(self, rt_uuid):
         """ Check if we have the link otherwise raise exception """

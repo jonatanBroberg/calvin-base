@@ -31,8 +31,11 @@ from calvin.runtime.north import metering
 from calvin.runtime.north.calvin_network import CalvinNetwork
 from calvin.runtime.north.calvin_proto import CalvinProto
 from calvin.runtime.north.portmanager import PortManager
+from calvin.runtime.north.app_monitor import AppMonitor
+from calvin.runtime.north.replicator import Replicator
 from calvin.runtime.south.monitor import Event_Monitor
 from calvin.runtime.south.plugins.async import async
+from calvin.runtime.north.lost_node_handler import LostNodeHandler
 from calvin.utilities.attribute_resolver import AttributeResolver
 from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
@@ -90,9 +93,25 @@ class Node(object):
         self.app_manager = appmanager.AppManager(self)
         self.resource_manager = ResourceManager()
 
+        self.peer_uris = {}
+        self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
+        self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
+
+
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:
             async.DelayedCall(0, self.start)
+
+    @property
+    def storage_node(self):
+        return False
+
+    def is_storage_node(self, node_id):
+        if node_id == self.id:
+            return self.storage_node
+        #if node_id not in self.network.links:
+        #    return False
+        return self.storage.proxy == self.network.links[node_id].transport.get_uri()
 
     def insert_local_reply(self):
         msg_id = calvinuuid.uuid("LMSG")
@@ -140,6 +159,7 @@ class Node(object):
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
+        self.peer_uris[peer_node_id] = uri
         if uri in peers:
             peers.remove(uri)
             peer_node_ids[uri] = (peer_node_id, status)
@@ -179,14 +199,35 @@ class Node(object):
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
-        self.resource_manager.register(self.id, usage)
+        self.resource_manager.register(self.id, usage, self.uri)
         for peer_id in self.network.links:
-            self.proto.report_usage(peer_id, self.id, usage)
+            callback = CalvinCB(self._report_resource_usage_cb, peer_id)
+            self.proto.report_usage(peer_id, self.id, usage, callback=callback)
+
+        self.app_monitor.check_reliabilities()
+
+    def _report_resource_usage_cb(self, peer_id, status):
+        _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
     def register_resource_usage(self, node_id, usage, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
-        self.resource_manager.register(node_id, usage)
+        uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
+        self.resource_manager.register(node_id, usage, uri)
         callback(status=response.CalvinResponse(True))
+
+    def lost_node(self, node_id):
+        _log.analyze(self.id, "+", "Lost node {}".format(node_id))
+        if self.storage_node:
+            _log.debug("{} Is storage node, ignoring lost node".format(self.id))
+            return
+
+        self.lost_node_handler.handle_lost_node(node_id)
+
+    def lost_actor(self, lost_actor_id, lost_actor_info, required_reliability, cb):
+        _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
+        replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
+        replicator.replicate_lost_actor(cb)
+        self.am.delete_actor(lost_actor_id)
 
     #
     # Event loop

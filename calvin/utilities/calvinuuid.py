@@ -17,6 +17,9 @@
 import calvinlogger
 import logging
 import uuid as sys_uuid
+import re
+
+uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 
 def uuid(prefix):
@@ -25,3 +28,7 @@ def uuid(prefix):
         return prefix + "_" + u
     else:
         return u
+
+
+def remove_uuid(string):
+    return re.sub(uuid_re, "", string)

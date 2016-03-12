@@ -23,10 +23,14 @@ import copy
 _log = get_logger(__name__)
 
 
+class FifoFullException(Exception):
+    pass
+
+
 class Port(object):
     """docstring for Port"""
 
-    def __init__(self, name, owner, fifo_size=10):
+    def __init__(self, name, owner, fifo_size=50):
         super(Port, self).__init__()
         # Human readable port name
         self.name = name
@@ -277,7 +281,7 @@ class OutPort(Port):
                 errors.append("FIFO full when writing to port {}.{} from {}.{} with id {}".format(
                     self.owner.name, self.name, e.port.owner.name, e.port.name, e.fifo_key))
         if errors:
-            raise Exception("\n".join(errors))
+            raise FifoFullException("\n".join(errors))
 
     def available_tokens(self):
         """Used by actor (owner) to check number of token slots available on the port."""

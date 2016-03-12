@@ -21,6 +21,7 @@ import random
 from calvin.runtime.north.plugins.storage import storage_factory
 from calvin.runtime.north.plugins.coders.messages import message_coder_factory
 from calvin.runtime.south.plugins.async import async
+from calvin.utilities import calvinuuid
 from calvin.utilities import calvinlogger
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.actor import actorport
@@ -31,8 +32,6 @@ from calvin.utilities import dynops
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
-
-uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 class Storage(object):
 
@@ -109,7 +108,6 @@ class Storage(object):
     def started_cb(self, *args, **kwargs):
         """ Called when storage has started, flushes localstore
         """
-        _log.debug("Storage started!!")
         if not args[0]:
             return
 
@@ -254,9 +252,10 @@ class Storage(object):
         """
         if value:
             value = self.coder.decode(value)
+            value = value if value else []
             org_cb(org_key, list(set(value + local_list)))
         else:
-            org_cb(org_key, local_list if local_list else None)
+            org_cb(org_key, local_list if local_list else [])
 
     def get_concat(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore
@@ -423,10 +422,10 @@ class Storage(object):
         Add node to storage
         """
         self.set(prefix="node-", key=node.id,
-                  value={"uri": node.uri,
-                         "control_uri": node.control_uri,
-                         "attributes": {'public': node.attributes.get_public(),
-                                        'indexed_public': node.attributes.get_indexed_public(as_list=False)}}, cb=cb)
+                 value={"uri": node.uri,
+                        "control_uri": node.control_uri,
+                        "attributes": {'public': node.attributes.get_public(),
+                                       'indexed_public': node.attributes.get_indexed_public(as_list=False)}}, cb=cb)
         self._add_node_index(node)
         # Store all actors on this node in storage
         GlobalStore(node=node).export()
@@ -518,7 +517,13 @@ class Storage(object):
         """
         Get the nodes for where there exists replicas of the actor actor_name in the app app_id
         """
-        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "",actor_name), cb=cb)
+        return self.get_concat(prefix="replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor_name), cb=cb)
+
+    def get_node_actors(self, node_id, cb=None):
+        """
+        Get actors located on a specific node
+        """
+        return self.get_concat(prefix="node-actors-", key=node_id, cb=cb)
 
     def delete_application(self, application_id, cb=None):
         """
@@ -533,7 +538,7 @@ class Storage(object):
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
 
-        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id}
+        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
 
         inports = []
         for p in actor.inports.values():
@@ -553,9 +558,11 @@ class Storage(object):
         self.set(prefix="actor-", key=actor.id, value=data, cb=cb)
 
         if app_id:
-            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
-            self.append("replica-nodes-", key=app_id + ":" + re.sub(uuid_re, "", actor.name), value=[node_id], cb=cb)
+            self.append("replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor.name), value=[node_id], cb=cb)
+            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+            self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):
         """
@@ -571,6 +578,13 @@ class Storage(object):
         cb = CalvinCB(self._delete_replica_nodes, cb=cb)
         self.get_actor(actor_id, cb=cb)
 
+    def delete_actor_from_node(self, node_id, actor_id):
+        if not node_id:
+            _log.warning("Cannot delete actor because node id is None")
+            return
+
+        self.remove("node-actors-", key=node_id, value=[actor_id], cb=None)
+
     def delete_actor_from_app(self, app_id, actor_id):
         """Remove actor_id from application's list of actors"""
         if not app_id:
@@ -581,14 +595,16 @@ class Storage(object):
 
     def _delete_replica_nodes(self, key, value, cb):
         """
-        Delete node_id from the list of replica nodes 
+        Delete node_id from the list of replica nodes
         """
         if not value:
             _log.warning("Cannot delete actor {}, cant be found in storage".format(key))
             self.delete(prefix="actor-", key=key, cb=cb)
             return
         if value['app_id']:
-            self.remove("replica-nodes-", key=value['app_id'] + ":" + re.sub(uuid_re, "", value['name']), value=[value['node_id']], cb=None)
+            _log.debug("Deleting from node {} replica nodes of actor {}".format(value['node_id'], value['name']))
+            self.remove("replica-nodes-", key=value['app_id'] + ":" + calvinuuid.remove_uuid(value['name']), value=[value['node_id']], cb=None)
+
         self.delete(prefix="actor-", key=key, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):

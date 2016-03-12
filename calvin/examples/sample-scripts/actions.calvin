@@ -1,9 +1,6 @@
-src:std.CountTimer(sleep=0.4)
-id:std.Identity()
+src:std.CountTimer(sleep=0.5, replicate=1)
 snk:io.Print()
-
-src.integer > id.token
-id.token > snk.token
+src.integer > snk.token
 
 
 
