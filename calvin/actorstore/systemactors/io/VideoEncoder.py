@@ -51,6 +51,8 @@ class VideoEncoder(Actor):
 
     Inputs:
       in : data to encode and send
+    Outputs:
+      out : when read an image to trigger read
     """
 
     @manage([])
@@ -60,7 +62,7 @@ class VideoEncoder(Actor):
         self.frame_buffer = {}
         self.done_sending = False
 
-    @condition(['in'])
+    @condition(['in'], ['out'])
     def encode(self, data):
         data = copy.deepcopy(data)
         url = data['url']
@@ -78,7 +80,7 @@ class VideoEncoder(Actor):
         try:
             s.connect((host, port))
         except:
-            return ActionResult(production=())
+            return ActionResult(production=(True, ))
 
         data['id'] = self.id
         try:
@@ -86,7 +88,7 @@ class VideoEncoder(Actor):
         except:
             pass
 
-        return ActionResult(production=())
+        return ActionResult(production=(True, ))
 
     action_priority = (encode, )
     requires =  ['calvinsys.io.filehandler']

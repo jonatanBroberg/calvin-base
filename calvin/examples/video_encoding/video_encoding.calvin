@@ -14,6 +14,7 @@ component UDPDump(uri) -> {
 
     get.value > reader.filename
     reader.out > encoder.in
+    encoder.out > reader.trigger
 }
 
 dump : UDPDump(uri="udp://127.0.0.1:6001")

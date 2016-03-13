@@ -41,6 +41,7 @@ class VideoReader(Actor):
 
     Inputs:
       filename : File to read. If file doesn't exist, an ExceptionToken is produced
+      trigger : #
     Outputs:
       out : data with frame, frame count and url to send it to
     """
@@ -54,6 +55,7 @@ class VideoReader(Actor):
         self.end_of_file = False
         self.filename = None
         self.url = None
+        self.can_read = False
 
     @condition(['filename'])
     @guard(lambda self, filename: not self.video and not self.filename)
@@ -63,6 +65,7 @@ class VideoReader(Actor):
         self.url = data['url']
         filename = data['filename']
         self.filename = filename
+        self.can_read = True
         try:
             self.video = cv2.VideoCapture("videos/" + filename)
             self.end_of_file = False
@@ -79,7 +82,7 @@ class VideoReader(Actor):
         return ActionResult(production=(token, ))
 
     @condition([], ['out'])
-    @guard(lambda self: self.video and self.url and not self.end_of_file)
+    @guard(lambda self: self.video and self.url and not self.end_of_file and self.can_read)
     def read(self):
         success, image = self.video.read()
         data = {
@@ -98,7 +101,14 @@ class VideoReader(Actor):
         else:
             self.end_of_file = True
 
+        self.can_read = False
         return ActionResult(production=(data, ))
+
+    @condition(['trigger'])
+    @guard(lambda self, token: self.video and not self.end_of_file)
+    def trigger(self, token):
+        self.can_read = True
+        return ActionResult(production=())
 
     @condition([])
     @guard(lambda self: self.video and self.end_of_file)
@@ -106,9 +116,10 @@ class VideoReader(Actor):
         self.video.release()
         self.video = None
         self.filename = None
+        self.can_read = False
         return ActionResult()  # production=(b"", ))  # EOSToken(), ))
 
-    action_priority = (open_file, file_not_found, read, eof)
+    action_priority = (open_file, file_not_found, read, trigger, eof)
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
