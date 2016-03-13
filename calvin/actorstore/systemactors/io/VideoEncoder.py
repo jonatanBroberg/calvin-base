@@ -15,27 +15,23 @@
 # limitations under the License.
 
 import cv2
-import pickle
 import socket
-import time
 import json
 import copy
 import numpy
 import base64
 
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
-from calvin.runtime.north.calvin_token import EOSToken, ExceptionToken
 
 
-def json_numpy_obj_hook(dct, frame_buffer):
+def json_numpy_obj_hook(dct):
     """Decodes a previously encoded numpy ndarray with proper shape and dtype.
 
     :param dct: (dict) json encoded ndarray
     :return: (ndarray) if input was an encoded ndarray
     """
-    if isinstance(dct, dict):
-        data = base64.b64decode(frame_buffer)  # dct['ndarray'])
-        #data = frame_buffer
+    if isinstance(dct, dict) and 'ndarray' in dct:
+        data = base64.b64decode(dct['ndarray'])
         return numpy.frombuffer(data, dct['dtype']).reshape(dct['shape'])
     return dct
 
@@ -55,8 +51,6 @@ class VideoEncoder(Actor):
 
     Inputs:
       in : data to encode and send
-    Outputs:
-      done : #
     """
 
     @manage([])
@@ -68,79 +62,33 @@ class VideoEncoder(Actor):
 
     @condition(['in'])
     def encode(self, data):
-        #print "ENCODER", data['frame_count'], time.time()
-        #t0 = time.time()
-        #print "yeah"
         data = copy.deepcopy(data)
-        #print data
         url = data['url']
         host = url.split(":")[0]
         port = int(url.split(":")[1])
 
         frame = data.get('frame')
 
-        frame_count = data['frame_count']
-        if frame_count not in self.frame_buffer:
-            self.frame_buffer[frame_count] = ""
         if frame is not None:
-            self.frame_buffer[frame_count] = self.frame_buffer[frame_count] + frame['ndarray']
-            if len(self.frame_buffer[frame_count]) != data['expected_length']:
-                #print "returning...", time.time()
-                return ActionResult(production=())
-            else:
-                #frame = pickle.loads(frame)
-                #frame = numpy.array(frame)
-                frame = json_numpy_obj_hook(frame, self.frame_buffer[frame_count])
-                ret, jpeg = cv2.imencode(".jpg", frame)
-                data['frame'] = jpeg.tobytes().decode("latin-1")
-                self.frame_buffer[frame_count] = ""
-        else:
-            data['frame_count'] = -1
-        #t00 = time.time()
-        #print "INIT: ", t00 - t0
+            frame = json_numpy_obj_hook(frame)
+            ret, jpeg = cv2.imencode(".jpg", frame)
+            data['frame'] = jpeg.tobytes().decode("latin-1")
 
-        #print time.time()
-        #t1 = time.time()
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #t2 = time.time()
         try:
             s.connect((host, port))
-            #t3 = time.time()
         except:
-            #print "DONE?!?!?!"
-            # we're done
             return ActionResult(production=())
 
-        #print time.time()
         data['id'] = self.id
-
         try:
-            #t4 = time.time()
             s.sendall(json.dumps(data))
-            #t5 = time.time()
-            #print "send", t5 - t4
-        except Exception as e:
-            #print "failed to send..", e
+        except:
             pass
-        #t6 = time.time()
-        self.done_sending = True
-        s.close()
-
-        #print "socket ", t2 - t1
-        #print "connect ", t3 - t2
-        #print time.time()
-        #print "close", t6 - t5
-        #print time.time()
 
         return ActionResult(production=())
 
-    @condition([], ['done'])
-    @guard(lambda self: self.done_sending)
-    def done(self):
-        self.done_sending = False
-        return ActionResult(production=(True, ))
-
-    action_priority = (encode, done)
+    action_priority = (encode, )
     requires =  ['calvinsys.io.filehandler']
 
     # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
