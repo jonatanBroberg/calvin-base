@@ -223,13 +223,16 @@ class CalvinTestBase(unittest.TestCase):
         self.runtime = runtime
         self.runtimes = runtimes
         self.peerlist = peerlist
+        self.actors = {}
         self.deployer = None
 
     def tearDown(self):
+        for (a_id, a_rt) in self.actors.iteritems():
+            utils.delete_actor(a_rt, a_id)
+        self.actors = {}
         if self.deployer:
             self.deployer.destroy()
         self.deployer = None
-
 
 @pytest.mark.slow
 @pytest.mark.essential
@@ -1185,6 +1188,24 @@ class TestActorMigration(CalvinTestBase):
 @pytest.mark.slow
 class TestActorReplication(CalvinTestBase):
 
+    def _start_app(self):
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(self.runtime, app_info)
+        app_id = d.deploy()
+        self.deployer = d
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        return (d, app_id, src, snk)
+
+
     def testReplicationGetsNewName(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1192,11 +1213,13 @@ class TestActorReplication(CalvinTestBase):
 
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=123, quiet=True)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src:rt})
 
         utils.connect(rt, snk, 'token', rt.id, src, 'integer')
         time.sleep(0.27)
 
         snk_replica = utils.replicate(rt, snk, peer.id)
+        self.actors[snk_replica] = peer
         time.sleep(0.27)
 
         original = utils.get_actor(rt, snk)
@@ -1204,30 +1227,13 @@ class TestActorReplication(CalvinTestBase):
 
         assert original['name'] != replica['name']
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, snk_replica)
-
     def testLocalToRemoteReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
 
-        script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-        self.deployer = d
+        (d, app_id, src, snk) = self._start_app()
 
-        time.sleep(0.2)
-
-        snk = d.actor_map['simple:snk']
-        src = d.actor_map['simple:src']
         replica = utils.replicate(rt, snk, peer.id)
-
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt, app_id)
@@ -1247,22 +1253,9 @@ class TestActorReplication(CalvinTestBase):
     def testLocalToLocalReplication(self):
         rt = self.runtime
 
-        script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-        self.deployer = d
+        (d, app_id, src, snk) = self._start_app()
 
-        time.sleep(0.2)
-
-        snk = d.actor_map['simple:snk']
-        src = d.actor_map['simple:src']
         replica = utils.replicate(rt, snk, rt.id)
-
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt, app_id)
@@ -1280,20 +1273,8 @@ class TestActorReplication(CalvinTestBase):
         rt = self.runtime
         peer = self.runtimes[0]
 
-        script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-        self.deployer = d
+        (d, app_id, src, snk) = self._start_app()
 
-        time.sleep(0.2)
-
-        snk = d.actor_map['simple:snk']
-        src = d.actor_map['simple:src']
         utils.migrate(rt, snk, peer.id)
         time.sleep(0.2)
         replica = utils.replicate(peer, snk, peer.id)
@@ -1325,7 +1306,6 @@ class TestActorReplication(CalvinTestBase):
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
         self.deployer = d
-
         time.sleep(0.2)
 
         snk1 = d.actor_map['simple:snk1']
@@ -1362,20 +1342,8 @@ class TestActorReplication(CalvinTestBase):
         rt = self.runtime
         peer = self.runtimes[0]
 
-        script = """
-            src : std.CountTimer()
-            snk : io.StandardOut(store_tokens=1)
-            src.integer > snk.token
-        """
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-        self.deployer = d
+        (d, app_id, src, snk) = self._start_app()
 
-        time.sleep(0.2)
-
-        snk = d.actor_map['simple:snk']
-        src = d.actor_map['simple:src']
         utils.migrate(rt, snk, peer.id)
         time.sleep(0.2)
         replica = utils.replicate(peer, snk, rt.id)
@@ -1402,12 +1370,14 @@ class TestActorReplication(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:rt, snk_2:rt, src:rt})
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
         time.sleep(0.3)
 
         src_replica = utils.replicate(rt, src, peer.id)
+        self.actors[src_replica] = rt
         time.sleep(0.2)
 
         expected_src = expected_tokens(rt, src, 'std.CountTimer')
@@ -1429,11 +1399,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk_1))
         self.assert_list_prefix(expected, sorted(actual_snk_2))
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(peer, src_replica)
-        utils.delete_actor(rt, snk_1)
-        utils.delete_actor(rt, snk_2)
-
     def testReplicateSourceWithMultipleSinksToLocal(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1441,12 +1406,14 @@ class TestActorReplication(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:rt, snk_2:rt, src:rt})
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
         time.sleep(0.2)
 
         src_replica = utils.replicate(rt, src, rt.id)
+        self.actors[src_replica] = rt
         time.sleep(0.4)
 
         expected_src = expected_tokens(rt, src, 'std.CountTimer')
@@ -1468,11 +1435,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk_1))
         self.assert_list_prefix(expected, sorted(actual_snk_2))
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, src_replica)
-        utils.delete_actor(rt, snk_1)
-        utils.delete_actor(rt, snk_2)
-
     def testReplicateSinkWithMultipleSourcesToRemote(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1481,12 +1443,14 @@ class TestActorReplication(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:rt, src_2:rt})
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
         time.sleep(0.2)
 
         snk_replica = utils.replicate(rt, snk, peer.id)
+        self.actors[snk_replica] = peer
         time.sleep(0.2)
 
         expected_src_1 = expected_tokens(rt, src_1, 'std.CountTimer')
@@ -1500,11 +1464,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk))
         self.assert_list_prefix(expected, sorted(actual_replica))
 
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(rt, src_2)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, snk_replica)
-
     def testReplicateSinkWithMultipleSourcesToLocal(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1512,12 +1471,14 @@ class TestActorReplication(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:rt, src_2:rt})
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
         time.sleep(0.2)
 
         snk_replica = utils.replicate(rt, snk, rt.id)
+        self.actors[snk_replica] = rt
         time.sleep(0.3)
 
         expected_src_1 = expected_tokens(rt, src_1, 'std.CountTimer')
@@ -1531,11 +1492,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk))
         self.assert_list_prefix(expected, sorted(actual_replica))
 
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(rt, src_2)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(rt, snk_replica)
-
     def testReplicateActorWithBothInportAndOutports(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1544,6 +1500,7 @@ class TestActorReplication(CalvinTestBase):
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        self.actors.update({snk:rt, src:rt, ity:rt})
 
         utils.connect(rt, snk, 'token', rt.id, ity, 'token')
         utils.connect(rt, ity, 'token', rt.id, src, 'integer')
@@ -1552,6 +1509,7 @@ class TestActorReplication(CalvinTestBase):
         actual = utils.report(rt, snk)
 
         replica = utils.replicate(rt, ity, rt.id)
+        self.actors[replica] = rt
         time.sleep(0.3)
 
         expected_1 = expected_tokens(rt, src, 'std.CountTimer')
@@ -1572,11 +1530,6 @@ class TestActorReplication(CalvinTestBase):
         actual = filter(lambda x: x not in unique_elements, actual)
         self.assert_list_prefix(expected, sorted(actual))
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, ity)
-        utils.delete_actor(rt, replica)
-        utils.delete_actor(rt, snk)
-
     def testReplicateWithoutNodeIdSelectsLeastBusyNode(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1584,12 +1537,14 @@ class TestActorReplication(CalvinTestBase):
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        self.actors.update({snk:rt, src:rt, ity:rt})
 
         utils.connect(rt, snk, 'token', rt.id, ity, 'token')
         utils.connect(rt, ity, 'token', rt.id, src, 'integer')
 
         time.sleep(0.2)
         replica = utils.replicate(rt, ity, None)
+        self.actors[replica] = rt
         time.sleep(0.2)
 
         new_node = None
@@ -1600,10 +1555,6 @@ class TestActorReplication(CalvinTestBase):
                 new_node = runtime
 
         assert new_node
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, ity)
-        utils.delete_actor(new_node, replica)
-        utils.delete_actor(rt, snk)
 
     def testReplicateSinkAndSource(self):
         """Testing outport remote to local migration"""
@@ -1612,13 +1563,15 @@ class TestActorReplication(CalvinTestBase):
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
+        self.actors.update({snk:rt, src:rt, ity:rt})
 
         utils.connect(rt, snk, 'token', rt.id, ity, 'token')
         utils.connect(rt, ity, 'token', rt.id, src, 'integer')
-
         time.sleep(0.2)
+
         snk_replica = utils.replicate(rt, snk, rt.id)
         src_replica = utils.replicate(rt, src, rt.id)
+        self.actors.update({snk_replica:rt, src_replica:rt})
         time.sleep(0.2)
 
         expected_1 = expected_tokens(rt, src, 'std.CountTimer')
@@ -1642,12 +1595,6 @@ class TestActorReplication(CalvinTestBase):
 
         self.assert_list_prefix(expected, sorted(actual))
         self.assert_list_prefix(expected, sorted(actual_replica))
-
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, src_replica)
-        utils.delete_actor(rt, ity)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(rt, snk_replica)
 
 
 @pytest.mark.essential
