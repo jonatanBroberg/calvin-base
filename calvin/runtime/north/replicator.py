@@ -70,7 +70,7 @@ class Replicator(object):
 
     def _check_for_original(self, key, value, actors, current_nodes, index, cb):
         _log.debug("Check for original: {} - {}".format(key, value))
-        if value and self._is_match(value['name'], self.actor_info['name']):
+        if value and self._is_match(value['name'], self.actor_info['name']) and not value['node_id'] == self.lost_node:
             _log.debug("Found an replica of lost actor:".format(key))
             self.replica_id = key
             self.replica_value = value
