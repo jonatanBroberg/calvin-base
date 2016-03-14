@@ -111,7 +111,7 @@ class Replicator(object):
                 if replica_node == self.node.id:
                     self.node.am.replicate(self.replica_id, to_node_id, cb)
                 else:
-                    _log.debug("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
+                    _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
                     self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
 
     def _find_available_nodes(self, current_nodes):

@@ -357,8 +357,9 @@ class CalvinProto(CalvinCBClass):
             resp = response.CalvinResponse(status=response.CalvinResponse(False))
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
-        if self.node.network.link_request(payload['from_rt_uuid'], CalvinCB(self._send_replication_request_reply, msg=msg)):
-            self._send_replication_request_reply(payload['from_rt_uuid'], msg)
+        cb = CalvinCB(self._send_replication_request_reply, to_rt_uuid=payload['from_rt_uuid'], msg=msg)
+        if self.node.network.link_request(payload['from_rt_uuid'], cb):
+            self._send_replication_request_reply(payload['from_rt_uuid'], msg, status=response.CalvinResponse(True))
 
     def _send_replication_request_reply(self, to_rt_uuid, msg, status):
         if status:

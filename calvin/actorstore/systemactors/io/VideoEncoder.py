@@ -21,14 +21,6 @@ import copy
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
 
 
-def absolute_filename(filename):
-    """Test helper - get absolute name of file
-    @TODO: Possibly not the best way of doing this
-    """
-    import os.path
-    return os.path.join(os.path.dirname(__file__), filename)
-
-
 class VideoEncoder(Actor):
 
     """
@@ -41,12 +33,17 @@ class VideoEncoder(Actor):
     """
 
     @manage([])
-    def init(self):
+    def init(self, replicate=False):
         self.did_read = False
         self.frame_buffer = {}
         self.done_sending = False
         self.use("calvinsys.media.encoder", shorthand="encoder")
         self.encoder = self["encoder"]
+        self._replicate = replicate
+
+    @property
+    def replicate(self):
+        return self._replicate
 
     @condition(['in'], ['out'])
     def encode(self, data):

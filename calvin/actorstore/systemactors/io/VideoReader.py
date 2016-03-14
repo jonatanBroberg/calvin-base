@@ -66,9 +66,9 @@ class VideoReader(Actor):
         self.file_not_found = False  # Only report once
         return ActionResult(production=(token, ))
 
-    @condition([], ['out'])
-    @guard(lambda self: self.video and self.url and not self.end_of_file and self.can_read)
-    def read(self):
+    @condition(['trigger'], ['out'])
+    @guard(lambda self, trigger: self.video and self.url and not self.end_of_file and self.can_read)
+    def read(self, trigger):
         print "read"
         data = {
             'frame_count': -1,

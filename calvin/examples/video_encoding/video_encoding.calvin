@@ -3,7 +3,7 @@ component UDPDump(uri) -> {
     set_uri : json.SetValue()
     listener : net.UDPListener()
     reader : io.VideoReader()
-    encoder : io.VideoEncoder()
+    encoder : io.VideoEncoder(replicate=1)
     get : json.GetValue()
 
     {"command" : "listen" } > set_uri.container
