@@ -23,9 +23,12 @@ class Replicator(object):
         self.do_delete = do_delete
 
     def replicate_lost_actor(self, cb):
-        _log.info("Replicating lost actor: {}".format(self.actor_id))
-        cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
-        self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
+        if self.actor_info['replicate']:
+            _log.info("Replicating lost actor: {}".format(self.actor_id))
+            cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
+            self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
+        else:
+            _log.debug("Ignore replication of actor: {}".format(self.actor_id))
 
     ### Find a replica to replicate ###
 
