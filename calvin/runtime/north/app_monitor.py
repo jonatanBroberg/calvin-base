@@ -58,7 +58,3 @@ class AppMonitor(object):
             if name in names:
                 _log.debug("Already checked reliability of actor: {}".format(name))
             self._check_actors_reliability(actors=actors, app_info=app_info, names=names, index=index + 1)
-
-    def _done_checking_actor_reliability(self, *args, **kwargs):
-        _log.debug("Done checking reliability. {}. {}".format(args, kwargs))
-

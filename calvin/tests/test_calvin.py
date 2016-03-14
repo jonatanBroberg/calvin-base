@@ -32,13 +32,11 @@ from calvin.utilities import utils
 from calvin.utilities.nodecontrol import dispatch_node
 from calvin.utilities.attribute_resolver import format_index_string
 from calvin.utilities import calvinlogger
+from calvin.utilities import calvinuuid
 
 
 _log = calvinlogger.get_logger(__name__)
 _conf = calvinconfig.get()
-
-
-uuid_re = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 runtime = None
 runtimes = []
@@ -225,6 +223,12 @@ class CalvinTestBase(unittest.TestCase):
         self.runtime = runtime
         self.runtimes = runtimes
         self.peerlist = peerlist
+        self.deployer = None
+
+    def tearDown(self):
+        if self.deployer:
+            self.deployer.destroy()
+        self.deployer = None
 
 
 @pytest.mark.slow
@@ -260,6 +264,7 @@ class TestActorDeletion(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -273,8 +278,6 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         assert snk not in utils.get_application_actors(rt, app_id)
 
-        #d.destroy()
-
     def testDeleteMigratedActor(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -287,6 +290,7 @@ class TestActorDeletion(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         snk = d.actor_map['simple:snk']
 
@@ -305,8 +309,6 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         self.assertIsNone(utils.get_actor(peer, snk))
 
-        #d.destroy()
-
     def testDeleteRemoteActor(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -319,6 +321,7 @@ class TestActorDeletion(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         snk = d.actor_map['simple:snk']
 
@@ -337,8 +340,6 @@ class TestActorDeletion(CalvinTestBase):
         self.assertIsNone(utils.get_actor(rt, snk))
         self.assertIsNone(utils.get_actor(peer, snk))
 
-        d.destroy()
-
     def testDeleteLocalActorRemotely(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -351,6 +352,7 @@ class TestActorDeletion(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         snk = d.actor_map['simple:snk']
 
@@ -366,8 +368,6 @@ class TestActorDeletion(CalvinTestBase):
 
         self.assertIsNone(utils.get_actor(rt, snk))
         self.assertIsNone(utils.get_actor(peer, snk))
-
-        d.destroy()
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1220,6 +1220,7 @@ class TestActorReplication(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -1243,8 +1244,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
 
-        d.destroy()
-
     def testLocalToLocalReplication(self):
         rt = self.runtime
 
@@ -1256,6 +1255,7 @@ class TestActorReplication(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -1276,8 +1276,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
 
-        d.destroy()
-
     def testRemoteToRemoteReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1290,6 +1288,7 @@ class TestActorReplication(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -1311,8 +1310,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
 
-        d.destroy()
-
     def testDoubleReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1327,6 +1324,7 @@ class TestActorReplication(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -1360,8 +1358,6 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig_2)
         self.assert_list_prefix(expected, actual_replica_2)
 
-        d.destroy()
-
     def testRemoteToLocalReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1374,6 +1370,7 @@ class TestActorReplication(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
+        self.deployer = d
 
         time.sleep(0.2)
 
@@ -1396,8 +1393,6 @@ class TestActorReplication(CalvinTestBase):
         assert(len(actual_orig) > 1)
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
-
-        d.destroy()
 
     def testReplicateSourceWithMultipleSinksToRemote(self):
         """Testing outport remote to local migration"""
@@ -1659,364 +1654,186 @@ class TestActorReplication(CalvinTestBase):
 @pytest.mark.slow
 class TestLosingActors(CalvinTestBase):
 
+    def setUp(self):
+        self.rt1 = runtime
+        self.rt2 = runtimes[0]
+        self.rt3 = runtimes[1]
+        self.runtimes = [self.rt1]
+        self.runtimes.extend(runtimes)
+
+    def _start_app(self):
+        script = """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(self.rt1, app_info)
+        app_id = d.deploy()
+        self.deployer = d
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        return (d, app_id, src, snk)
+
+    def _get_reliability(self, app_id, actor_name):
+        reliability = 0
+        for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
+            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
+        return reliability
+
+    def _check_reliability(self, app_id, name):
+        reliability = self._get_reliability(app_id, name)
+        app = utils.get_application(self.rt1, app_id)
+        assert(reliability > app['required_reliability'])
+
+    def _check_replicas(self, app_id, name, expected):
+        replicas = self._get_replicas(app_id, name)
+        for a_id, a_rt in replicas.iteritems():
+            actual = actual_tokens(a_rt, a_id)
+            self.assert_list_prefix(expected, actual)
+
+    def _get_replicas(self, app_id, actor_name):
+        replicas = {}
+        actors = utils.get_application_actors(self.rt1, app_id)
+        for actor in actors:
+            for i in range(5):
+                try:
+                    a = utils.get_actor(self.rt1, actor)
+                    a_name = calvinuuid.remove_uuid(a['name'])
+                    if a_name == name:
+                        replicas[actor] = a['node_id']
+                except:
+                    time.sleep(0.2)
+        return replicas
+
+    ## Tests ##
+
     @pytest.mark.xfail(raises=Exception)
     def testLoseLastActor(self):
-        rt = self.runtime
+        (d, app_id, src, snk) = self._start_app()
 
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt, app_info)
-        app_id = d.deploy()
-        time.sleep(0.2)
-
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-
-        utils.lost_actor(rt, snk)
-
-        d.destroy()
+        utils.lost_actor(self.rt1, snk)
 
     def testReplicaNodeList(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
+        (d, app_id, src, snk) = self._start_app()
 
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
-        time.sleep(0.2)
-
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-
-        snk_replica = utils.replicate(rt1, snk, rt2.id)
-
-        snk_info = utils.get_actor(rt1, snk)
-        nodes = utils.get_replica_nodes(rt1, app_id, snk_info['name'])
+        snk_replica = utils.replicate(self.rt1, snk, self.rt2.id)
+        nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
         assert(len(nodes) == 2)
 
-        d.destroy()
+        snk_replica = utils.replicate(self.rt1, snk, self.rt3.id)
+        nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
+        assert(len(nodes) == 3)
 
-    def testLoseOneActorFromAppRTOneReplica(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
-        rt3 = self.runtimes[1]
+        snk_replica = utils.delete_actor(self.rt1, snk)
+        nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
+        assert(len(nodes) == 2)
 
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
+    def testLoseLocalSnkOneReplica(self):
+        (d, app_id, src, snk) = self._start_app()
 
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
+        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk2 = utils.replicate(rt1, snk, rt2.id)
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, snk))
 
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        self._check_reliability(app_id, 'simple:snk')
 
-        utils.lost_actor(rt1, snk)
-        time.sleep(0.3)
-        replicas = {snk2: rt2}
-        reliability = 0
-
-        for rt in [rt1, rt2, rt3]:
-            actors = utils.get_actors(rt)
-            for actor in actors:
-                if not actor == snk:
-                    for i in range(5):
-                        try:
-                            a = utils.get_actor(rt, actor)
-                            name = re.sub(uuid_re, "", a['name'])
-                            if name == 'simple:snk' and a['app_id'] == app_id:
-                                replicas[actor] = rt
-                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
-                            break
-                        except:
-                            time.sleep(0.2)
-
-        app = utils.get_application(rt1, app_id)
-        assert(reliability > app['required_reliability'])
-
-        self.assertIsNone(utils.get_actor(rt1, snk))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        for a_id, a_rt in replicas.iteritems():
-            actual = actual_tokens(a_rt, a_id)
-            self.assert_list_prefix(expected, actual)
+        self._check_replicas(app_id, 'simple:snk', expected)
 
-        utils.delete_actor(rt1, src)
-        for a_id, a_rt in replicas.iteritems():
-            utils.delete_actor(a_rt, a_id)
+    def testLoseRemoteSnkOneReplica(self):
+        (d, app_id, src, snk) = self._start_app()
 
-        d.destroy()
-
-    def testLoseOneActorFromNotAppRTOneReplica(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
-        rt3 = self.runtimes[1]
-
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
+        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk2 = utils.replicate(rt1, snk, rt2.id)
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(self.rt2, snk2)
         time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        self._check_reliability(app_id, 'simple:snk')
 
-        utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
-        replicas = {snk: rt1}
-        reliability = 0
-
-        for rt in [rt1, rt2, rt3]:
-            actors = utils.get_actors(rt)
-            for actor in actors:
-                if not actor == snk2:
-                    for i in range(5):
-                        try:
-                            a = utils.get_actor(rt, actor)
-                            name = re.sub(uuid_re, "", a['name'])
-                            if name == 'simple:snk' and a['app_id'] == app_id:
-                                replicas[actor] = rt
-                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
-                            break
-                        except:
-                            time.sleep(0.2)
-
-        app = utils.get_application(rt1, app_id)
-        assert(reliability > app['required_reliability'])
-        self.assertIsNone(utils.get_actor(rt1, snk2))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        for a_id, a_rt in replicas.iteritems():
-            actual = actual_tokens(a_rt, a_id)
-            self.assert_list_prefix(expected, actual)
+        self._check_replicas(app_id, 'simple:snk', expected)
 
-        utils.delete_actor(rt1, src)
-        for a_id, a_rt in replicas.iteritems():
-            utils.delete_actor(a_rt, a_id)
+    def testLoseLocalSnkTwoReplicas(self):
+        (d, app_id, src, snk) = self._start_app()
 
-        d.destroy()
-
-    def testLoseOneActorFromAppRTTwoReplicas(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
-        rt3 = self.runtimes[1]
-
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
+        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(self.rt2, snk2, self.rt3.id)
         time.sleep(0.2)
 
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk2 = utils.replicate(rt1, snk, rt2.id)
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
-        snk3 = utils.replicate(rt2, snk2, rt3.id)
-        time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, snk))
 
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        self._check_reliability(app_id, 'simple:snk')
 
-        utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
-        replicas = {snk2: rt2, snk3: rt3}
-        reliability = 0
-
-        for rt in [rt1, rt2, rt3]:
-            actors = utils.get_actors(rt)
-            for actor in actors:
-                if not actor == snk:
-                    for i in range(5):
-                        try:
-                            a = utils.get_actor(rt, actor)
-                            name = re.sub(uuid_re, "", a['name'])
-                            if name == 'simple:snk' and a['app_id'] == app_id:
-                                replicas[actor] = rt
-                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
-                            break
-                        except:
-                            time.sleep(0.2)
-
-        app = utils.get_application(rt1, app_id)
-        assert(reliability > app['required_reliability'])
-        self.assertIsNone(utils.get_actor(rt1, snk))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        for a_id, a_rt in replicas.iteritems():
-            actual = actual_tokens(a_rt, a_id)
-            self.assert_list_prefix(expected, actual)
+        self._check_replicas(app_id, 'simple:snk', expected)
 
-        utils.delete_actor(rt1, src)
-        for a_id, a_rt in replicas.iteritems():
-            utils.delete_actor(a_rt, a_id)
+    def testLoseRemoteSnkTwoReplicas(self):
+        (d, app_id, src, snk) = self._start_app()
 
-        d.destroy()
-
-    def testLoseOneActorFromNotAppRTTwoReplicas(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
-        rt3 = self.runtimes[1]
-
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
+        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(self.rt2, snk2, self.rt3.id)
         time.sleep(0.2)
 
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk2 = utils.replicate(rt1, snk, rt2.id)
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(self.rt2, snk2)
         time.sleep(0.2)
-        snk3 = utils.replicate(rt2, snk2, rt3.id)
-        time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
-
-        utils.lost_actor(rt2, snk2)
-        time.sleep(0.2)
-        replicas = {snk: rt1, snk3: rt3}
-        reliability = 0
-
-        for rt in [rt1, rt2, rt3]:
-            actors = utils.get_actors(rt)
-            for actor in actors:
-                if not actor == snk2:
-                    for i in range(5):
-                        try:
-                            a = utils.get_actor(rt, actor)
-                            name = re.sub(uuid_re, "", a['name'])
-                            if name == 'simple:snk' and a['app_id'] == app_id:
-                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
-                                replicas[actor] = rt
-                            break
-                        except:
-                            time.sleep(0.2)
-
-        app = utils.get_application(rt1, app_id)
-        assert(reliability > app['required_reliability'])
-        self.assertIsNone(utils.get_actor(rt1, snk2))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        self._check_reliability(app_id, 'simple:snk')
+        
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        for a_id, a_rt in replicas.iteritems():
-            actual = actual_tokens(a_rt, a_id)
-            self.assert_list_prefix(expected, actual)
-
-        utils.delete_actor(rt1, src)
-        for a_id, a_rt in replicas.iteritems():
-            utils.delete_actor(a_rt, a_id)
-
-        d.destroy()
+        self._check_replicas(app_id, 'simple:snk', expected)
 
     def testLoseTwoActorsTwoReplicas(self):
-        rt1 = self.runtime
-        rt2 = self.runtimes[0]
-        rt3 = self.runtimes[1]
+        (d, app_id, src, snk) = self._start_app()
 
-        script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
-        src.integer > snk.token
-        """
-
-        app_info, errors, warnings = compiler.compile(script, "simple")
-        d = deployer.Deployer(rt1, app_info)
-        app_id = d.deploy()
+        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
+        time.sleep(0.2)
+        snk3 = utils.replicate(self.rt1, snk, self.rt3.id)
         time.sleep(0.2)
 
-        src = d.actor_map['simple:src']
-        snk = d.actor_map['simple:snk']
-        snk2 = utils.replicate(rt1, snk, rt2.id)
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.lost_actor(self.rt2, snk2)
+        utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
-        snk3 = utils.replicate(rt1, snk, rt3.id)
-        time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, snk))
+        self.assertIsNone(utils.get_actor(self.rt2, snk2))
 
-        expected_before = expected_tokens(rt1, src, 'std.CountTimer')
+        self._check_reliability(app_id, 'simple:snk')
 
-        utils.lost_actor(rt2, snk2)
-        utils.lost_actor(rt1, snk)
-        time.sleep(0.2)
-        replicas = {snk3: rt3}
-        reliability = 0
-
-        for rt in [rt1, rt2, rt3]:
-            actors = utils.get_actors(rt)
-            for actor in actors:
-                if actor != snk and actor != snk2:
-                    for i in range(5):
-                        try:
-                            a = utils.get_actor(rt, actor)
-                            name = re.sub(uuid_re, "", a['name'])
-                            if name == 'simple:snk' and a['app_id'] == app_id:
-                                replicas[actor] = rt
-                                reliability = (1 - (1-reliability) * (1-utils.get_reliability(rt, a['node_id'])))
-                            break
-                        except:
-                            time.sleep(0.2)
-
-        app = utils.get_application(rt1, app_id)
-        assert(reliability > app['required_reliability'])
-
-        self.assertIsNone(utils.get_actor(rt1, snk))
-        self.assertIsNone(utils.get_actor(rt2, snk2))
-
-        expected = expected_tokens(rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        for a_id, a_rt in replicas.iteritems():
-            actual = actual_tokens(a_rt, a_id)
-            self.assert_list_prefix(expected, actual)
-
-        utils.delete_actor(rt1, src)
-        for a_id, a_rt in replicas.iteritems():
-            utils.delete_actor(a_rt, a_id)
-
-        d.destroy()
-
+        self._check_replicas(app_id, 'simple:snk', expected)
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -2123,7 +1940,7 @@ class TestDyingRuntimes(CalvinTestBase):
         for actor in new_actors:
             a = utils.get_actor(rt, actor)
             if a:
-                name = re.sub(uuid_re, "", a['name'])
+                name = calvinuuid.remove_uuid(a['name'])
                 if name == actor_name:
                     reliability = (1 - (1 - reliability) * (1 - utils.get_reliability(rt, a['node_id'])))
                 for rt in runtimes:
@@ -2185,6 +2002,7 @@ class TestDyingRuntimes(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(self.runtime, app_info)
         app_id = d.deploy()
+        self.deployer = d
         time.sleep(0.2)
 
         src = d.actor_map['simple:src']
@@ -2220,8 +2038,6 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_actuals(expected, actual_replicas, actual_replica_before)
 
-        d.destroy()
-
     def testLoseSnkActorWithRemoteSource(self):
         d, app_id, src, snk = self._start_app()
 
@@ -2252,8 +2068,6 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_actuals(expected, actual_replicas, actual_replica_before)
 
-        d.destroy()
-
     def testLoseSrcActorWithLocalSink(self):
         d, app_id, src, snk = self._start_app()
 
@@ -2274,8 +2088,6 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_values(self.runtime, self.runtime, snk, src, 'std.CountTimer',
                            expected_before, snk_before, replica_before, actual_replicas)
-
-        d.destroy()
 
     def testLoseSrcActorWithRemoteSink(self):
         d, app_id, src, snk = self._start_app()
@@ -2299,8 +2111,6 @@ class TestDyingRuntimes(CalvinTestBase):
         self._check_values(self.runtime, self.runtime2, snk, src, 'std.CountTimer',
                            expected_before, snk_before, replica_before, actual_replicas)
 
-        d.destroy()
-
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -2310,13 +2120,14 @@ class TestCalvinScript(CalvinTestBase):
         rt = self.runtime
 
         script = """
-      src : std.CountTimer()
-      snk : io.StandardOut(store_tokens=1)
-      src.integer > snk.token
-    """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         d.deploy() # ignoring app_id here
+        self.deployer = d
         time.sleep(0.5)
         src = d.actor_map['simple:src']
         snk = d.actor_map['simple:snk']
@@ -2328,16 +2139,14 @@ class TestCalvinScript(CalvinTestBase):
 
         self.assert_list_prefix(expected, actual)
 
-        d.destroy()
-
     def testDestroyAppWithLocalActors(self):
         rt = self.runtime
 
         script = """
-      src : std.CountTimer()
-      snk : io.StandardOut(store_tokens=1)
-      src.integer > snk.token
-    """
+        src : std.CountTimer()
+        snk : io.StandardOut(store_tokens=1)
+        src.integer > snk.token
+        """
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         app_id = d.deploy()
@@ -2423,6 +2232,7 @@ class TestCalvinScript(CalvinTestBase):
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(rt, app_info)
         d.deploy()
+        self.deployer = d
         time.sleep(0.5)
         src_1 = d.actor_map['simple:src_1']
         src_2 = d.actor_map['simple:src_2']
@@ -2435,8 +2245,6 @@ class TestCalvinScript(CalvinTestBase):
         expected_2 = expected_tokens(rt, src_2, 'std.CountTimer')
 
         self.assert_list_prefix(sorted(expected_1 + expected_2), actual)
-
-        d.destroy()
 
 
 @pytest.mark.essential
