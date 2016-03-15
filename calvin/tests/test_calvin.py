@@ -708,6 +708,20 @@ class TestRemoteConnection(CalvinTestBase):
 @pytest.mark.slow
 class TestActorMigration(CalvinTestBase):
 
+    def _start_sum_app(self, snk_rt, sum_rt, src_rt):
+        snk = utils.new_actor_wargs(snk_rt, 'io.StandardOut', 'snk', store_tokens=1)
+        sum_ = utils.new_actor(sum_rt, 'std.Sum', 'sum')
+        src = utils.new_actor(src_rt, 'std.CountTimer', 'src')
+        self.actors[snk] = snk_rt
+        self.actors[sum_] = sum_rt
+        self.actors[src] = src_rt
+
+        utils.connect(snk_rt, snk, 'token', sum_rt.id, sum_, 'integer')
+        utils.connect(sum_rt, sum_, 'integer', src_rt.id, src, 'integer')
+        time.sleep(0.27)
+
+        return (snk, sum_, src)
+
     def testOutPortRemoteToLocalMigration(self):
         """Testing outport remote to local migration"""
 
@@ -716,13 +730,7 @@ class TestActorMigration(CalvinTestBase):
         peer = self.runtimes[0]
         peer_id = peer.id
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(peer, 'std.Sum', 'sum')
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
-
-        utils.connect(rt, snk, 'token', peer_id, sum_, 'integer')
-        utils.connect(peer, sum_, 'integer', id_, src, 'integer')
-        time.sleep(0.27)
+        (snk, sum_, src) = self._start_sum_app(rt, peer, rt)
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(rt, src, peer_id)
@@ -733,9 +741,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(peer, src)
 
     def testOutPortLocalToRemoteMigration(self):
         """Testing outport local to remote migration"""
@@ -745,13 +750,7 @@ class TestActorMigration(CalvinTestBase):
         peer = self.runtimes[0]
         peer_id = peer.id
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(peer, 'std.Sum', 'sum')
-        src = utils.new_actor(peer, 'std.CountTimer', 'src')
-
-        utils.connect(rt, snk, 'token', peer_id, sum_, 'integer')
-        utils.connect(peer, sum_, 'integer', peer_id, src, 'integer')
-        time.sleep(0.27)
+        (snk, sum_, src) = self._start_sum_app(rt, peer, peer)
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(peer, src, id_)
@@ -762,9 +761,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(rt, src)
 
     def testOutPortLocalRemoteRepeatedMigration(self):
         """Testing outport local to remote migration and revers repeatedly"""
@@ -773,14 +769,9 @@ class TestActorMigration(CalvinTestBase):
         id_ = rt.id
         peer = self.runtimes[0]
         peer_id = peer.id
+        
+        (snk, sum_, src) = self._start_sum_app(rt, peer, peer)
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(peer, 'std.Sum', 'sum')
-        src = utils.new_actor(peer, 'std.CountTimer', 'src')
-
-        utils.connect(rt, snk, 'token', peer_id, sum_, 'integer')
-        utils.connect(peer, sum_, 'integer', peer_id, src, 'integer')
-        time.sleep(0.27)
         actual_x = []
         actual_1 = actual_tokens(rt, snk)
         for i in range(5):
@@ -798,9 +789,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(rt, src)
 
     def testInOutPortRemoteToLocalMigration(self):
         """Testing out- and inport remote to local migration"""
@@ -810,13 +798,7 @@ class TestActorMigration(CalvinTestBase):
         peer = self.runtimes[0]
         peer_id = peer.id
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(peer, 'std.Sum', 'sum')
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
-
-        utils.connect(rt, snk, 'token', peer_id, sum_, 'integer')
-        utils.connect(peer, sum_, 'integer', id_, src, 'integer')
-        time.sleep(0.27)
+        (snk, sum_, src) = self._start_sum_app(rt, peer, rt)
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(peer, sum_, id_)
@@ -827,9 +809,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(rt, sum_)
-        utils.delete_actor(rt, src)
 
     def testInOutPortLocalRemoteRepeatedMigration(self):
         """Testing outport local to remote migration and revers repeatedly"""
@@ -839,13 +818,8 @@ class TestActorMigration(CalvinTestBase):
         peer = self.runtimes[0]
         peer_id = peer.id
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(rt, 'std.Sum', 'sum')
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        (snk, sum_, src) = self._start_sum_app(rt, rt, rt)
 
-        utils.connect(rt, snk, 'token', id_, sum_, 'integer')
-        utils.connect(rt, sum_, 'integer', id_, src, 'integer')
-        time.sleep(0.27)
         actual_x = []
         actual_1 = actual_tokens(rt, snk)
         for i in range(5):
@@ -863,9 +837,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(rt, src)
 
     def testInOutPortLocalToRemoteMigration(self):
         """Testing out- and inport local to remote migration"""
@@ -875,13 +846,7 @@ class TestActorMigration(CalvinTestBase):
         peer = self.runtimes[0]
         peer_id = peer.id
 
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(rt, 'std.Sum', 'sum')
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
-
-        utils.connect(rt, snk, 'token', id_, sum_, 'integer')
-        utils.connect(rt, sum_, 'integer', id_, src, 'integer')
-        time.sleep(0.27)
+        (snk, sum_, src) = self._start_sum_app(rt, rt, rt)
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(rt, sum_, peer_id)
@@ -892,9 +857,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(rt, src)
 
     def testInOutPortRemoteToRemoteMigration(self):
         """Testing out- and inport remote to remote migration"""
@@ -907,14 +869,8 @@ class TestActorMigration(CalvinTestBase):
         peer1_id = peer1.id
 
         time.sleep(0.5)
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        sum_ = utils.new_actor(peer0, 'std.Sum', 'sum')
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
 
-        utils.connect(rt, snk, 'token', peer0_id, sum_, 'integer')
-        time.sleep(0.5)
-        utils.connect(peer0, sum_, 'integer', id_, src, 'integer')
-        time.sleep(0.5)
+        (snk, sum_, src) = self._start_sum_app(rt, peer0, rt)
 
         actual_1 = actual_tokens(rt, snk)
         utils.migrate(peer0, sum_, peer1_id)
@@ -925,9 +881,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer1, sum_)
-        utils.delete_actor(rt, src)
 
     def testExplicitStateMigration(self):
         """Testing migration of explicit state handling"""
@@ -942,6 +895,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(peer0, 'io.StandardOut', 'snk', store_tokens=1)
         wrapper = utils.new_actor(rt, 'misc.ExplicitStateExample', 'wrapper')
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:peer0, wrapper:rt, src:rt}) 
 
         utils.connect(peer0, snk, 'token', id_, wrapper, 'token')
         utils.connect(rt, wrapper, 'token', id_, src, 'integer')
@@ -956,9 +910,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         assert(len(actual) > len(actual_1))
         self.assert_list_prefix(expected, actual)
-        utils.delete_actor(peer0, snk)
-        utils.delete_actor(peer0, wrapper)
-        utils.delete_actor(rt, src)
 
     def testMigrateSourceWithMultipleLocalSinks(self):
         rt = self.runtime
@@ -967,6 +918,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:rt, snk_2:rt, src:rt}) 
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
@@ -990,10 +942,6 @@ class TestActorMigration(CalvinTestBase):
         self.assert_list_prefix(expected, actual_2)
         self.assertListEqual(actual_1, actual_2)
 
-        utils.delete_actor(rt, snk_1)
-        utils.delete_actor(rt, snk_2)
-        utils.delete_actor(peer, src)
-
     def testMigrateSourceWithMultipleRemoteAndLocalSinks(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1001,6 +949,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:rt, snk_2:peer, src:rt}) 
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
@@ -1024,10 +973,6 @@ class TestActorMigration(CalvinTestBase):
         self.assert_list_prefix(expected, actual_2)
         self.assertListEqual(actual_1, actual_2)
 
-        utils.delete_actor(rt, snk_1)
-        utils.delete_actor(peer, snk_2)
-        utils.delete_actor(peer, src)
-
     def testMigrateSourceWithMultipleRemoteSinks(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1035,6 +980,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:peer, snk_2:peer, src:rt}) 
 
         utils.connect(peer, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
@@ -1058,10 +1004,6 @@ class TestActorMigration(CalvinTestBase):
         self.assert_list_prefix(expected, actual_2)
         self.assertListEqual(actual_1, actual_2)
 
-        utils.delete_actor(peer, snk_1)
-        utils.delete_actor(peer, snk_2)
-        utils.delete_actor(peer, src)
-
     def testMigrateSinkWithMultipleLocalSources(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1069,6 +1011,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:rt, src_2:rt}) 
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
@@ -1085,10 +1028,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(rt, src_2)
-        utils.delete_actor(peer, snk)
-
     def testMigrateSinkWithMultipleRemoteAndLocalSources(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1096,6 +1035,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:rt, src_2:peer}) 
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
@@ -1112,10 +1052,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(peer, src_2)
-        utils.delete_actor(peer, snk)
-
     def testMigrateSinkWithMultipleRemoteSources(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1123,6 +1059,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(peer, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:peer, src_2:peer}) 
 
         utils.connect(rt, snk, 'token', peer.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
@@ -1139,10 +1076,6 @@ class TestActorMigration(CalvinTestBase):
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(peer, src_1)
-        utils.delete_actor(peer, src_2)
-        utils.delete_actor(peer, snk)
-
     def testMigrateSinkWithMultipleSinkAndSources(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1151,6 +1084,7 @@ class TestActorMigration(CalvinTestBase):
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk_1:rt, snk_2:rt, src_1:rt, src_2:rt}) 
 
         utils.connect(rt, snk_1, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk_1, 'token', rt.id, src_2, 'integer')
@@ -1177,11 +1111,6 @@ class TestActorMigration(CalvinTestBase):
         self.assert_list_prefix(expected, actual_snk_1)
         self.assert_list_prefix(expected, actual_snk_2)
         self.assert_list_prefix(actual_snk_1, actual_snk_2)
-
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(rt, src_2)
-        utils.delete_actor(peer, snk_1)
-        utils.delete_actor(rt, snk_2)
 
 
 @pytest.mark.essential
@@ -1629,6 +1558,7 @@ class TestLosingActors(CalvinTestBase):
     def _get_reliability(self, app_id, actor_name):
         reliability = 0
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
+            print 'Replica on node:', node_id
             reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
         return reliability
 
@@ -1643,15 +1573,22 @@ class TestLosingActors(CalvinTestBase):
             actual = actual_tokens(a_rt, a_id)
             self.assert_list_prefix(expected, actual)
 
-    def _check_src_replicas(self, app_id, snk, src, actor_type, expected_before, snk_before, replica_before):
-        actual_snk = actual_tokens(self.rt1, snk)
+    def _check_src_replicas(self, app_id, snk, snk_rt, src, src_rt, actor_type, expected_before, snk_before, replica_before):
+        print 'expected_before', expected_before
+        print 'snk_before', snk_before
+        print 'replica_before', replica_before
+        actual_snk = actual_tokens(snk_rt, snk)
+        print '\nactual_snk', actual_snk
 
         actual_replicas = []
         replicas = self._get_replicas(app_id, 'simple:src')
         for actor_id, rt in replicas.iteritems():
-            actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
+            if actor_id != src:
+                actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
+        print 'actual_replicas', actual_replicas
 
-        expected = expected_tokens(self.rt2, src, actor_type)
+        expected = expected_tokens(src_rt, src, actor_type)
+        print '\nexpected', expected
 
         assert len(expected) > len(expected_before)
         assert len(actual_snk) > len(snk_before + replica_before)
@@ -1661,6 +1598,7 @@ class TestLosingActors(CalvinTestBase):
 
         counts = Counter(actual_snk)
         unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        print '\nunique_elements', unique_elements
         assert len(unique_elements) > 0
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
@@ -1668,6 +1606,7 @@ class TestLosingActors(CalvinTestBase):
         filtered_expected_replicas = []
         for expected_replica in actual_replicas:
             filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
+        print 'filtered_expected_replicas', filtered_expected_replicas
 
         filtered_expected_total = [x for x in filtered_expected]
         for i in range(len(actual_replicas)):
@@ -1723,6 +1662,9 @@ class TestLosingActors(CalvinTestBase):
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
 
+        utils.disable(self.rt1, snk)
+        time.sleep(0.2)
+
         utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk))
@@ -1744,13 +1686,37 @@ class TestLosingActors(CalvinTestBase):
         actual_snk_before = actual_tokens(self.rt1, snk)
         expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
 
+        utils.disable(self.rt1, src)
+        time.sleep(0.2)
+
         utils.lost_actor(self.rt1, src)
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, src))
 
         self._check_reliability(app_id, 'simple:src')
 
-        self._check_src_replicas(app_id, snk, replica, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
+        self._check_src_replicas(app_id, snk, self.rt1, replica, self.rt2, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
+
+    def testLoseRemoteSrcOneReplica(self):
+        (d, app_id, src, snk) = self._start_app()
+
+        replica = utils.replicate(self.rt1, src, self.rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(self.rt1, snk)
+        expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
+
+        utils.disable(self.rt2, replica)
+        time.sleep(0.2)
+
+        utils.lost_actor(self.rt2, replica)
+        time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt2, replica))
+
+        self._check_reliability(app_id, 'simple:src')
+
+        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSnkOneReplica(self):
         (d, app_id, src, snk) = self._start_app()
@@ -1759,6 +1725,9 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.disable(self.rt2, snk2)
+        time.sleep(0.2)
 
         utils.lost_actor(self.rt2, snk2)
         time.sleep(0.2)
@@ -1781,6 +1750,9 @@ class TestLosingActors(CalvinTestBase):
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
 
+        utils.disable(self.rt1, snk)
+        time.sleep(0.2)
+
         utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk))
@@ -1801,6 +1773,9 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+
+        utils.disable(self.rt2, snk2)
+        time.sleep(0.2)
 
         utils.lost_actor(self.rt2, snk2)
         time.sleep(0.2)
@@ -1823,7 +1798,14 @@ class TestLosingActors(CalvinTestBase):
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
 
+        utils.disable(self.rt2, snk2)
+        time.sleep(0.2)
+
         utils.lost_actor(self.rt2, snk2)
+
+        utils.disable(self.rt1, snk)
+        time.sleep(0.2)
+
         utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk))
