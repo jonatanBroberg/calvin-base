@@ -386,6 +386,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         utils.connect(rt, snk, 'token', id_, src, 'integer')
+        self.actors.update({src:rt, snk:rt})
 
         time.sleep(0.4)
 
@@ -397,9 +398,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-
     def testLocalConnectDisconnectSink(self):
         """Testing local connect/disconnect/re-connect on sink"""
 
@@ -408,6 +406,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         src = utils.new_actor(rt, "std.CountTimer", "src")
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
         utils.connect(rt, snk, 'token', id_, src, 'integer')
+        self.actors.update({src:rt, snk:rt})
         time.sleep(0.2)
 
         utils.disconnect(rt, snk)
@@ -420,9 +419,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-
     def testLocalConnectDisconnectSource(self):
         """Testing local connect/disconnect/re-connect on source"""
 
@@ -430,6 +426,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         src = utils.new_actor(rt, "std.CountTimer", "src")
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+        self.actors.update({src:rt, snk:rt})
 
         utils.connect(rt, snk, "token", id_, src, "integer")
         time.sleep(0.2)
@@ -444,9 +441,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-
     def testLocalConnectSourceWithMultipleSinks(self):
         """Testing local connect/disconnect/re-connect on source with multiple sinks"""
 
@@ -455,6 +449,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         src = utils.new_actor(rt, "std.CountTimer", "src")
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
         snk_2 = utils.new_actor_wargs(rt, "io.StandardOut", "snk_2", store_tokens=1)
+        self.actors.update({src:rt, snk:rt, snk_2:rt})
 
         utils.connect(rt, snk, "token", rt_id, src, "integer")
         time.sleep(0.2)
@@ -473,10 +468,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         self.assert_list_prefix(expected, actual_1)
         self.assert_list_prefix(expected, actual_2)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(rt, snk_2)
-
     def testLocalConnectSinkWithMultipleSources(self):
         """Testing local connect/disconnect/re-connect on source with multiple sinks"""
 
@@ -485,6 +476,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         src = utils.new_actor(rt, "std.CountTimer", "src")
         src_2 = utils.new_actor(rt, "std.CountTimer", "src_2")
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+        self.actors.update({src:rt, src_2:rt, snk:rt})
 
         utils.connect(rt, snk, "token", rt_id, src, "integer")
         utils.connect(rt, snk, "token", rt_id, src_2, "integer")
@@ -503,10 +495,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         actual = sorted(actual_tokens(rt, snk))
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(rt, src_2)
-
     def testLocalConnectDisconnectFilter(self):
         """Testing local connect/disconnect/re-connect on filter"""
 
@@ -515,6 +503,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         src = utils.new_actor(rt, "std.CountTimer", "src")
         sum_ = utils.new_actor(rt, "std.Sum", "sum")
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
+        self.actors.update({src:rt, sum_:rt, snk:rt})
 
         utils.connect(rt, snk, "token", id_, sum_, "integer")
         utils.connect(rt, sum_, "integer", id_, src, "integer")
@@ -534,10 +523,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, sum_)
-        utils.delete_actor(rt, snk)
-
     def testTimerLocalSourceSink(self):
         """Testing timer based local source and sink"""
 
@@ -547,6 +532,7 @@ class TestLocalConnectDisconnect(CalvinTestBase):
             rt, 'std.CountTimer', 'src', sleep=0.1, steps=10)
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         utils.connect(rt, snk, 'token', id_, src, 'integer')
+        self.actors.update({src:rt, snk:rt})
 
         time.sleep(1.2)
 
@@ -558,9 +544,6 @@ class TestLocalConnectDisconnect(CalvinTestBase):
 
         self.assert_list_prefix(expected, actual)
         self.assertTrue(len(actual) > 0)
-
-        utils.delete_actor(rt, src)
-        utils.delete_actor(rt, snk)
 
 
 @pytest.mark.essential
@@ -580,6 +563,7 @@ class TestRemoteConnection(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         sum_ = utils.new_actor(peer, 'std.Sum', 'sum')
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, sum_:peer, src:rt})
 
         utils.connect(rt, snk, 'token', peer_id, sum_, 'integer')
         utils.connect(peer, sum_, 'integer', id_, src, 'integer')
@@ -591,10 +575,6 @@ class TestRemoteConnection(CalvinTestBase):
         actual = actual_tokens(rt, snk)
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
-
-        utils.delete_actor(rt, snk)
-        utils.delete_actor(peer, sum_)
-        utils.delete_actor(rt, src)
 
     def testRemoteSlowPort(self):
         """Testing remote slow port and that token flow control works"""
@@ -608,6 +588,7 @@ class TestRemoteConnection(CalvinTestBase):
         alt = utils.new_actor(peer, 'std.Alternate', 'alt')
         src1 = utils.new_actor_wargs(rt, 'std.CountTimer', 'src1', sleep=0.1, steps=100)
         src2 = utils.new_actor_wargs(rt, 'std.CountTimer', 'src2', sleep=1.0, steps=10)
+        self.actors.update({snk1:rt, alt:peer, src1:rt, src2:rt})
 
         utils.connect(rt, snk1, 'token', peer_id, alt, 'token')
         utils.connect(peer, alt, 'token_1', id_, src1, 'integer')
@@ -628,11 +609,6 @@ class TestRemoteConnection(CalvinTestBase):
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, snk1)
-        utils.delete_actor(peer, alt)
-        utils.delete_actor(rt, src1)
-        utils.delete_actor(rt, src2)
-
     def testRemoteSlowFanoutPort(self):
         """Testing remote slow port with fan out and that token flow control works"""
 
@@ -646,6 +622,7 @@ class TestRemoteConnection(CalvinTestBase):
         alt = utils.new_actor(peer, 'std.Alternate', 'alt')
         src1 = utils.new_actor_wargs(rt, 'std.CountTimer', 'src1', sleep=0.1, steps=100)
         src2 = utils.new_actor_wargs(rt, 'std.CountTimer', 'src2', sleep=1.0, steps=10)
+        self.actors.update({snk1:rt, snk2:peer, alt:peer, src1:rt, src2:rt})
 
         utils.connect(rt, snk1, 'token', peer_id, alt, 'token')
         utils.connect(peer, snk2, 'token', id_, src1, 'integer')
@@ -672,12 +649,6 @@ class TestRemoteConnection(CalvinTestBase):
         assert(len(actual) > 1)
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(rt, snk1)
-        utils.delete_actor(peer, snk2)
-        utils.delete_actor(peer, alt)
-        utils.delete_actor(rt, src1)
-        utils.delete_actor(rt, src2)
-
     def testSinkWithMultipleRemoteSources(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -685,6 +656,7 @@ class TestRemoteConnection(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, "io.StandardOut", "snk", store_tokens=1)
         src_1 = utils.new_actor_wargs(peer, 'std.CountTimer', 'src_1')
         src_2 = utils.new_actor_wargs(peer, 'std.CountTimer', 'src_2')
+        self.actors.update({snk:rt, src_1:peer, src_2:peer})
 
         utils.connect(rt, snk, 'token', peer.id, src_1, 'integer')
         time.sleep(.2)
@@ -699,10 +671,6 @@ class TestRemoteConnection(CalvinTestBase):
         assert len(actual) > 0
         self.assert_list_prefix(expected, actual)
 
-        utils.delete_actor(peer, src_1)
-        utils.delete_actor(peer, src_2)
-        utils.delete_actor(rt, snk)
-
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -712,9 +680,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(snk_rt, 'io.StandardOut', 'snk', store_tokens=1)
         sum_ = utils.new_actor(sum_rt, 'std.Sum', 'sum')
         src = utils.new_actor(src_rt, 'std.CountTimer', 'src')
-        self.actors[snk] = snk_rt
-        self.actors[sum_] = sum_rt
-        self.actors[src] = src_rt
+        self.actors.update({snk:snk_rt, sum_:sum_rt, src:src_rt})
 
         utils.connect(snk_rt, snk, 'token', sum_rt.id, sum_, 'integer')
         utils.connect(sum_rt, sum_, 'integer', src_rt.id, src, 'integer')
@@ -2239,6 +2205,7 @@ class TestMultipleInports(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
+        self.actors.update({snk:rt, src_1:rt, src_2:rt})
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
@@ -2252,14 +2219,10 @@ class TestMultipleInports(CalvinTestBase):
         assert(len(actual_snk) > 1)
         self.assert_list_prefix(expected, sorted(actual_snk))
 
-        utils.delete_actor(rt, src_1)
-        utils.delete_actor(rt, src_2)
-        utils.delete_actor(rt, snk)
-
 
 @pytest.mark.essential
 @pytest.mark.slow
-class TestPeerSetup(CalvinTestBase):
+class TestPeerSetup(unittest.TestCase):
 
     def testPeerSetupSinglePeer(self):
         global ip_addr
