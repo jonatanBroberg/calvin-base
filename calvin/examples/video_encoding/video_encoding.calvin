@@ -1,8 +1,9 @@
 component UDPDump(uri) -> {
+    trigger : std.CountTimer(sleep=0.05)
     set_uri : json.SetValue()
     listener : net.UDPListener()
     reader : io.VideoReader()
-    encoder : io.VideoEncoder()
+    encoder : io.VideoEncoder(replicate=1)
     get : json.GetValue()
 
     {"command" : "listen" } > set_uri.container
@@ -15,6 +16,7 @@ component UDPDump(uri) -> {
     get.value > reader.filename
     reader.out > encoder.in
     encoder.out > reader.trigger
+    trigger.integer > reader.trigger
 }
 
 dump : UDPDump(uri="udp://127.0.0.1:6001")

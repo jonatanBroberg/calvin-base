@@ -325,11 +325,11 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
-        _log.info("Sending actor replication request to {}".format(from_node_id))
+        _log.info("Sending actor replication request to {} from {}".format(from_node_id, self.node.id))
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                    'actor_id': actor_id,
-                   'from_node_id': from_node_id,
+                   #'from_node_id': from_node_id,
                    'to_node_id': to_node_id}
             if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request_send,
                                                                      from_node_id=from_node_id,
@@ -344,7 +344,6 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
-        _log.info("Handle actor replication request")
         _log.analyze(self.rt_id, "+", "Handle of request of a replication request {}".format(payload))
         self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback=CalvinCB(self._actor_replication_request_handler, payload))
 
@@ -354,8 +353,18 @@ class CalvinProto(CalvinCBClass):
             resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
         else:
             resp = response.CalvinResponse(status=response.CalvinResponse(False))
+
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
-        self.network.links[payload['from_rt_uuid']].send(msg)
+        cb = CalvinCB(self._send_replication_request_reply, to_rt_uuid=payload['from_rt_uuid'], msg=msg)
+        if self.node.network.link_request(payload['from_rt_uuid'], cb):
+            self._send_replication_request_reply(payload['from_rt_uuid'], msg, status=response.CalvinResponse(True))
+
+    def _send_replication_request_reply(self, to_rt_uuid, msg, status, *args, **kwargs):
+        if status:
+            self.network.links[to_rt_uuid].send(msg)
+        else:
+            _log.error("Failed to send reply to actor replication request to node id: {} - {}".format(
+                to_rt_uuid, status))
 
     def actor_migrate(self, to_rt_uuid, callback, actor_id, requirements, extend=False, move=False):
         """ Request actor on to_rt_uuid node to migrate accoring to new deployment requirements
@@ -638,10 +647,18 @@ class CalvinProto(CalvinCBClass):
         if tunnel:
             msg = {'cmd': 'PORT_CONNECT', 'port_id': port_id, 'peer_actor_id': peer_actor_id,
                    'peer_port_name': peer_port_name, 'peer_port_id': peer_port_id, 'peer_port_dir': peer_port_dir,
-                   'port_states': port_states, 'tunnel_id':tunnel.id}
-            self.network.links[peer_node_id].send_with_reply(callback, msg)
+                   'port_states': port_states, 'tunnel_id': tunnel.id}
+            cb = CalvinCB(self._port_connect, peer_node_id=peer_node_id, msg=msg, callback=callback)
+            if self.node.network.link_request(peer_node_id, cb):
+                self._port_connect(peer_node_id=peer_node_id, msg=msg, callback=callback, status=response.CalvinResponse(True))
         else:
             raise NotImplementedError()
+
+    def _port_connect(self, peer_node_id, msg, callback, status, *args, **kwargs):
+        if status:
+            self.network.links[peer_node_id].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
 
     def port_connect_handler(self, payload):
         """ Request for port connection """

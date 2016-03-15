@@ -26,8 +26,10 @@ from calvin.utilities import calvinconfig
 
 # Spec
 _MODULES = {'camera': ['Camera'],
-            'image': ['Image'],
-            'mediaplayer': ['MediaPlayer']}
+            #'image': ['Image'],
+            'video': ['Video'],
+            'encoder': ['Encoder']}
+            #'mediaplayer': ['MediaPlayer']}
 
 _FW_MODULES = []
 __all__ = []

@@ -23,9 +23,12 @@ class Replicator(object):
         self.do_delete = do_delete
 
     def replicate_lost_actor(self, cb):
-        _log.info("Replicating lost actor: {}".format(self.actor_id))
-        cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
-        self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
+        if self.actor_info['replicate']:
+            _log.info("Replicating lost actor: {}".format(self.actor_id))
+            cb = CalvinCB(self._find_replica_nodes_cb, cb=cb)
+            self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
+        else:
+            _log.debug("Ignore replication of actor: {}".format(self.actor_id))
 
     ### Find a replica to replicate ###
 
@@ -67,7 +70,7 @@ class Replicator(object):
 
     def _check_for_original(self, key, value, actors, current_nodes, index, cb):
         _log.debug("Check for original: {} - {}".format(key, value))
-        if value and self._is_match(value['name'], self.actor_info['name']):
+        if value and self._is_match(value['name'], self.actor_info['name']) and not value['node_id'] == self.lost_node:
             _log.debug("Found an replica of lost actor:".format(key))
             self.replica_id = key
             self.replica_value = value
@@ -108,7 +111,7 @@ class Replicator(object):
                 if replica_node == self.node.id:
                     self.node.am.replicate(self.replica_id, to_node_id, cb)
                 else:
-                    _log.debug("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
+                    _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
                     self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
 
     def _find_available_nodes(self, current_nodes):
