@@ -28,8 +28,6 @@ class VideoEncoder(Actor):
 
     Inputs:
       in : data to encode and send
-    Outputs:
-      out : when read an image to trigger read
     """
 
     @manage([])
@@ -45,9 +43,8 @@ class VideoEncoder(Actor):
     def replicate(self):
         return self._replicate
 
-    @condition(['in'], ['out'])
+    @condition(['in'])
     def encode(self, data):
-        print "encode"
         data = copy.deepcopy(data)
         url = data['url']
         host = url.split(":")[0]
@@ -66,7 +63,7 @@ class VideoEncoder(Actor):
         try:
             s.connect((host, port))
         except:
-            return ActionResult(production=(True, ))
+            return ActionResult(production=())
 
         data['id'] = self.id
         try:
@@ -74,7 +71,7 @@ class VideoEncoder(Actor):
         except:
             pass
 
-        return ActionResult(production=(True, ))
+        return ActionResult(production=())
 
     action_priority = (encode, )
     requires =  ['calvinsys.media.encoder']

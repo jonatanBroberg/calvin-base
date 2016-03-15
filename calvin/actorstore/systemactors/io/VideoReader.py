@@ -69,7 +69,6 @@ class VideoReader(Actor):
     @condition(['trigger'], ['out'])
     @guard(lambda self, trigger: self.video and self.url and not self.end_of_file and self.can_read)
     def read(self, trigger):
-        print "read"
         data = {
             'frame_count': -1,
             'url': self.url
