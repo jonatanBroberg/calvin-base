@@ -1524,7 +1524,6 @@ class TestLosingActors(CalvinTestBase):
     def _get_reliability(self, app_id, actor_name):
         reliability = 0
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            print 'Replica on node:', node_id
             reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
         return reliability
 
@@ -1599,11 +1598,16 @@ class TestLosingActors(CalvinTestBase):
 
     ## Tests ##
 
-    @pytest.mark.xfail(raises=Exception)
     def testLoseLastActor(self):
         (d, app_id, src, snk) = self._start_app()
 
+        actors_before = utils.get_application_actors(self.rt1, app_id)
         utils.lost_actor(self.rt1, snk)
+        time.sleep(0.2)
+
+        actors_after = utils.get_application_actors(self.rt1, app_id)
+        new_actors = [actor for actor in actors_after if actor not in actors_before]
+        assert(len(new_actors) == 0)
 
     def testReplicaNodeList(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
