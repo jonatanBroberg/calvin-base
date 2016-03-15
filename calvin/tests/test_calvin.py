@@ -1602,6 +1602,7 @@ class TestActorReplication(CalvinTestBase):
 class TestLosingActors(CalvinTestBase):
 
     def setUp(self):
+        super(TestLosingActors, self).setUp()
         self.rt1 = runtime
         self.rt2 = runtimes[0]
         self.rt3 = runtimes[1]
@@ -1636,24 +1637,59 @@ class TestLosingActors(CalvinTestBase):
         app = utils.get_application(self.rt1, app_id)
         assert(reliability > app['required_reliability'])
 
-    def _check_replicas(self, app_id, name, expected):
-        replicas = self._get_replicas(app_id, name)
+    def _check_snk_replicas(self, app_id, expected):
+        replicas = self._get_replicas(app_id, 'simple:snk')
         for a_id, a_rt in replicas.iteritems():
             actual = actual_tokens(a_rt, a_id)
             self.assert_list_prefix(expected, actual)
 
+    def _check_src_replicas(self, app_id, snk, src, actor_type, expected_before, snk_before, replica_before):
+        actual_snk = actual_tokens(self.rt1, snk)
+
+        actual_replicas = []
+        replicas = self._get_replicas(app_id, 'simple:src')
+        for actor_id, rt in replicas.iteritems():
+            actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
+
+        expected = expected_tokens(self.rt2, src, actor_type)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual_snk) > len(snk_before + replica_before)
+        for actuals in actual_replicas:
+            assert len(actuals) > 0
+            assert len(actuals) > len(replica_before)
+
+        counts = Counter(actual_snk)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
+        filtered_expected_replicas = []
+        for expected_replica in actual_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
+
+        filtered_expected_total = [x for x in filtered_expected]
+        for i in range(len(actual_replicas)):
+            filtered_expected_total += filtered_expected
+        self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual_snk))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
+
     def _get_replicas(self, app_id, actor_name):
         replicas = {}
-        actors = utils.get_application_actors(self.rt1, app_id)
-        for actor in actors:
-            for i in range(5):
-                try:
-                    a = utils.get_actor(self.rt1, actor)
-                    a_name = calvinuuid.remove_uuid(a['name'])
-                    if a_name == name:
-                        replicas[actor] = a['node_id']
-                except:
-                    time.sleep(0.2)
+        for rt in self.runtimes:
+            actors = utils.get_actors(rt)
+            for actor in actors:
+                for i in range(5):
+                    try:
+                        a = utils.get_actor(self.rt1, actor)
+                        a_name = calvinuuid.remove_uuid(a['name'])
+                        if a_name == actor_name and a['node_id'] == rt.id:
+                            replicas[actor] = rt
+                        break
+                    except:
+                        time.sleep(0.2)
         return replicas
 
     ## Tests ##
@@ -1682,7 +1718,7 @@ class TestLosingActors(CalvinTestBase):
     def testLoseLocalSnkOneReplica(self):
         (d, app_id, src, snk) = self._start_app()
 
-        snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
+        utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
@@ -1696,7 +1732,25 @@ class TestLosingActors(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        self._check_replicas(app_id, 'simple:snk', expected)
+        self._check_snk_replicas(app_id, expected)
+
+    def testLoseLocalSrcOneReplica(self):
+        (d, app_id, src, snk) = self._start_app()
+
+        replica = utils.replicate(self.rt1, src, self.rt2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(self.rt1, snk)
+        expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
+
+        utils.lost_actor(self.rt1, src)
+        time.sleep(0.2)
+        self.assertIsNone(utils.get_actor(self.rt1, src))
+
+        self._check_reliability(app_id, 'simple:src')
+
+        self._check_src_replicas(app_id, snk, replica, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSnkOneReplica(self):
         (d, app_id, src, snk) = self._start_app()
@@ -1715,7 +1769,7 @@ class TestLosingActors(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        self._check_replicas(app_id, 'simple:snk', expected)
+        self._check_snk_replicas(app_id, expected)
 
     def testLoseLocalSnkTwoReplicas(self):
         (d, app_id, src, snk) = self._start_app()
@@ -1736,7 +1790,7 @@ class TestLosingActors(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        self._check_replicas(app_id, 'simple:snk', expected)
+        self._check_snk_replicas(app_id, expected)
 
     def testLoseRemoteSnkTwoReplicas(self):
         (d, app_id, src, snk) = self._start_app()
@@ -1757,7 +1811,7 @@ class TestLosingActors(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        self._check_replicas(app_id, 'simple:snk', expected)
+        self._check_snk_replicas(app_id, expected)
 
     def testLoseTwoActorsTwoReplicas(self):
         (d, app_id, src, snk) = self._start_app()
@@ -1780,7 +1834,7 @@ class TestLosingActors(CalvinTestBase):
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
-        self._check_replicas(app_id, 'simple:snk', expected)
+        self._check_snk_replicas(app_id, expected)
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1907,7 +1961,6 @@ class TestDyingRuntimes(CalvinTestBase):
     def _check_values(self, rt1, rt2, snk, src, src_type, expected_before, snk_before, replica_before, actual_replicas):
         actual_snk = actual_tokens(rt1, snk)
         expected = expected_tokens(rt2, src, src_type)
-
         assert len(expected) > len(expected_before)
         assert len(actual_snk) > len(snk_before + replica_before)
         for actuals in actual_replicas:
