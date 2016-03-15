@@ -365,7 +365,7 @@ class Storage(object):
     def remove_cb(self, key, value, org_key, org_value, org_cb):
         """ remove callback, on error retry after flush_timeout
         """
-        if value == True:
+        if value:
             if org_cb:
                 org_cb(key=org_key, value=True)
             if key in self.localstore_sets:
@@ -560,6 +560,7 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
+            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor.name), value=[node_id], cb=cb)
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
