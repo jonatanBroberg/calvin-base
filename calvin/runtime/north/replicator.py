@@ -29,6 +29,7 @@ class Replicator(object):
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
         else:
             _log.debug("Ignore replication of actor: {}".format(self.actor_id))
+            cb(response.OK)
 
     ### Find a replica to replicate ###
 
