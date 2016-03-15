@@ -334,13 +334,18 @@ class CalvinProto(CalvinCBClass):
             if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request_send,
                                                                      from_node_id=from_node_id,
                                                                      callback=callback, msg=msg)):
-                self.network.links[from_node_id].send_with_reply(callback, msg)
+                self._actor_replication_request_send(from_node_id=from_node_id, callback=callback, msg=msg,
+                                                     status=response.CalvinResponse(True))
         elif callback:
-            _log.warning("Failed to send actor replication request: {}".format(status))
+            _log.warning("Failed to send actor replication request to: {} - {}".format(from_node_id, status))
             callback(status=status)
 
-    def _actor_replication_request_send(self, from_node_id, callback, msg, *args, **kwargs):
-        self.network.links[from_node_id].send_with_reply(callback, msg)
+    def _actor_replication_request_send(self, from_node_id, callback, msg, status, *args, **kwargs):
+        if status:
+            self.network.links[from_node_id].send_with_reply(callback, msg)
+        elif callback:
+            _log.warning("Failed to send actor replication request to: {} - {}".format(from_node_id, status))
+            callback(status=status)
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
