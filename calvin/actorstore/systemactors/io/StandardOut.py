@@ -31,12 +31,17 @@ class StandardOut(Actor):
         # Check args to verify that it is EOSToken
         return action(self, *args)
 
-    @manage(['tokens', 'store_tokens', 'quiet'])
-    def init(self, store_tokens=False, quiet=False):
+    @manage(['tokens', 'store_tokens', 'quiet', '_replicate'])
+    def init(self, store_tokens=False, quiet=False, replicate=False):
         self.store_tokens = store_tokens
         self.tokens = []
         self.quiet = quiet
+        self._replicate = replicate
         self.setup()
+
+    @property
+    def replicate(self):
+        return self._replicate
 
     def did_migrate(self):
         self.setup()

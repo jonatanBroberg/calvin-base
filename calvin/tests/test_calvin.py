@@ -1504,10 +1504,10 @@ class TestLosingActors(CalvinTestBase):
         self.runtimes = [self.rt1]
         self.runtimes.extend(runtimes)
 
-    def _start_app(self):
+    def _start_app(self, replicate_src=0, replicate_snk=0):
         script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
+        src : std.CountTimer(replicate=""" +str(replicate_src)+ """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
         src.integer > snk.token
         """
 
@@ -1606,7 +1606,7 @@ class TestLosingActors(CalvinTestBase):
         utils.lost_actor(self.rt1, snk)
 
     def testReplicaNodeList(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk_replica = utils.replicate(self.rt1, snk, self.rt2.id)
         nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
@@ -1621,7 +1621,7 @@ class TestLosingActors(CalvinTestBase):
         assert(len(nodes) == 2)
 
     def testLoseLocalSnkOneReplica(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
@@ -1643,7 +1643,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_snk_replicas(app_id, expected)
 
     def testLoseLocalSrcOneReplica(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_src=1)
 
         replica = utils.replicate(self.rt1, src, self.rt2.id)
         time.sleep(0.2)
@@ -1664,7 +1664,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_src_replicas(app_id, snk, self.rt1, replica, self.rt2, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSrcOneReplica(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_src=1)
 
         replica = utils.replicate(self.rt1, src, self.rt2.id)
         time.sleep(0.2)
@@ -1685,7 +1685,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSnkOneReplica(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
@@ -1707,7 +1707,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_snk_replicas(app_id, expected)
 
     def testLoseLocalSnkTwoReplicas(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
@@ -1731,7 +1731,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_snk_replicas(app_id, expected)
 
     def testLoseRemoteSnkTwoReplicas(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
@@ -1755,7 +1755,7 @@ class TestLosingActors(CalvinTestBase):
         self._check_snk_replicas(app_id, expected)
 
     def testLoseTwoActorsTwoReplicas(self):
-        (d, app_id, src, snk) = self._start_app()
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
@@ -1940,10 +1940,10 @@ class TestDyingRuntimes(CalvinTestBase):
     def _kill_dying(self):
         os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
 
-    def _start_app(self):
+    def _start_app(self, replicate_snk=0, replicate_src=0):
         script = """
-        src : std.CountTimer()
-        snk : io.StandardOut(store_tokens=1)
+        src : std.CountTimer(replicate="""+str(replicate_src)+""")
+        snk : io.StandardOut(store_tokens=1, replicate="""+str(replicate_snk)+""")
         src.integer > snk.token
         """
 
@@ -1958,7 +1958,7 @@ class TestDyingRuntimes(CalvinTestBase):
         return (d, app_id, src, snk)
 
     def testLoseSnkActorWithLocalSource(self):
-        d, app_id, src, snk = self._start_app()
+        d, app_id, src, snk = self._start_app(replicate_snk=1)
 
         replica = utils.replicate(self.runtime, snk, self.dying_rt.id)
         time.sleep(0.2)
@@ -1987,7 +1987,7 @@ class TestDyingRuntimes(CalvinTestBase):
         self._check_actuals(expected, actual_replicas, actual_replica_before)
 
     def testLoseSnkActorWithRemoteSource(self):
-        d, app_id, src, snk = self._start_app()
+        d, app_id, src, snk = self._start_app(replicate_snk=1)
 
         replica = utils.replicate(self.runtime, snk, self.dying_rt.id)
         utils.migrate(self.runtime, src, self.runtime2.id)
@@ -2017,7 +2017,7 @@ class TestDyingRuntimes(CalvinTestBase):
         self._check_actuals(expected, actual_replicas, actual_replica_before)
 
     def testLoseSrcActorWithLocalSink(self):
-        d, app_id, src, snk = self._start_app()
+        d, app_id, src, snk = self._start_app(replicate_src=1)
 
         replica = utils.replicate(self.runtime, src, self.dying_rt.id)
         time.sleep(0.2)
@@ -2038,7 +2038,7 @@ class TestDyingRuntimes(CalvinTestBase):
                            expected_before, snk_before, replica_before, actual_replicas)
 
     def testLoseSrcActorWithRemoteSink(self):
-        d, app_id, src, snk = self._start_app()
+        d, app_id, src, snk = self._start_app(replicate_src=1)
 
         replica = utils.replicate(self.runtime, src, self.dying_rt.id)
         utils.migrate(self.runtime, src, self.runtime2.id)
@@ -2058,6 +2058,27 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_values(self.runtime, self.runtime2, snk, src, 'std.CountTimer',
                            expected_before, snk_before, replica_before, actual_replicas)
+
+    def testLoseReplicaNoReplication(self):
+        d, app_id, src, snk = self._start_app() #Sould not replicate lost actor
+
+        replica = utils.replicate(self.runtime, src, self.dying_rt.id)
+        utils.migrate(self.runtime, src, self.runtime2.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
+        snk_before = actual_tokens(self.runtime, snk)
+        replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
+
+        actors_before = utils.get_application_actors(self.runtime, app_id)
+        self._kill_dying()
+        time.sleep(0.3)
+
+        app_actors = utils.get_application_actors(self.runtime, app_id)
+        new_actors = [actor_id for actor_id in app_actors if actor_id not in actors_before]
+        assert(len(new_actors) == 0)
+
+        self._check_dead_node(self.runtime, self.dying_rt, replica)
 
 
 @pytest.mark.essential
