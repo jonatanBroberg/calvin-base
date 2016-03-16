@@ -1832,11 +1832,18 @@ class TestDynamicReliability(CalvinTestBase):
         app = utils.get_application(self.rt1, app_id)
         assert(reliability > app['required_reliability'])
 
-    def testCheckReliability(self):
+    def testCheckReliabilityOneActor(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
         time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
+
+    def testCheckReliabilityTwoActors(self):
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1, replicate_src=1)
+        time.sleep(5)
+
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
+        self._check_reliability(app_id, 'simple:src', self.src_type)
 
     def testDropInReliability(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
@@ -1848,6 +1855,7 @@ class TestDynamicReliability(CalvinTestBase):
         time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
+
 
 @pytest.mark.essential
 @pytest.mark.slow
