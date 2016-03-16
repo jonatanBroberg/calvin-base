@@ -228,9 +228,9 @@ class Node(object):
 
     def lost_actor(self, lost_actor_id, lost_actor_info, required_reliability, cb):
         _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
+        self.am.delete_actor(lost_actor_id)
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
         replicator.replicate_lost_actor(cb)
-        self.am.delete_actor(lost_actor_id)
 
     #
     # Event loop

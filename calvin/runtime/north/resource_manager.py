@@ -22,7 +22,6 @@ class ResourceManager(object):
         self.node_start_times = defaultdict(lambda: time.time())
         #self.failure_times = defaultdict(lambda: [])
         #TODO Same history size?
-        #self.replication_time_millis = deque(self.history_size *[100], maxlen=self.history_size)
         self.replication_times_millis = defaultdict(lambda: deque(self.history_size *[100], maxlen=self.history_size))
 
     def register(self, node_id, usage, uri):
@@ -75,13 +74,11 @@ class ResourceManager(object):
         return self.reliability_calculator.calculate_reliability(fail_count, start_time, replication_time)
 
     def _average_replication_time(self, actor_type):
-        #time =  sum(self.replication_time_millis) / self.history_size
         time = sum(self.replication_times_millis[actor_type]) / self.history_size
         return time
 
     def update_replication_time(self, actor_type, time):
         _log.info('New replication time: {}'.format(time))
-        #self.replication_time_millis.append(time)
         self.replication_times_millis[actor_type].append(time)
 
     def sort_nodes_reliability(self, node_ids):
