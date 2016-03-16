@@ -6,7 +6,7 @@ class ReliabilityCalculator(object):
 	def __init__(self):
 		pass
 
-	def calculate_reliability(self, failure_count, node_start_time):
+	def calculate_reliability(self, failure_count, node_start_time, replication_time):
 		# Weibull
 		"""
 		p = math.exp(-(time/delta)^beta)
@@ -24,6 +24,6 @@ class ReliabilityCalculator(object):
 			return 0.8
 		total_time = time.time() - node_start_time
 		MTBF = total_time/failure_count
-		replication_time = 0.1		# Time to replicate an actor
-		p = math.exp(-float(replication_time)/MTBF)
+		rep_time = 0.1		# Time to replicate an actor
+		p = math.exp(-float(replication_time)/(1000*MTBF))
 		return p
