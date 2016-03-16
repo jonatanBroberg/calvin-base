@@ -21,7 +21,10 @@ class ResourceManager(object):
         self.node_uris = {}
         self.node_start_times = {}
         #self.failure_times = defaultdict(lambda: [])
-        self.replication_time_millis = 100
+        #TODO Same history size? Possible to initialize with a lambda func?
+        self.replication_time_millis = deque(maxlen=self.history_size)
+        for i in range(1,self.history_size):
+            self.replication_time_millis.append(100)
         #self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
 
     def register(self, node_id, usage, uri):
@@ -68,11 +71,16 @@ class ResourceManager(object):
 
     def get_reliability(self, node_id):
         uri = self.node_uris[node_id]
-        return self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri], self.replication_time_millis)
+        return self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri], self._average_replication_time())
+
+    def _average_replication_time(self):
+        time =  sum(self.replication_time_millis) / self.history_size
+        print 'average_replication_time:', time
+        return time
 
     def update_replication_time(self, actor_type, time):
         _log.info('New replication time: {}'.format(time))
-        self.replication_time_millis = time
+        self.replication_time_millis.append(time)
         #self.replication_times_millis[actor_type] = time
 
     def sort_nodes_reliability(self, node_ids):
@@ -87,7 +95,7 @@ class ResourceManager(object):
         failure = 1
         for node in current_nodes:
             uri = self.node_uris[node]
-            failure *= (1 - self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri], self.replication_time_millis))
+            failure *= (1 - self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri], self._average_replication_time()))
 
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
         return 1 - failure
