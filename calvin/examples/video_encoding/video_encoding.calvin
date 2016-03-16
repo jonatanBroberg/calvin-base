@@ -1,5 +1,5 @@
 component UDPDump(uri) -> {
-    trigger : std.CountTimer(sleep=0.05)
+    trigger : std.CountTimer(sleep=0.04)
     set_uri : json.SetValue()
     listener : net.UDPListener()
     reader : io.VideoReader()
@@ -15,7 +15,7 @@ component UDPDump(uri) -> {
 
     get.value > reader.filename
     reader.out > encoder.in
-    encoder.out > reader.trigger
+    #encoder.out > reader.trigger
     trigger.integer > reader.trigger
 }
 

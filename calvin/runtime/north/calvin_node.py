@@ -200,14 +200,17 @@ class Node(object):
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
-        for peer_id in self.network.links:
+        for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
 
         self.app_monitor.check_reliabilities()
 
     def _report_resource_usage_cb(self, peer_id, status):
-        _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
+        if not status:
+            _log.error("Failed to report resource usage to: {} - {} - {}".format(peer_id, self.resource_manager.node_uris.get(peer_id), status))
+        else:
+            _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
     def register_resource_usage(self, node_id, usage, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
@@ -255,7 +258,8 @@ class Node(object):
             if self.control_uri is not None:
                 self.control.start(node=self, uri=self.control_uri)
 
-        self._start_resource_reporter()
+        if not self.storage_node:
+            self._start_resource_reporter()
 
     def _start_resource_reporter(self):
         actor_id = self.new("sys.NodeResourceReporter", {'node': self})

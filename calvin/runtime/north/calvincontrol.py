@@ -939,15 +939,16 @@ class CalvinControl(object):
         else:
             data = {k: (v[0], v[1].status) for k, v in peer_node_ids.items()}
 
-        peers = []
+        peers = set()
         for uri, (_, status_code) in data.iteritems():
             # Only include successful peers
             if status_code == 200:
-                peers.append(uri)
+                peers.add(uri)
 
+        all_peers = set(self.node.resource_manager.node_uris.values()) | set(peers)
         for uri, (node_id, status_code) in data.iteritems():
             if status_code == 200:
-                to_send = set(peers)
+                to_send = set(all_peers)
                 to_send.remove(uri)
                 to_send.add(self.node.uri[0])
                 cb = CalvinCB(self.node.logging_callback)

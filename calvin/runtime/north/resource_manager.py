@@ -60,7 +60,7 @@ class ResourceManager(object):
         return most_busy
 
     def _update_reliability(self, node_id):
-        _log.info("Updating reliability for node {}".format(node_id))
+        _log.debug("Updating reliability for node {}".format(node_id))
         self.reliabilities[node_id] = self.reliability_calculator.calculate_reliability(1, 10)
 
     def get_reliability(self, node_id):
@@ -80,5 +80,5 @@ class ResourceManager(object):
         for node in current_nodes:
             failure *= (1 - self.reliabilities[node])
 
-        _log.info("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
+        _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
         return 1 - failure
