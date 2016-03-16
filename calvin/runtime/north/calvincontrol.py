@@ -323,6 +323,17 @@ control_api_doc += \
 """
 re_post_actor_disable = re.compile(r"POST /actor/(ACTOR_" + uuid_re + "|" + uuid_re + ")/disable\sHTTP/1")
 
+
+control_api_doc += \
+    """
+    POST /failed_node/{node-id}/nbr/{nbr}/uri/{uri}
+    ONLY FOR TESTING, adds a "failure" to failure_counts in resource_manager
+    Response status code: OK or NOT_FOUND
+    Response: none
+"""
+re_post_simulate_node_failure = re.compile(r"POST /failed_node/(NODE_" + uuid_re + "|" + uuid_re + ")/nbr/([0-9]+?)/uri/(.*)\sHTTP/1")
+
+
 # control_api_doc += \
 """
     GET /actor/{actor-id}/port/{port-id}
@@ -723,6 +734,7 @@ class CalvinControl(object):
             (re_post_actor_migrate, self.handle_actor_migrate),
             (re_post_actor_replicate, self.handle_actor_replicate),
             (re_post_actor_disable, self.handle_actor_disable),
+            (re_post_simulate_node_failure, self.handle_simulate_node_failure),
             (re_post_lost_actor, self.handle_lost_actor),
             (re_get_port, self.handle_get_port),
             (re_get_port_state, self.handle_get_port_state),
@@ -1162,6 +1174,15 @@ class CalvinControl(object):
     def handle_actor_disable(self, handle, connection, match, data, hdr):
         try:
             self.node.am.disable(match.group(1))
+            status = calvinresponse.OK
+        except:
+            status = calvinresponse.NOT_FOUND
+        self.send_response(handle, connection, None, status)
+
+    def handle_simulate_node_failure(self, handle, connection, match, data, hdr):
+        """ Only for testing """
+        try:
+            self.node.resource_manager.update_node_failure(match.group(1), match.group(2), match.group(3))
             status = calvinresponse.OK
         except:
             status = calvinresponse.NOT_FOUND

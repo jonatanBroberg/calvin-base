@@ -1,4 +1,5 @@
 import sys
+import time
 import operator
 
 from collections import defaultdict, deque
@@ -15,24 +16,28 @@ class ResourceManager(object):
     def __init__(self, history_size=DEFAULT_HISTORY_SIZE):
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
-        self.reliabilities = defaultdict(lambda: 0.8)
         self.reliability_calculator = ReliabilityCalculator()
         self.failure_counts = defaultdict(lambda: 0)
+        #self.failure_times = defaultdict(lambda: [])
+        self.node_start_times = {}
         self.node_uris = {}
 
     def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
-        self.node_uris[node_id] = uri
+        if not uri in self.node_uris.values():
+            self.node_uris[node_id] = uri
+            self.node_start_times[uri] = time.time()
+            #self.failure_times[uri][0] = time.time()  # For reference
         if usage:
             self.usages[node_id].append(usage)
-        self.reliabilities[node_id] = 0.8
 
     def lost_node(self, node_id, uri):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += 1
+        #self.failure_times[uri].append(time.time())
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -59,13 +64,9 @@ class ResourceManager(object):
 
         return most_busy
 
-    def _update_reliability(self, node_id):
-        _log.debug("Updating reliability for node {}".format(node_id))
-        self.reliabilities[node_id] = self.reliability_calculator.calculate_reliability(1, 10)
-
     def get_reliability(self, node_id):
-        return 0.8
-        #return self.reliabilities[node_id]
+        uri = self.node_uris[node_id]
+        return self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri])
 
     def sort_nodes_reliability(self, node_ids):
         """Sorts after number of failures"""
@@ -78,7 +79,13 @@ class ResourceManager(object):
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
         failure = 1
         for node in current_nodes:
-            failure *= (1 - self.reliabilities[node])
+            uri = self.node_uris[node]
+            failure *= (1 - self.reliability_calculator.calculate_reliability(self.failure_counts[uri], self.node_start_times[uri]))
 
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
         return 1 - failure
+
+    def update_node_failure(self, node_id, nbr_of_failures, uri):
+        """ Simulates node failures """
+        self.node_uris[node_id] = uri
+        self.failure_counts[uri] += int(nbr_of_failures)

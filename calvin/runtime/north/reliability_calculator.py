@@ -1,11 +1,12 @@
 import math
+import time
 
 class ReliabilityCalculator(object):
 
 	def __init__(self):
 		pass
 
-	def calculate_reliability(self, time, MTBF):
+	def calculate_reliability(self, failure_count, node_start_time):
 		# Weibull
 		"""
 		p = math.exp(-(time/delta)^beta)
@@ -19,5 +20,10 @@ class ReliabilityCalculator(object):
 		"""
 
 		#Exponential
-		p = math.exp(-float(time)/MTBF)
+		if failure_count == 0:
+			return 0.8
+		total_time = time.time() - node_start_time
+		MTBF = total_time/failure_count
+		replication_time = 0.1		# Time to replicate an actor
+		p = math.exp(-float(replication_time)/MTBF)
 		return p

@@ -1790,6 +1790,63 @@ class TestLosingActors(CalvinTestBase):
 
 @pytest.mark.essential
 @pytest.mark.slow
+class TestDynamicReliability(CalvinTestBase):
+
+    def setUp(self):
+        super(TestDynamicReliability, self).setUp()
+        self.rt1 = runtime
+        self.rt2 = runtimes[0]
+        self.rt3 = runtimes[1]
+        self.runtimes = [self.rt1]
+        self.runtimes.extend(runtimes)
+
+    def _start_app(self, replicate_src=0, replicate_snk=0):
+        script = """
+        src : std.CountTimer(replicate=""" +str(replicate_src)+ """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        d = deployer.Deployer(self.rt1, app_info)
+        app_id = d.deploy()
+        self.deployer = d
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        return (d, app_id, src, snk)
+
+    def _get_reliability(self, app_id, actor_name):
+        reliability = 0
+        for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
+            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
+        return reliability
+
+    def _check_reliability(self, app_id, name):
+        reliability = self._get_reliability(app_id, name)
+        app = utils.get_application(self.rt1, app_id)
+        assert(reliability > app['required_reliability'])
+
+    def testCheckReliability(self):
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
+        time.sleep(5)
+
+        self._check_reliability(app_id, 'simple:snk')
+
+    def testDropInReliability(self):
+        (d, app_id, src, snk) = self._start_app(replicate_snk=1)
+        time.sleep(5)
+
+        self._check_reliability(app_id, 'simple:snk')
+
+        utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 25)
+        time.sleep(5)
+
+        self._check_reliability(app_id, 'simple:snk')
+
+@pytest.mark.essential
+@pytest.mark.slow
 class TestDyingRuntimes(CalvinTestBase):
 
     def setUp(self):
