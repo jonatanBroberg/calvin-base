@@ -21,10 +21,8 @@ class ResourceManager(object):
         self.node_uris = {}
         self.node_start_times = {}
         #self.failure_times = defaultdict(lambda: [])
-        #TODO Same history size? Possible to initialize with a lambda func?
-        self.replication_time_millis = deque(maxlen=self.history_size)
-        for i in range(1,self.history_size):
-            self.replication_time_millis.append(100)
+        #TODO Same history size?
+        self.replication_time_millis = deque(self.history_size *[100], maxlen=self.history_size)
         #self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
 
     def register(self, node_id, usage, uri):
