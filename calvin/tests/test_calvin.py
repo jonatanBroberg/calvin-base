@@ -1510,6 +1510,8 @@ class TestLosingActors(CalvinTestBase):
         snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
         src.integer > snk.token
         """
+        self.src_type = "std.CountTimer"
+        self.snk_type = "io.StandardOut"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(self.rt1, app_info)
@@ -1521,14 +1523,14 @@ class TestLosingActors(CalvinTestBase):
         snk = d.actor_map['simple:snk']
         return (d, app_id, src, snk)
 
-    def _get_reliability(self, app_id, actor_name):
+    def _get_reliability(self, app_id, actor_name, actor_type):
         reliability = 0
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
+            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id, actor_type)))
         return reliability
 
-    def _check_reliability(self, app_id, name):
-        reliability = self._get_reliability(app_id, name)
+    def _check_reliability(self, app_id, name, actor_type):
+        reliability = self._get_reliability(app_id, name, actor_type)
         app = utils.get_application(self.rt1, app_id)
         assert(reliability > app['required_reliability'])
 
@@ -1639,7 +1641,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk))
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1663,7 +1665,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, src))
 
-        self._check_reliability(app_id, 'simple:src')
+        self._check_reliability(app_id, 'simple:src', self.src_type)
 
         self._check_src_replicas(app_id, snk, self.rt1, replica, self.rt2, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
@@ -1684,7 +1686,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt2, replica))
 
-        self._check_reliability(app_id, 'simple:src')
+        self._check_reliability(app_id, 'simple:src', self.src_type)
 
         self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
@@ -1703,7 +1705,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1727,7 +1729,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk))
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1751,7 +1753,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
         self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
         
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1781,7 +1783,7 @@ class TestLosingActors(CalvinTestBase):
         self.assertIsNone(utils.get_actor(self.rt1, snk))
         self.assertIsNone(utils.get_actor(self.rt2, snk2))
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
@@ -1806,6 +1808,8 @@ class TestDynamicReliability(CalvinTestBase):
         snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
         src.integer > snk.token
         """
+        self.snk_type = "io.StandardOut"
+        self.src_type = "std.CountTimer"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(self.rt1, app_info)
@@ -1817,14 +1821,14 @@ class TestDynamicReliability(CalvinTestBase):
         snk = d.actor_map['simple:snk']
         return (d, app_id, src, snk)
 
-    def _get_reliability(self, app_id, actor_name):
+    def _get_reliability(self, app_id, actor_name, actor_type):
         reliability = 0
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id)))
+            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id, actor_type)))
         return reliability
 
-    def _check_reliability(self, app_id, name):
-        reliability = self._get_reliability(app_id, name)
+    def _check_reliability(self, app_id, name, actor_type):
+        reliability = self._get_reliability(app_id, name, actor_type)
         app = utils.get_application(self.rt1, app_id)
         assert(reliability > app['required_reliability'])
 
@@ -1832,18 +1836,18 @@ class TestDynamicReliability(CalvinTestBase):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
         time.sleep(5)
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
     def testDropInReliability(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
         time.sleep(5)
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 25)
         time.sleep(5)
 
-        self._check_reliability(app_id, 'simple:snk')
+        self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
 @pytest.mark.essential
 @pytest.mark.slow
@@ -1952,7 +1956,7 @@ class TestDyingRuntimes(CalvinTestBase):
             if a:
                 name = calvinuuid.remove_uuid(a['name'])
                 if name == actor_name:
-                    reliability = (1 - (1 - reliability) * (1 - utils.get_reliability(rt, a['node_id'])))
+                    reliability = (1 - (1 - reliability) * (1 - utils.get_reliability(rt, a['node_id'], a['type'])))
                 for rt in runtimes:
                     if a['node_id'] == rt.id:
                         actor_runtimes[actor] = rt

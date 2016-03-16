@@ -170,15 +170,15 @@ re_get_application = re.compile(r"GET /application/(APP_" + uuid_re + "|" + uuid
 
 control_api_doc += \
     """
-    GET /reliability/{node-id}
-    Get reliability of the node node-id
+    GET /reliability/{node-id}/actor_type/{type}
+    Get reliability of the node node-id from the view of actor_type
     Response status code: OK or NOT_FOUND
     Response:
     {
          "reliability": <reliability of the node>
     }
 """
-re_get_reliability = re.compile(r"GET /reliability/(NODE_" + uuid_re + "|" + uuid_re + ")\sHTTP/1")
+re_get_reliability = re.compile(r"GET /reliability/(NODE_" + uuid_re + "|" + uuid_re + ")/actor-type/(.*)\sHTTP/1")
 
 control_api_doc += \
     """
@@ -995,7 +995,7 @@ class CalvinControl(object):
     def handle_get_reliability(self, handle, connection, match, data, hdr):
         """ Ge reliability of node
         """
-        reliability = self.node.resource_manager.get_reliability(match.group(1))
+        reliability = self.node.resource_manager.get_reliability(match.group(1), match.group(2))
         self.send_response(handle, connection, json.dumps(reliability))
 
     def handle_get_application_actors(self, handle, connection, match, data, hdr):

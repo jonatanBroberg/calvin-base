@@ -94,7 +94,7 @@ class Replicator(object):
             return
 
         _log.info("Current replica nodes: {}".format(current_nodes))
-        current_rel = self.node.resource_manager.current_reliability(current_nodes)
+        current_rel = self.node.resource_manager.current_reliability(current_nodes, self.replica_value['type'])
 
         _log.info("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
 

@@ -284,10 +284,10 @@ def report(rt, actor_id, timeout=TIMEOUT, async=False):
     return check_response(r)
 
 
-def get_reliability(rt, node_id, timeout=TIMEOUT, async=False):
+def get_reliability(rt, node_id, actor_type, timeout=TIMEOUT, async=False):
     rt = get_RT(rt)
     req = session if async else requests
-    r = req.get(rt.control_uri + '/reliability/' + node_id, timeout=timeout)
+    r = req.get(rt.control_uri + '/reliability/' + node_id + '/actor-type/' + actor_type, timeout=timeout)
     return check_response(r)
 
 
