@@ -7,21 +7,21 @@ class ReliabilityCalculator(object):
 		pass
 
 	def calculate_reliability(self, failure_count, node_start_time, replication_time):
-		total_time = time.time() - node_start_time
-		MTBF = total_time/(failure_count + 1)
+		total_time = 1000 * (time.time() - node_start_time)
 
-		# Weibull
-		"""
-		p = math.exp(-(time/delta)^beta)
-		Formula taken from "Efficient task replication and management for adaptive fault tolerance in Mobile Grid environments"
-		"""
-
-		#Poisson, failure distibution
-		"""
-		p = (math.exp(-fail_rate*time) * (fail_rate*time)^n) / (math.factorial(n))
-		If n=1 then probability that p is probability that one failure occur in time time  
-		"""
-
-		#Exponential
-		p = math.exp(-float(replication_time)/(1000*MTBF))
+		# For a Poisson process with a constant failure rate we get the probability of no more failures to occur in time t as:
+		_lambda = (failure_count + 1)/(total_time) * replication_time
+		n = failure_count
+		print 'values:', '_lambda', _lambda, '(_lambda)**n', (_lambda)**n,  (math.factorial(n))
+		p = (math.exp(-_lambda) * (_lambda)**n) / (math.factorial(n))
 		return p
+
+		#Just clerifications:
+		"""
+		Definition Poisson:
+		p = (math.exp(-_lambda) * (_lambda)^n) / (math.factorial(n))
+		p = probability that n failures occur when we have _lambda as the event rate, i.e. the average number of failures during time t
+
+		Average number of failures during time t:
+		_lambda = (failure_count + 1)/(total_time) * 1000 * replication_time
+		"""
