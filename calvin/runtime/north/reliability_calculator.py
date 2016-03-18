@@ -11,10 +11,7 @@ class ReliabilityCalculator(object):
 
 		# For a Poisson process with a constant failure rate we get the probability of no more failures to occur in time t as:
 		_lambda = (failure_count + 1)/(total_time) * replication_time
-		n = failure_count
-		print 'values:', '_lambda', _lambda, '(_lambda)**n', (_lambda)**n,  (math.factorial(n))
-		p = (math.exp(-_lambda) * (_lambda)**n) / (math.factorial(n))
-		return p
+		return (math.exp(-_lambda) * (_lambda)**failure_count) / (math.factorial(failure_count))
 
 		#Just clerifications:
 		"""
