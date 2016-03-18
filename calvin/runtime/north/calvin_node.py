@@ -200,9 +200,13 @@ class Node(object):
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
+
+        replication_times = {}
+        for (actor_type, times) in self.resource_manager.replication_times_millis.iteritems():
+            replication_times[actor_type] = [(x,y) for x, y in times]
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
-            self.proto.report_usage(peer_id, self.id, usage, callback=callback)
+            self.proto.report_usage(peer_id, self.id, usage, replication_times, callback=callback)
 
         self.app_monitor.check_reliabilities()
 
@@ -212,10 +216,10 @@ class Node(object):
         else:
             _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
-    def register_resource_usage(self, node_id, usage, callback):
+    def register_resource_usage(self, node_id, usage, replication_times, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
-        self.resource_manager.register(node_id, usage, uri)
+        self.resource_manager.register(node_id, usage, uri, replication_times)
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):

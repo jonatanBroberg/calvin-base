@@ -22,9 +22,9 @@ class ResourceManager(object):
         self.node_start_times = defaultdict(lambda: time.time())
         #self.failure_times = defaultdict(lambda: [])
         #TODO Same history size?
-        self.replication_times_millis = defaultdict(lambda: deque(self.history_size *[(time.time(), 100)], maxlen=self.history_size))
+        self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
 
-    def register(self, node_id, usage, uri):
+    def register(self, node_id, usage, uri, replication_times=None):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
@@ -34,6 +34,8 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
+        if replication_times:
+            self._sync_replication_times(replication_times)
 
     def lost_node(self, node_id, uri):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
@@ -74,8 +76,29 @@ class ResourceManager(object):
         return self.reliability_calculator.calculate_reliability(fail_count, start_time, replication_time)
 
     def _average_replication_time(self, actor_type):
+        if not self.replication_times_millis[actor_type]:
+            return 200
         time = sum(x[1] for x in self.replication_times_millis[actor_type]) / self.history_size
         return time
+
+    def _sync_replication_times(self, replication_times):
+        """
+        Sync the replication_times for each actor_type stored on another node. 
+        replication_times is a sent as a list but stored as a deque
+        """
+        for (actor_type, times) in replication_times.iteritems():
+            sorted_times = sorted(times, key=lambda x:x[0])
+            sorted_times = [(x,y) for x,y in sorted_times]
+            if actor_type in self.replication_times_millis.keys() and len(self.replication_times_millis[actor_type]) > 0:
+                self._update_deque(sorted_times, self.replication_times_millis[actor_type])
+            else:
+                for key, value in sorted_times:
+                    self.replication_times_millis[actor_type].append((key, value))
+
+    def _update_deque(self, new_values, old_values):
+        for tup in new_values:
+            if tup[0] > old_values[-1][0]:
+                old_values.append(tup)
 
     def update_replication_time(self, actor_type, replication_time):
         _log.info('New replication time: {}'.format(replication_time))
