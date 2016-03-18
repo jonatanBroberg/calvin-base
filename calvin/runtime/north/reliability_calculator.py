@@ -6,8 +6,10 @@ class ReliabilityCalculator(object):
 	def __init__(self):
 		pass
 
-	def calculate_reliability(self, failure_count, node_start_time, replication_time):
+	def calculate_reliability(self, failure_count, failure_times, node_start_time, replication_time):
 		total_time = 1000 * (time.time() - node_start_time)
+		if total_time < 1000:
+			return 0.8
 
 		# For a Poisson process with a constant failure rate we get the probability of no more failures to occur in time t as:
 		_lambda = (failure_count + 1)/(total_time) * replication_time

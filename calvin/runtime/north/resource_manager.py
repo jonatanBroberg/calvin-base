@@ -20,7 +20,7 @@ class ResourceManager(object):
         self.failure_counts = defaultdict(lambda: 0)
         self.node_uris = {}
         self.node_start_times = defaultdict(lambda: time.time())
-        #self.failure_times = defaultdict(lambda: [])
+        self.failure_times = defaultdict(lambda: [])
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
 
     def register(self, node_id, usage, uri, replication_times=None):
@@ -29,7 +29,6 @@ class ResourceManager(object):
             uri = uri[0]
         if not uri in self.node_uris.values():
             self.node_start_times[uri] = time.time()
-            #self.failure_times[uri][0] = time.time()  # For reference
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
@@ -40,7 +39,7 @@ class ResourceManager(object):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += 1
-        #self.failure_times[uri].append(time.time())
+        self.failure_times[uri].append(time.time())
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -70,9 +69,10 @@ class ResourceManager(object):
     def get_reliability(self, node_id, actor_type):
         uri = self.node_uris.get(node_id)
         fail_count = self.failure_counts[uri]
+        failure_times = self.failure_times[uri]
         start_time = self.node_start_times[uri]
         replication_time = self._average_replication_time(actor_type)
-        return self.reliability_calculator.calculate_reliability(fail_count, start_time, replication_time)
+        return self.reliability_calculator.calculate_reliability(fail_count, failure_times, start_time, replication_time)
 
     def _average_replication_time(self, actor_type):
         if not self.replication_times_millis[actor_type]:
@@ -114,13 +114,7 @@ class ResourceManager(object):
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
         failure = 1
         for node_id in current_nodes:
-            uri = self.node_uris.get(node_id)
-
-            fail_count = self.failure_counts[uri]
-            start_time = self.node_start_times[uri]
-            replication_time = self._average_replication_time(actor_type)
-
-            failure *= (1 - self.reliability_calculator.calculate_reliability(fail_count, start_time, replication_time))
+            failure *= (1 - self.get_reliability(node_id, actor_type))
 
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
         return 1 - failure
@@ -129,3 +123,4 @@ class ResourceManager(object):
         """ Simulates node failures """
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += int(nbr_of_failures)
+        self.failure_times[uri].append(time.time())
