@@ -21,7 +21,6 @@ class ResourceManager(object):
         self.node_uris = {}
         self.node_start_times = defaultdict(lambda: time.time())
         #self.failure_times = defaultdict(lambda: [])
-        #TODO Same history size?
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
 
     def register(self, node_id, usage, uri, replication_times=None):

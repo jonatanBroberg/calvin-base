@@ -201,6 +201,7 @@ class Node(object):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
+        # Not send all replication_times each time?
         replication_times = {}
         for (actor_type, times) in self.resource_manager.replication_times_millis.iteritems():
             replication_times[actor_type] = [(x,y) for x, y in times]
