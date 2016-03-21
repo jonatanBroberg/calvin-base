@@ -18,15 +18,14 @@ class ReliabilityCalculator(object):
 		_lambda = self.failure_rate(failure_count, failure_times, node_start_time, total_time, replication_time)
 		return math.exp(-_lambda)
 
-
 	def failure_rate(self, failure_count, failure_times, node_start_time, total_time, replication_time):
 		# Constant
-		MTBF = 500
+		MTBF = 10000		#ms
 		times = [node_start_time]
 		times.extend(failure_times)
 		if len(times) > 1:
 			time_between_failures = [(j-i) for i,j in zip(times, times[1:])]
-			MTBF = sum(time_between_failures)/len(time_between_failures)
+			MTBF = 1000 * sum(time_between_failures)/len(time_between_failures)
 		return float(replication_time) / MTBF
 
 		# Variable failure rate (standard bath tub shaped)

@@ -1851,7 +1851,8 @@ class TestDynamicReliability(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 5)
+        time.sleep(5)
+        utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 1)
         time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
