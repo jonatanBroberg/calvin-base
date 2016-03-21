@@ -24,7 +24,7 @@ class ResourceManager(object):
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.new_rep_times_available = False
 
-    def register(self, node_id, usage, uri, replication_times=None):
+    def register(self, node_id, usage, uri, failure_counts=None, replication_times=None):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
@@ -33,6 +33,8 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
+        if failure_counts:
+            self._sync_failure_counts(failure_counts)
         if replication_times:
             self._sync_replication_times(replication_times)
 
@@ -106,6 +108,10 @@ class ResourceManager(object):
             if tup[0] > old_values[-1][0]:
                 old_values.append(tup)
 
+    def _sync_failure_counts(self, failure_counts):
+        for (uri, count) in failure_counts.iteritems():
+            self.failure_counts[uri] = max(self.failure_counts[uri], failure_counts[uri])
+
     def update_replication_time(self, actor_type, replication_time):
         _log.info('New replication time: {}'.format(replication_time))
         self.replication_times_millis[actor_type].append((time.time(), replication_time))
@@ -123,7 +129,6 @@ class ResourceManager(object):
         failure = 1
         for node_id in current_nodes:
             failure *= (1 - self.get_reliability(node_id, actor_type))
-
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
         return 1 - failure
 

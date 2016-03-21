@@ -773,17 +773,19 @@ class CalvinProto(CalvinCBClass):
 
     ### RESOURCE USAGE ###
 
-    def report_usage(self, to_rt_uuid, node_id, usage, replication_times, callback=None):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, to_rt_uuid, node_id, usage, replication_times, callback)):
+    def report_usage(self, to_rt_uuid, node_id, usage, failure_counts, replication_times, callback=None):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, to_rt_uuid, node_id, usage,
+                                                                failure_counts, replication_times, callback)):
             # Already have link just continue in _actor_new
-            self._report_usage(to_rt_uuid, node_id, usage, replication_times, callback, response.CalvinResponse(True))
+            self._report_usage(to_rt_uuid, node_id, usage, failure_counts, replication_times, callback, response.CalvinResponse(True))
 
-    def _report_usage(self, to_rt_uuid, node_id, usage, replication_times, callback, status, uri=None):
+    def _report_usage(self, to_rt_uuid, node_id, usage, failure_counts, replication_times, callback, status, uri=None):
         """ Got link? continue actor new """
         if status:
             msg = {'cmd': 'REPORT_USAGE',
                    'node_id': node_id,
                    'usage': usage,
+                   'failure_counts':failure_counts,
                    'replication_times': replication_times}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
@@ -792,7 +794,7 @@ class CalvinProto(CalvinCBClass):
     def report_usage_handler(self, payload):
         """ Peer request new actor with state and connections """
         _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.register_resource_usage(payload['node_id'], payload['usage'], payload['replication_times'],
+        self.node.register_resource_usage(payload['node_id'], payload['usage'], payload['failure_counts'], payload['replication_times'],
                                           callback=CalvinCB(self._report_usage_handler, payload))
 
     def _report_usage_handler(self, payload, status, **kwargs):
