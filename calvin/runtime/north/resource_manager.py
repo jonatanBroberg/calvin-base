@@ -126,11 +126,14 @@ class ResourceManager(object):
 
     def current_reliability(self, current_nodes, actor_type):
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
-        failure = 1
+        failure = []
         for node_id in current_nodes:
-            failure *= (1 - self.get_reliability(node_id, actor_type))
-        _log.debug("Reliability for nodes {} is {}".format(current_nodes, 1 - failure))
-        return 1 - failure
+            failure.append(1 - self.get_reliability(node_id, actor_type))
+        failure.remove(min(failure))
+
+        p = 1 - reduce(operator.mul, failure, 1)
+        _log.debug("Reliability for nodes {} is {}".format(current_nodes, p))
+        return p
 
     def update_node_failure(self, node_id, nbr_of_failures, uri):
         """ Simulates node failures """
