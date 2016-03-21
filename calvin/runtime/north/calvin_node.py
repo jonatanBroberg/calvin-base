@@ -218,11 +218,14 @@ class Node(object):
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
     def _print_reliability(self, key, value, app_id, lost_node_id):
-        if value:
-            if lost_node_id in value:
-                value.remove(lost_node_id)
-            current_rel = self.resource_manager.current_reliability(value)
-            self.info("RELIABILITY: {}".format(current_rel))
+        if not value:
+            return
+
+        if lost_node_id in value:
+            value.remove(lost_node_id)
+        self.info("CURRENT NODES: {}".format([self.resource_manager.node_uris.get(node_id) for node_id in value]))
+        current_rel = self.resource_manager.current_reliability(value)
+        self.info("RELIABILITY: {}".format(current_rel))
 
     def _print_replication_time(self):
         return
