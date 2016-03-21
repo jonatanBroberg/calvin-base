@@ -14,10 +14,6 @@ class ReliabilityCalculator(object):
 
 		total_time = 1000 * (time.time() - node_start_time)
 
-		#In case total_time is very low, we can't simulate a failure (Then the failure rate goes through the roof)
-		if total_time < 1000:
-			return 0.8
-
 		# Poisson process
 		_lambda = self.failure_rate(failure_count, failure_times, node_start_time, total_time, replication_time)
 		return math.exp(-_lambda)
@@ -25,16 +21,20 @@ class ReliabilityCalculator(object):
 
 	def failure_rate(self, failure_count, failure_times, node_start_time, total_time, replication_time):
 		# Constant
-		return (failure_count + 1)/(total_time) * replication_time
+		MTBF = 500
+		times = [node_start_time]
+		times.extend(failure_times)
+		if len(times) > 1:
+			time_between_failures = [(j-i) for i,j in zip(times, times[1:])]
+			MTBF = sum(time_between_failures)/len(time_between_failures)
+		return float(replication_time) / MTBF
 
 		# Variable failure rate (standard bath tub shaped)
 		# It is even possible to model since hardware modules are heterogenuous?
-
+		# ...
 
 		# Variable failure rate (Curve fitting of failure_times)
-
-
-
+		# ...
 
 
 		#Just clerifications:
