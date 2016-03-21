@@ -246,7 +246,7 @@ class Node(object):
 
         replication_times = {}
         for (actor_type, times) in self.resource_manager.new_rep_times().iteritems():
-            replication_times[actor_type] = [(x,y) for x, y in times]
+            replication_times[actor_type] = [(x, y) for x, y in times]
 
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
