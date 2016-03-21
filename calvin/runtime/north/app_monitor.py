@@ -28,7 +28,7 @@ class AppMonitor(object):
         self.storage.get_application_actors(key, cb=CalvinCB(self._check_reliability, app_info=value))
 
     def _check_reliability(self, key, value, app_info):
-        _log.info("Check reliability for app: {}".format(key))
+        _log.debug("Check reliability for app: {}".format(key))
         if not value:
             _log.warning("Failed to get application actors from storage: {}".format(key))
             return

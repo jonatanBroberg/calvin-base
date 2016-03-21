@@ -25,7 +25,7 @@ class Replicator(object):
 
     def replicate_lost_actor(self, cb):
         if self.actor_info['replicate']:
-            _log.info("Replicating lost actor: {}".format(self.actor_id))
+            _log.debug("Replicating lost actor: {}".format(self.actor_id))
             start_time_millis = int(round(time.time() * 1000))
             cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
@@ -65,7 +65,7 @@ class Replicator(object):
 
     def _find_a_replica(self, actors, current_nodes, start_time_millis, index, cb):
         if index < len(actors):
-            cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes, 
+            cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes,
                             start_time_millis=start_time_millis, index=index, cb=cb)
             _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
             self.node.storage.get_actor(actors[index], cb=cb)
@@ -93,10 +93,10 @@ class Replicator(object):
             cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             return
 
-        _log.info("Current replica nodes: {}".format(current_nodes))
+        _log.debug("Current replica nodes: {}".format(current_nodes))
         current_rel = self.node.resource_manager.current_reliability(current_nodes, self.replica_value['type'])
 
-        _log.info("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
+        _log.debug("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
 
         if current_rel > self.required_reliability:
             status = response.CalvinResponse(data=self.new_replicas)
@@ -116,7 +116,7 @@ class Replicator(object):
                 if replica_node == self.node.id:
                     self.node.am.replicate(self.replica_id, to_node_id, cb)
                 else:
-                    _log.info("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
+                    _log.debug("Sending replication request of actor {} to node {}".format(self.replica_id, self.replica_value['node_id']))
                     self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
 
     def _find_available_nodes(self, current_nodes):
@@ -132,14 +132,14 @@ class Replicator(object):
                 available_nodes.append(node_id)
 
         available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes)
-        _log.info("Available nodes: {}".format(available_nodes))
+        _log.debug("Available nodes: {}".format(available_nodes))
 
         return available_nodes
 
     def collect_new_replicas(self, status, current_nodes, to_node_id, start_time_millis, cb):
         self.pending_replications.remove(to_node_id)
         if status in status.success_list:
-            _log.info("Successfully replicated to {}".format(to_node_id))
+            _log.debug("Successfully replicated to {}".format(to_node_id))
             self.new_replicas[status.data['actor_id']] = to_node_id
             if len(self.new_replicas) == 1:
                 stop_time_millis = int(round(time.time() * 1000))

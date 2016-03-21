@@ -127,6 +127,7 @@ class Storage(object):
             self._init_proxy()
 
     def _init_proxy(self):
+	_log.info("Storage proxy INIT!")
         _log.analyze(self.node.id, "+ SERVER", None)
         # We are not proxy client, so we can be proxy bridge/master
         self._proxy_cmds = {'GET': self.get,

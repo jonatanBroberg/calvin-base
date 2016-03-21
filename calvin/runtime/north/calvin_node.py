@@ -19,6 +19,7 @@ from multiprocessing import Process
 import sys
 import trace
 import logging
+import socket
 
 from calvin.calvinsys import Sys as CalvinSys
 
@@ -197,13 +198,50 @@ class Node(object):
         # @TODO: Write node capabilities to storage
         return self._calvinsys
 
+    @property
+    def hostname(self):
+	return socket.gethostname()
+
+    def info(self, s):
+        _log.info("[{}] {}".format(self.hostname, s))
+
+    def _print_replicas(self):
+        actors = []
+        for actor in self.am.actors.values():
+            if 'actions:src' in actor.name:
+                actors.append(actor)
+        self.info("REPLICAS: {}".format(len(actors)))
+
+    def _print_rel(self, lost_node_id):
+        for app in self.app_manager.applications.values():
+            cb = CalvinCB(self._print_reliability, app_id=app.id, lost_node_id=lost_node_id)
+            self.storage.get_replica_nodes(app.id, 'actions:src', cb)
+
+    def _print_reliability(self, key, value, app_id, lost_node_id):
+        if value:
+            if lost_node_id in value:
+                value.remove(lost_node_id)
+            current_rel = self.resource_manager.current_reliability(value)
+            self.info("RELIABILITY: {}".format(current_rel))
+
+    def _print_replication_time(self):
+        return
+
+    def _print_stats(self, lost_node_id=None):
+        self._print_replicas()
+        self._print_rel(lost_node_id)
+        self._print_replication_time()
+
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
+        self._print_stats()
+
         replication_times = {}
         for (actor_type, times) in self.resource_manager.new_rep_times().iteritems():
             replication_times[actor_type] = [(x,y) for x, y in times]
+
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, replication_times, callback=callback)
@@ -223,6 +261,7 @@ class Node(object):
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):
+        self._print_stats(lost_node_id=node_id)
         _log.analyze(self.id, "+", "Lost node {}".format(node_id))
         if self.storage_node:
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
