@@ -231,6 +231,9 @@ class Node(object):
         return
 
     def _print_stats(self, lost_node_id=None):
+        if self.storage_node:
+            return
+
         self._print_replicas()
         self._print_rel(lost_node_id)
         self._print_replication_time()
