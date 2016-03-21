@@ -7,7 +7,6 @@ while true; do
     sleep 1
 
     #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001"
-    echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001"
     cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001 &
     wait $!
     sleep $rand
