@@ -6,12 +6,12 @@ while true; do
     PID=$!
     sleep 1
 
-    echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001"
+    #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001"
     cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001 &
     wait $!
     sleep $rand
     kill -9 $PID
 
-    pkill -9 -f ".*csruntime --host $host --port $5001" &
+    pkill -9 -f ".*csruntime --host $host --port 5001" &
     wait $!
 done
