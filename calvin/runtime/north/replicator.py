@@ -14,6 +14,7 @@ class Replicator(object):
         self.node = node
         self.actor_id = actor_id
         self.actor_info = actor_info
+        self.master_node = actor_info['master_node']
         self.required_reliability = required_reliability
         self.new_replicas = {}
         self.replica_id = None
@@ -125,9 +126,12 @@ class Replicator(object):
         connected_nodes = [self.node.id]
         connected_nodes.extend(self.node.network.list_links())
         for node_id in connected_nodes:
-            if (node_id not in current_nodes and node_id not in self.pending_replications and
-                    node_id not in self.failed_requests and node_id != self.lost_node and
-                    not self.node.is_storage_node(node_id)):
+            not_allowed = current_nodes
+            not_allowed.extend(self.pending_replications)
+            not_allowed.extend(self.failed_requests)
+            not_allowed.append(self.lost_node)
+            not_allowed.append(self.master_node)
+            if node_id not in not_allowed and not self.node.is_storage_node(node_id):
                 _log.debug("Adding {} to available nodes".format(node_id))
                 available_nodes.append(node_id)
 
