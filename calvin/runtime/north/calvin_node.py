@@ -223,8 +223,9 @@ class Node(object):
 
         if lost_node_id in value:
             value.remove(lost_node_id)
+
         self.info("CURRENT NODES: {}".format([self.resource_manager.node_uris.get(node_id) for node_id in value]))
-        current_rel = self.resource_manager.current_reliability(value)
+        current_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
         self.info("RELIABILITY: {}".format(current_rel))
 
     def _print_replication_time(self):
