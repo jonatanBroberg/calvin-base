@@ -119,9 +119,9 @@ class ResourceManager(object):
 
     def sort_nodes_reliability(self, node_ids, actor_type):
         """Sorts after number of failures"""
-        _log.debug("Sorting nodes {} after reliability {}".format(node_ids, self.failure_counts))
         node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: x[1])
+        _log.info("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
     def current_reliability(self, current_nodes, actor_type):
