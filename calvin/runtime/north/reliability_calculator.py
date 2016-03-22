@@ -12,13 +12,11 @@ class ReliabilityCalculator(object):
 		does not experince any more failure during time replication_time
 		"""
 
-		total_time = 1000 * (time.time() - node_start_time)
-
 		# Poisson process
-		_lambda = self.failure_rate(failure_count, failure_times, node_start_time, total_time, replication_time)
+		_lambda = self.failure_rate(failure_count, failure_times, node_start_time, replication_time)
 		return math.exp(-_lambda)
 
-	def failure_rate(self, failure_count, failure_times, node_start_time, total_time, replication_time):
+	def failure_rate(self, failure_count, failure_times, node_start_time, replication_time):
 		# Constant
 		MTBF = 10000		#ms
 		times = [node_start_time]

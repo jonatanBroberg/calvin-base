@@ -19,7 +19,7 @@ class ResourceManager(object):
         self.reliability_calculator = ReliabilityCalculator()
         self.failure_counts = defaultdict(lambda: 0)
         self.node_uris = {}
-        self.node_start_times = defaultdict(lambda: time.time())
+        self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
         self.failure_times = defaultdict(lambda: [])
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.new_rep_times_available = False
@@ -140,3 +140,9 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += int(nbr_of_failures)
         self.failure_times[uri].append(time.time())
+
+    def get_highest_reliable_node(self, node_ids):
+        reliabilities = {}
+        for node_id in node_ids:
+            reliabilities[node_id] = self.get_reliability(node_id, None)
+        return max(reliabilities.iteritems(), key=operator.itemgetter(1))[0]
