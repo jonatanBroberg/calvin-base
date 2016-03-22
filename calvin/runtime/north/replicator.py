@@ -131,7 +131,7 @@ class Replicator(object):
                 _log.debug("Adding {} to available nodes".format(node_id))
                 available_nodes.append(node_id)
 
-        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes)
+        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'])
         _log.info("Available nodes: {}".format(available_nodes))
 
         return available_nodes

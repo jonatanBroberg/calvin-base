@@ -117,10 +117,10 @@ class ResourceManager(object):
         self.replication_times_millis[actor_type].append((time.time(), replication_time))
         self.new_rep_times_available = True
 
-    def sort_nodes_reliability(self, node_ids):
+    def sort_nodes_reliability(self, node_ids, actor_type):
         """Sorts after number of failures"""
         _log.debug("Sorting nodes {} after reliability {}".format(node_ids, self.failure_counts))
-        node_ids = [(node_id, self.failure_counts[self.node_uris.get(node_id)]) for node_id in node_ids]
+        node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: x[1])
         return [x[0] for x in node_ids]
 
