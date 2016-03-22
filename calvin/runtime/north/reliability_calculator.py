@@ -22,7 +22,7 @@ class ReliabilityCalculator(object):
 		times = [node_start_time]
 		times.extend(failure_times)
 		if len(times) > 1:
-			time_between_failures = [(j-i) for i,j in zip(times, times[1:])]
+			time_between_failures = [math.fabs(j-i) for i,j in zip(times, times[1:])]
 			MTBF = 1000 * sum(time_between_failures)/len(time_between_failures)
 		return float(replication_time) / MTBF
 
