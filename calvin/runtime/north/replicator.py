@@ -131,7 +131,8 @@ class Replicator(object):
             not_allowed.extend(self.failed_requests)
             not_allowed.append(self.lost_node)
             not_allowed.append(self.master_node)
-            if node_id not in not_allowed and not self.node.is_storage_node(node_id):
+            uri = self.node.resource_manager.node_uris.get(node_id, "")
+            if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
                 _log.debug("Adding {} to available nodes".format(node_id))
                 available_nodes.append(node_id)
 
