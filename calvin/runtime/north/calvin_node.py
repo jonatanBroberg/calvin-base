@@ -225,11 +225,34 @@ class Node(object):
             value.remove(lost_node_id)
 
         self.info("CURRENT NODES: {}".format([self.resource_manager.node_uris.get(node_id) for node_id in value]))
+
+        rm = self.resource_manager
+        rels = []
+        for node_id in value:
+            rel = rm.get_reliability(node_id, "std.CountTimer")
+            rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
+        self.info("NODE RELIABILITIES: {}".format(rels))
+
         current_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
         self.info("RELIABILITY: {}".format(current_rel))
 
     def _print_replication_time(self):
-        return
+        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time("std.CountTimer")))
+
+    def _print_reliabilities(self):
+        all_nodes = self.network.list_links()
+        rm = self.resource_manager
+        rels = []
+        self.info("all nodes: {}".format(all_nodes))
+        for node_id in all_nodes:
+            rel = rm.get_reliability(node_id, "std.CountTimer")
+            uri = rm.node_uris.get(node_id)
+            if uri:
+                failure_times = rm.failure_times[uri]
+                start_time = rm.node_start_times[uri]
+                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_times)
+                rels.append((uri, rel, 1 - rel, mtbf))
+        self.info("ALL NODE RELIABILITIES: {}".format(rels))
 
     def _print_stats(self, lost_node_id=None):
         if self.storage_node:
@@ -238,6 +261,7 @@ class Node(object):
         self._print_replicas()
         self._print_rel(lost_node_id)
         self._print_replication_time()
+        self._print_reliabilities()
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
