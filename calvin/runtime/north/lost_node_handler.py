@@ -130,6 +130,7 @@ class LostNodeHandler(object):
     def _delete_actor(self, status, lost_node_id, actor_id, app_id, cb):
         _log.debug("Replicated lost actor {}: {}".format(actor_id, status))
         _log.debug("Deleting actor {} from local storage".format(actor_id))
-        self.storage.delete_actor_from_app(app_id, actor_id)
         self.storage.delete_actor(actor_id)
+        self.storage.delete_actor_from_app(app_id, actor_id)
+        self.storage.delete_actor_from_node(lost_node_id, actor_id)
         cb(status=status, node_id=lost_node_id)
