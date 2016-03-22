@@ -29,7 +29,7 @@ class ReliabilityCalculator(object):
 
         return MTBF
 
-    def failure_rate(self, failure_count, failure_times, node_start_time, total_time, replication_time):
+    def failure_rate(self, failure_count, failure_times, node_start_time, replication_time):
         # Constant
         MTBF = self.get_mtbf(node_start_time, failure_times)
         return float(replication_time) / MTBF
