@@ -53,6 +53,7 @@ class LostNodeHandler(object):
             _log.error("Failed to handle lost node: {}".format(status))
         else:
             _log.debug("Successfully handled lost node")
+
         self.storage.get_node(node_id, self._delete_node)
         if node_id in self._lost_nodes:
             self._lost_nodes.remove(node_id)
@@ -83,7 +84,7 @@ class LostNodeHandler(object):
         try:
             self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors, node_id=node_id, cb=cb))
         except AttributeError as e:
-            _log.warning("Failed to get node actors: {}".format(e))
+            _log.error("Failed to get node actors: {}".format(e))
             # We are the deleted node
             pass
 
@@ -101,36 +102,31 @@ class LostNodeHandler(object):
 
         for actor_id in value:
             self.storage.get_actor(actor_id, cb=CalvinCB(self._replicate_node_actor, lost_node_id=node_id,
-                                   lost_actor_id=actor_id, cb=cb))
+                                   cb=cb))
+            self.storage.delete_actor_from_node(node_id, actor_id)
 
-    def _replicate_node_actor(self, key, value, lost_node_id, lost_actor_id, cb):
+    def _replicate_node_actor(self, key, value, lost_node_id, cb):
         """ Get app id and actor name from actor info """
         _log.debug("Replicating node actor {}: {}".format(key, value))
+        self.storage.delete_actor(key)
+
         if not value:
             _log.error("Failed get lost actor info from storage")
             cb(response.CalvinResponse(False))
             return
 
         cb = CalvinCB(func=self._handle_lost_application_actor, lost_node_id=lost_node_id,
-                      lost_actor_id=lost_actor_id, lost_actor_info=value, cb=cb)
+                      lost_actor_id=key, lost_actor_info=value, cb=cb)
         self.storage.get_application(value['app_id'], cb=cb)
+        self.storage.delete_actor_from_app(value['app_id'], key)
 
     def _handle_lost_application_actor(self, key, value, lost_node_id, lost_actor_id, lost_actor_info, cb):
         """ Get required reliability from app info """
         if not value:
-            _log.error("Failed to get application actors")
+            _log.error("Failed to get application")
+            self.storage.delete_replica_node(key, lost_node_id, lost_actor_info['name'])
             return
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'],
                                 lost_node=lost_node_id)
-        cb = CalvinCB(self._delete_actor, actor_id=lost_actor_id, app_id=lost_actor_info['app_id'], cb=cb,
-                      lost_node_id=lost_node_id)
         replicator.replicate_lost_actor(cb)
-
-    def _delete_actor(self, status, lost_node_id, actor_id, app_id, cb):
-        _log.debug("Replicated lost actor {}: {}".format(actor_id, status))
-        _log.debug("Deleting actor {} from local storage".format(actor_id))
-        self.storage.delete_actor(actor_id)
-        self.storage.delete_actor_from_app(app_id, actor_id)
-        self.storage.delete_actor_from_node(lost_node_id, actor_id)
-        cb(status=status, node_id=lost_node_id)

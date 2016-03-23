@@ -26,7 +26,7 @@ class Replicator(object):
 
     def replicate_lost_actor(self, cb):
         if self.actor_info['replicate']:
-            _log.debug("Replicating lost actor: {}".format(self.actor_id))
+            _log.info("Replicating lost actor: {}".format(self.actor_id))
             start_time_millis = int(round(time.time() * 1000))
             cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
@@ -65,18 +65,22 @@ class Replicator(object):
         self._find_a_replica(value, current_nodes, start_time_millis, index=0, cb=cb)
 
     def _find_a_replica(self, actors, current_nodes, start_time_millis, index, cb):
-        if index < len(actors):
+        _log.debug("Searching for a replica")
+        if index < len(actors) and actors[index] != self.actor_id:
+            _log.debug("Trying {}".format(actors[index]))
             cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes,
-                            start_time_millis=start_time_millis, index=index, cb=cb)
-            _log.debug("Searching for actor to replicate, trying {}".format(actors[index]))
+                          start_time_millis=start_time_millis, index=index, cb=cb)
             self.node.storage.get_actor(actors[index], cb=cb)
+        elif index < len(actors):
+            _log.debug("{} is the lost one, ignoring".format(actors[index]))
+            self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
         else:
             self._replicate(current_nodes, start_time_millis, cb)
 
     def _check_for_original(self, key, value, actors, current_nodes, start_time_millis, index, cb):
         _log.debug("Check for original: {} - {}".format(key, value))
-        if value and self._is_match(value['name'], self.actor_info['name']) and not value['node_id'] == self.lost_node:
-            _log.debug("Found an replica of lost actor:".format(key))
+        if value and self._is_match(value['name'], self.actor_info['name']):  # and value['node_id'] in self.node.network.list_links():
+            _log.debug("Found a replica of lost actor: {}".format(value))
             self.replica_id = key
             self.replica_value = value
             self._replicate(current_nodes, start_time_millis, cb)
@@ -113,7 +117,7 @@ class Replicator(object):
                 to_node_id = available_nodes.pop(0)
                 self.pending_replications.append(to_node_id)
                 cb = CalvinCB(func=self.collect_new_replicas, to_node_id=to_node_id, current_nodes=current_nodes,
-                                start_time_millis=start_time_millis, cb=cb)
+                              start_time_millis=start_time_millis, cb=cb)
                 if replica_node == self.node.id:
                     self.node.am.replicate(self.replica_id, to_node_id, cb)
                 else:
@@ -122,7 +126,7 @@ class Replicator(object):
 
     def _find_available_nodes(self, current_nodes):
         available_nodes = []
-        _log.debug("Connected to: {}".format(self.node.network.list_links()))
+        _log.debug("Finding available nodes among: {}".format(self.node.network.list_links()))
         connected_nodes = [self.node.id]
         connected_nodes.extend(self.node.network.list_links())
         for node_id in connected_nodes:
@@ -144,7 +148,7 @@ class Replicator(object):
     def collect_new_replicas(self, status, current_nodes, to_node_id, start_time_millis, cb):
         self.pending_replications.remove(to_node_id)
         if status in status.success_list:
-            _log.debug("Successfully replicated to {}".format(to_node_id))
+            _log.info("Successfully replicated to {}".format(to_node_id))
             self.new_replicas[status.data['actor_id']] = to_node_id
             if len(self.new_replicas) == 1:
                 stop_time_millis = int(round(time.time() * 1000))
