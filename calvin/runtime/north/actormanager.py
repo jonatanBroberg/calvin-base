@@ -132,9 +132,9 @@ class ActorManager(object):
         del self.actors[actor.id]
 
         self.node.control.log_actor_destroy(a.id)
-
         if delete_from_app and a.app_id:
             self.node.storage.delete_actor_from_app(a.app_id, actor.id)
+            self.node.storage.delete_replica_node(a.app_id, self.node.id, actor.name)
 
         self.node.storage.delete_actor_from_node(self.node.id, actor.id)
 
