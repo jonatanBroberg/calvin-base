@@ -561,8 +561,16 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
-            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
-            self.append("replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor.name), value=[node_id], cb=cb)
+
+            name = calvinuuid.remove_uuid(actor.name)
+            _log.debug("Adding node {} to replica nodes of app {} actor {}".format(node_id, app_id, name))
+            if node_id:
+                cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+                self.append("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
+            else:
+                _log.warning("Tried to add None to replica nodes of app {} actor {}".format(app_id, name))
+
+            _log.info("Adding actor {} to node actors for node {}".format(actor.id, node_id))
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
 
@@ -594,12 +602,12 @@ class Storage(object):
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
 
-    def delete_replica_node(self, app_id, node_id, actor_name, cb):
+    def delete_replica_node(self, app_id, node_id, actor_name, cb=None):
         """
         Delete node_id from the list of replica nodes
         """
         name = calvinuuid.remove_uuid(actor_name)
-        _log.debug("Deleting from node {} replica nodes of actor {}".format(node_id, name))
+        _log.debug("Deleting node {} from app {} replica nodes of actor {}".format(node_id, app_id, name))
         self.remove("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
