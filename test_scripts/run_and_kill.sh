@@ -1,6 +1,6 @@
 #rand=`python -c "import random; print random.randint(30, 90)"`
 rands=($(python -c "import numpy as np;
-mu=29; sigma=5;
+mu=28; sigma=10;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
         print n
@@ -20,8 +20,9 @@ while true; do
     cscontrol http://gru.nefario:5002 nodes add calvinip://$host:5001 &
     wait $!
     sleep $rand
-    kill -9 $PID
+    kill $PID
 
-    pkill -9 -f ".*csruntime --host $host --port 5001" &
+    pkill -f ".*csruntime --host $host --port 5001" &
     wait $!
+    sleep 1
 done
