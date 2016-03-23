@@ -224,20 +224,21 @@ class Node(object):
         if lost_node_id in value:
             value.remove(lost_node_id)
 
-        self.info("CURRENT NODES: {}".format([self.resource_manager.node_uris.get(node_id) for node_id in value]))
+        nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
+        self.info("CURRENT NODES: {}".format(nodes))
 
         rm = self.resource_manager
         rels = []
         for node_id in value:
-            rel = rm.get_reliability(node_id, "std.CountTimer")
+            rel = rm.get_reliability(node_id, "actions:src")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         self.info("NODE RELIABILITIES: {}".format(rels))
 
-        current_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
-        self.info("RELIABILITY: {}".format(current_rel))
+        current_rel, actual_rel = self.resource_manager.current_reliability(value, 'actions:src')
+        self.info("RELIABILITY: {}".format(actual_rel))
 
     def _print_replication_time(self):
-        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time("std.CountTimer")))
+        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time("actions:src")))
 
     def _print_reliabilities(self):
         all_nodes = self.network.list_links()
@@ -245,12 +246,12 @@ class Node(object):
         rels = []
         self.info("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
-            rel = rm.get_reliability(node_id, "std.CountTimer")
+            rel = rm.get_reliability(node_id, "actions:src")
             uri = rm.node_uris.get(node_id)
             if uri:
-                failure_times = rm.failure_times[uri]
+                failure_info = rm.failure_info[uri]
                 start_time = rm.node_start_times[uri]
-                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_times)
+                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_info)
                 rels.append((uri, rel, 1 - rel, mtbf))
         self.info("ALL NODE RELIABILITIES: {}".format(rels))
 
@@ -292,6 +293,7 @@ class Node(object):
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):
+        _log.info("Lost node: {}".format(node_id))
         self._print_stats(lost_node_id=node_id)
         _log.analyze(self.id, "+", "Lost node {}".format(node_id))
         if self.storage_node:
