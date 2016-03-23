@@ -91,7 +91,7 @@ class ResourceManager(object):
 
     def _sync_replication_times(self, replication_times):
         """
-        Sync the replication_times for each actor_type stored on another node. 
+        Sync the replication_times for each actor_type stored on another node.
         replication_times is a sent as a list but stored as a deque
         """
         for (actor_type, times) in replication_times.iteritems():
@@ -129,11 +129,14 @@ class ResourceManager(object):
         failure = []
         for node_id in current_nodes:
             failure.append(1 - self.get_reliability(node_id, actor_type))
-        failure.remove(min(failure))
+
+        actual = 1 - reduce(operator.mul, failure, 1)
+        if failure:
+            failure.remove(min(failure))
 
         p = 1 - reduce(operator.mul, failure, 1)
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, p))
-        return p
+        return p, actual
 
     def update_node_failure(self, node_id, nbr_of_failures, uri):
         """ Simulates node failures """

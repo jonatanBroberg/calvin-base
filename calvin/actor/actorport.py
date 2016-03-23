@@ -246,7 +246,7 @@ class OutPort(Port):
 
     def _detach_endpoint(self, ep):
         if ep not in self.endpoints:
-            _log.warning("Outport: No such endpoint")
+            _log.debug("Outport: No such endpoint")
             return
         self.endpoints.remove(ep)
         if not self.endpoints:

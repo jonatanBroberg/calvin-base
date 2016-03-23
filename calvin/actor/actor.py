@@ -225,7 +225,7 @@ def verify_status(valid_status_list, raise_=False):
             if raise_:
                 raise Exception(msg)
             else:
-                _log.info(msg)
+                _log.debug(msg)
         x = wrapped(*args, **kwargs)
         return x
     return wrapper
@@ -305,7 +305,7 @@ class Actor(object):
             else:
                 msg = "Invalid transition %s -> %s" % (self, self.printable(new_state))
                 if self.allow_invalid_transitions:
-                    _log.warning("ALLOWING " + msg)
+                    _log.debug("ALLOWING " + msg)
                     self._state = new_state
                 else:
                     raise Exception(msg)
@@ -330,7 +330,7 @@ class Actor(object):
 
     # What are the arguments, really?
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None, app_id=None):
+                 disable_state_checks=False, actor_id=None, app_id=""):
         """Should _not_ be overridden in subclasses."""
         super(Actor, self).__init__()
         self._type = actor_type
@@ -519,7 +519,7 @@ class Actor(object):
                 if diff > 0.2 and start_time - self._last_time_warning > 120.0:
                     # Every other minute warn if an actor runs for longer than 200 ms
                     self._last_time_warning = start_time
-                    _log.warning("%s (%s) actor blocked for %f sec" % (self.name, self._type, diff))
+                    _log.debug("%s (%s) actor blocked for %f sec" % (self.name, self._type, diff))
                 # We reached the end of the list without ANY firing => return
                 return total_result
         # Redundant as of now, kept as reminder for when rewriting exeption handling.

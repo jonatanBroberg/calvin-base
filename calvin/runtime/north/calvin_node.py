@@ -19,6 +19,7 @@ from multiprocessing import Process
 import sys
 import trace
 import logging
+import socket
 
 from calvin.calvinsys import Sys as CalvinSys
 
@@ -197,13 +198,82 @@ class Node(object):
         # @TODO: Write node capabilities to storage
         return self._calvinsys
 
+    @property
+    def hostname(self):
+	return socket.gethostname()
+
+    def info(self, s):
+        _log.info("[{}] {}".format(self.hostname, s))
+
+    def _print_replicas(self):
+        actors = []
+        for actor in self.am.actors.values():
+            if 'actions:src' in actor.name:
+                actors.append(actor)
+        self.info("REPLICAS: {}".format(len(actors)))
+
+    def _print_rel(self, lost_node_id):
+        for app in self.app_manager.applications.values():
+            cb = CalvinCB(self._print_reliability, app_id=app.id, lost_node_id=lost_node_id)
+            self.storage.get_replica_nodes(app.id, 'actions:src', cb)
+
+    def _print_reliability(self, key, value, app_id, lost_node_id):
+        if not value:
+            return
+
+        if lost_node_id in value:
+            value.remove(lost_node_id)
+
+        nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
+        self.info("CURRENT NODES: {}".format(nodes))
+
+        rm = self.resource_manager
+        rels = []
+        for node_id in value:
+            rel = rm.get_reliability(node_id, "actions:src")
+            rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
+        self.info("NODE RELIABILITIES: {}".format(rels))
+
+        current_rel, actual_rel = self.resource_manager.current_reliability(value, 'actions:src')
+        self.info("RELIABILITY: {}".format(actual_rel))
+
+    def _print_replication_time(self):
+        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time("actions:src")))
+
+    def _print_reliabilities(self):
+        all_nodes = self.network.list_links()
+        rm = self.resource_manager
+        rels = []
+        self.info("all nodes: {}".format(all_nodes))
+        for node_id in all_nodes:
+            rel = rm.get_reliability(node_id, "actions:src")
+            uri = rm.node_uris.get(node_id)
+            if uri:
+                failure_info = rm.failure_info[uri]
+                start_time = rm.node_start_times[uri]
+                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_info)
+                rels.append((uri, rel, 1 - rel, mtbf))
+        self.info("ALL NODE RELIABILITIES: {}".format(rels))
+
+    def _print_stats(self, lost_node_id=None):
+        if self.storage_node:
+            return
+
+        self._print_replicas()
+        self._print_rel(lost_node_id)
+        self._print_replication_time()
+        self._print_reliabilities()
+
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
+        self._print_stats()
+
         replication_times = {}
         for (actor_type, times) in self.resource_manager.new_rep_times().iteritems():
-            replication_times[actor_type] = [(x,y) for x, y in times]
+            replication_times[actor_type] = [(x, y) for x, y in times]
+
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, replication_times, callback=callback)
@@ -223,6 +293,8 @@ class Node(object):
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):
+        _log.info("Lost node: {}".format(node_id))
+        self._print_stats(lost_node_id=node_id)
         _log.analyze(self.id, "+", "Lost node {}".format(node_id))
         if self.storage_node:
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))

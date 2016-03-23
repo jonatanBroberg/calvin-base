@@ -127,6 +127,7 @@ class Storage(object):
             self._init_proxy()
 
     def _init_proxy(self):
+	_log.info("Storage proxy INIT!")
         _log.analyze(self.node.id, "+ SERVER", None)
         # We are not proxy client, so we can be proxy bridge/master
         self._proxy_cmds = {'GET': self.get,
@@ -538,7 +539,7 @@ class Storage(object):
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
 
-        data = {"name": actor.name, "type": actor._type, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
+        data = {"name": actor.name, "type": actor._type, "master_node": node_id, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
 
         inports = []
         for p in actor.inports.values():
@@ -560,8 +561,16 @@ class Storage(object):
         if app_id:
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("app-actors-", key=app_id, value=[actor.id], cb=cb)
-            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
-            self.append("replica-nodes-", key=app_id + ":" + calvinuuid.remove_uuid(actor.name), value=[node_id], cb=cb)
+
+            name = calvinuuid.remove_uuid(actor.name)
+            _log.debug("Adding node {} to replica nodes of app {} actor {}".format(node_id, app_id, name))
+            if node_id:
+                cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+                self.append("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
+            else:
+                _log.warning("Tried to add None to replica nodes of app {} actor {}".format(app_id, name))
+
+            _log.info("Adding actor {} to node actors for node {}".format(actor.id, node_id))
             cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
             self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
 
@@ -576,8 +585,7 @@ class Storage(object):
         Delete actor from storage
         """
         _log.debug("Delete actor id %s" % (actor_id))
-        cb = CalvinCB(self._delete_replica_nodes, cb=cb)
-        self.get_actor(actor_id, cb=cb)
+        self.delete(prefix="actor-", key=actor_id, cb=cb)
 
     def delete_actor_from_node(self, node_id, actor_id):
         if not node_id:
@@ -594,19 +602,13 @@ class Storage(object):
 
         self.remove("app-actors-", key=app_id, value=[actor_id], cb=None)
 
-    def _delete_replica_nodes(self, key, value, cb):
+    def delete_replica_node(self, app_id, node_id, actor_name, cb=None):
         """
         Delete node_id from the list of replica nodes
         """
-        if not value:
-            _log.warning("Cannot delete actor {}, cant be found in storage".format(key))
-            self.delete(prefix="actor-", key=key, cb=cb)
-            return
-        if value['app_id']:
-            _log.debug("Deleting from node {} replica nodes of actor {}".format(value['node_id'], value['name']))
-            self.remove("replica-nodes-", key=value['app_id'] + ":" + calvinuuid.remove_uuid(value['name']), value=[value['node_id']], cb=None)
-
-        self.delete(prefix="actor-", key=key, cb=cb)
+        name = calvinuuid.remove_uuid(actor_name)
+        _log.debug("Deleting node {} from app {} replica nodes of actor {}".format(node_id, app_id, name))
+        self.remove("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """

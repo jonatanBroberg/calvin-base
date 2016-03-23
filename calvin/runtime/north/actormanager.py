@@ -252,6 +252,7 @@ class ActorManager(object):
         if status:
             state = actor.state()
             self.delete_actor(actor.id)
+            self.node.storage.delete_replica_node(actor.app_id, self.node.id, actor.name, cb=None)
             self.node.proto.actor_new(node_id, callback, actor_type, state, ports, app_id=actor.app_id)
         elif callback:  # FIXME handle errors!!!
             callback(status=status)
