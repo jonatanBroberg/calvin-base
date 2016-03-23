@@ -48,7 +48,8 @@ class LostNodeHandler(object):
             _log.debug("We have highest id, replicate actors")
             self.replicate_node_actors(node_id, cb=cb)
         elif highest_prio_node:
-            _log.debug("Sending lost node msg to {}".format(highest_prio_node))
+            _log.debug("Sending lost node msg to {} - {}".format(
+                highest_prio_node, self.resource_manager.node_uris.get(highest_prio_node)))
             cb.kwargs_update(prio_node=highest_prio_node)
             self.node.proto.lost_node(highest_prio_node, node_id, cb)
 
@@ -66,9 +67,8 @@ class LostNodeHandler(object):
         if not status:
             if prio_node:
                 _log.error("Node {} failed to handle lost node {}: {}".format(prio_node, node_id, status))
-                self.handle_lost_node(node_id, cb)
                 self._lost_nodes.remove(node_id)
-                return
+                self.handle_lost_node(node_id, cb)
             else:
                 _log.error("Failed to handle lost node {}: {}".format(node_id, status))
         else:
@@ -80,8 +80,8 @@ class LostNodeHandler(object):
             cb(status=status)
 
     def _highest_prio_node(self, node_id):
-        _log.debug("Getting highest_prio_node")
         node_ids = self.node.network.list_links()
+        _log.debug("Getting highest_prio_node among {}".format(node_ids))
         if not node_ids:
             # We are not connected to anyone
             return None
@@ -96,9 +96,11 @@ class LostNodeHandler(object):
         if not node_ids:
             return None
 
-        rel_node = self.resource_manager.get_highest_reliable_node(node_ids)
-        _log.debug("Highest prio node: {}".format(rel_node))
-        return rel_node
+        return sorted(node_ids)[0]
+
+        #rel_node = self.resource_manager.get_highest_reliable_node(node_ids)
+        #_log.debug("Highest prio node: {}".format(rel_node))
+        #return rel_node
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
@@ -117,7 +119,7 @@ class LostNodeHandler(object):
             cb(status=response.CalvinResponse(False))
             return
         elif value == []:
-            _log.debug("No value returned from storage when fetching node actors")
+            _log.debug("No value returned from storage when fetching node actors for node {}".format(node_id))
             cb(status=response.CalvinResponse(True))
             return
 
