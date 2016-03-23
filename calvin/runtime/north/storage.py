@@ -567,12 +567,12 @@ class Storage(object):
             if node_id:
                 cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
                 self.append("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
+                _log.info("Adding actor {} to node actors for node {}".format(actor.id, node_id))
+                cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+                self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
             else:
                 _log.warning("Tried to add None to replica nodes of app {} actor {}".format(app_id, name))
 
-            _log.info("Adding actor {} to node actors for node {}".format(actor.id, node_id))
-            cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
-            self.append("node-actors-", key=node_id, value=[actor.id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):
         """
@@ -592,6 +592,7 @@ class Storage(object):
             _log.warning("Cannot delete actor because node id is None")
             return
 
+        _log.debug("Deleting actor {} from node {}".format(actor_id, node_id))
         self.remove("node-actors-", key=node_id, value=[actor_id], cb=None)
 
     def delete_actor_from_app(self, app_id, actor_id):
