@@ -325,11 +325,12 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
-        _log.info("Sending actor replication request to {} from {}".format(from_node_id, self.node.id))
+        _log.info("Sending actor replication request of 'actor {} to node {}' from node {} to node {}".format(
+            actor_id, to_node_id, self.node.id, from_node_id))
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                    'actor_id': actor_id,
-                   #'from_node_id': from_node_id,
+                   'from_node_id': from_node_id,
                    'to_node_id': to_node_id}
             if self.node.network.link_request(from_node_id, CalvinCB(self._actor_replication_request_send,
                                                                      from_node_id=from_node_id,
@@ -349,6 +350,9 @@ class CalvinProto(CalvinCBClass):
 
     def actor_replication_request_handler(self, payload):
         """ Another node requested a replication of an actor"""
+        from_node = self.node.resource_manager.node_uris.get(payload['from_node_id'])
+        to_node = self.node.resource_manager.node_uris.get(payload['to_node_id'])
+        _log.info("Got replication request from {} to send to {}".format(from_node, to_node))
         _log.analyze(self.rt_id, "+", "Handle of request of a replication request {}".format(payload))
         self.node.am.replicate(payload['actor_id'], payload['to_node_id'], callback=CalvinCB(self._actor_replication_request_handler, payload))
 
