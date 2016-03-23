@@ -11,7 +11,7 @@ class LostNodeHandler(object):
 
     def __init__(self, node, resource_manager, port_manager, actor_manager, storage):
         self.node = node
-        self._lost_nodes = []
+        self._lost_nodes = set()
         self.resource_manager = resource_manager
         self.pm = port_manager
         self.am = actor_manager
@@ -25,14 +25,18 @@ class LostNodeHandler(object):
 
         try:
             self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
-        except:
-            pass
+        except Exception as e:
+            _log.error("{}".format(e))
+
+        for actor in self.node.am.actors.values():
+            if actor.app_id:
+                self.storage.delete_replica_node(actor.app_id, node_id, actor.name)
 
         highest_prio_node = self._highest_prio_node(node_id)
         _log.debug("Highest prio node: {}".format(highest_prio_node))
+        self._lost_nodes.add(node_id)
         if highest_prio_node == self.node.id:
             _log.debug("We have highest id, replicate actors")
-            self._lost_nodes.append(node_id)
             self.replicate_node_actors(node_id, cb=CalvinCB(self._lost_node_cb, node_id=node_id))
         elif highest_prio_node:
             _log.debug("Sending lost node msg")
@@ -55,8 +59,6 @@ class LostNodeHandler(object):
             _log.debug("Successfully handled lost node")
 
         self.storage.get_node(node_id, self._delete_node)
-        if node_id in self._lost_nodes:
-            self._lost_nodes.remove(node_id)
 
     def _highest_prio_node(self, node_id):
         _log.debug("Getting highest_prio_node")
@@ -122,9 +124,9 @@ class LostNodeHandler(object):
 
     def _handle_lost_application_actor(self, key, value, lost_node_id, lost_actor_id, lost_actor_info, cb):
         """ Get required reliability from app info """
+        self.storage.delete_replica_node(key, lost_node_id, lost_actor_info['name'])
         if not value:
             _log.error("Failed to get application")
-            self.storage.delete_replica_node(key, lost_node_id, lost_actor_info['name'])
             return
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'],
