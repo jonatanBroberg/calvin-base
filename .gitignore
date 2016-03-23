@@ -11,6 +11,7 @@ __pycache__
 .coverage
 .cache
 calvin.conf
+calvin.conf1
 /.tox
 dist/
 calvin.egg-info

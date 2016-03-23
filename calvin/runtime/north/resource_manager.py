@@ -20,7 +20,7 @@ class ResourceManager(object):
         self.failure_counts = defaultdict(lambda: 0)
         self.node_uris = {}
         self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
-        self.failure_times = defaultdict(lambda: [])
+        self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.new_rep_times_available = False
 
@@ -42,7 +42,7 @@ class ResourceManager(object):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += 1
-        self.failure_times[uri].append(time.time())
+        self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
@@ -72,10 +72,10 @@ class ResourceManager(object):
     def get_reliability(self, node_id, actor_type):
         uri = self.node_uris.get(node_id)
         fail_count = self.failure_counts[uri]
-        failure_times = self.failure_times[uri]
+        failure_info = self.failure_info[uri]
         start_time = self.node_start_times[uri]
         replication_time = self._average_replication_time(actor_type)
-        return self.reliability_calculator.calculate_reliability(fail_count, failure_times, start_time, replication_time)
+        return self.reliability_calculator.calculate_reliability(fail_count, failure_info, start_time, replication_time)
 
     def new_rep_times(self):
         if self.new_rep_times_available:
@@ -117,11 +117,11 @@ class ResourceManager(object):
         self.replication_times_millis[actor_type].append((time.time(), replication_time))
         self.new_rep_times_available = True
 
-    def sort_nodes_reliability(self, node_ids):
+    def sort_nodes_reliability(self, node_ids, actor_type):
         """Sorts after number of failures"""
-        _log.debug("Sorting nodes {} after reliability {}".format(node_ids, self.failure_counts))
-        node_ids = [(node_id, self.failure_counts[self.node_uris.get(node_id)]) for node_id in node_ids]
+        node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: x[1])
+        _log.info("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
     def current_reliability(self, current_nodes, actor_type):
@@ -140,7 +140,7 @@ class ResourceManager(object):
         """ Simulates node failures """
         self.node_uris[node_id] = uri
         self.failure_counts[uri] += int(nbr_of_failures)
-        self.failure_times[uri].append(time.time())
+        self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     def get_highest_reliable_node(self, node_ids):
         reliabilities = {}
