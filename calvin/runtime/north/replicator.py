@@ -39,7 +39,7 @@ class Replicator(object):
 
     def _find_replica_nodes_cb(self, key, value, start_time_millis, cb):
         if not value:
-            _log.error("Failed to get replica nodes or no there is no replica")
+            _log.error("Failed to get replica nodes for {} or no there is no replica. Storage returned {}".format(key, value))
             cb(status=response.CalvinResponse(False))
             return
 
@@ -162,6 +162,7 @@ class Replicator(object):
             not_allowed.append(self.master_node)
             not_allowed = set(filter(None, not_allowed))
             uri = self.node.resource_manager.node_uris.get(node_id, "")
+            uri = uri if uri else ""
             if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
                 _log.debug("Adding {} to available nodes".format(node_id))
                 available_nodes.append(node_id)
@@ -172,7 +173,11 @@ class Replicator(object):
         return available_nodes
 
     def collect_new_replicas(self, status, current_nodes, to_node_id, start_time_millis, cb):
-        _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, status, to_node_id))
+        try:
+            st = str(status)
+        except:
+            st = ""
+        _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, st, to_node_id))
         self.pending_replications.remove(to_node_id)
         if status in status.success_list:
             _log.info("Successfully replicated to {}".format(to_node_id))
