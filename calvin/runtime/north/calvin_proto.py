@@ -766,9 +766,9 @@ class CalvinProto(CalvinCBClass):
 
     def lost_node_handler(self, payload):
         """ Peer request new actor with state and connections """
-        self.node.lost_node(payload['node_id'])
-        #cb=CalvinCB(self._lost_node_handler, payload))
-        self._lost_node_handler(payload, status=response.CalvinResponse(True))
+        _log.debug("Handling lost node request: {}".format(payload['node_id']))
+        cb = CalvinCB(self._lost_node_handler, payload=payload)
+        self.node.lost_node(payload['node_id'], cb)
 
     def _lost_node_handler(self, payload, status, **kwargs):
         """ Potentially created actor, reply to requesting node """
