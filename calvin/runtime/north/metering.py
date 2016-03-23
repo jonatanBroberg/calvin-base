@@ -72,6 +72,8 @@ class Metering(object):
                 self.forget_aggregated(t)
         if self.active and self.timeout > 0.0:
             # Timed metering
+            if actor_id not in self.actors_log.keys():
+                self.actors_log[actor_id] = []
             self.actors_log[actor_id].append((t, action_name))
             # Remove old data at most once per second
             if self.oldest < t - self.timeout and self.last_forget < t - 1.0:
