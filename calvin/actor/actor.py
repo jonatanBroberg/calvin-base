@@ -330,7 +330,7 @@ class Actor(object):
 
     # What are the arguments, really?
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None, app_id=None):
+                 disable_state_checks=False, actor_id=None, app_id=""):
         """Should _not_ be overridden in subclasses."""
         super(Actor, self).__init__()
         self._type = actor_type
