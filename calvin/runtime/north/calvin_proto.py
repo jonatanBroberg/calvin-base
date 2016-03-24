@@ -167,6 +167,7 @@ class CalvinProto(CalvinCBClass):
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
             'REPORT_USAGE': [CalvinCB(self.report_usage_handler)],
             'REPORT_NEW_REPLICATION_TIME': [CalvinCB(self.report_new_replication_time_handler)],
+            'SEND_RM_INFO': [CalvinCB(self.send_rm_info_handler)],
             'REPLY': [CalvinCB(self.reply_handler)]})
 
         self.rt_id = node.id
@@ -847,6 +848,34 @@ class CalvinProto(CalvinCBClass):
     def _report_new_replication_time_handler(self, payload, status, **kwargs):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
+
+    ### Synchronize resource manager information ###
+
+    def send_rm_info(self, to_rt_uuid, rm_info, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, rm_info, callback)):
+            # Already have link just continue in _actor_new
+            self._send_rm_info(to_rt_uuid, rm_info, callback, response.CalvinResponse(True))
+
+    def _send_rm_info(self, to_rt_uuid, rm_info, callback, status):
+        """ Got link? continue send rm info """
+        if status:
+            msg = {'cmd': 'SEND_RM_INFO',
+                    'rm_info': rm_info}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def send_rm_info_handler(self, payload):
+        """ Peer reported new replication time """
+        _log.analyze(self.rt_id, "+", payload, tb=True)
+        self.node.sync_rm_info(payload['rm_info'], callback=CalvinCB(self._send_rm_info_handler, payload))
+
+    def _send_rm_info_handler(self, payload, rm_info, status, **kwargs):
+        value = status.encode()
+        value['data'] = [rm_info]
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'rm_info':rm_info, 'value': value}
+        self.network.links[payload['from_rt_uuid']].send(msg)
+
 
 if __name__ == '__main__':
     import pytest
