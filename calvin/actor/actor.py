@@ -330,18 +330,19 @@ class Actor(object):
 
     # What are the arguments, really?
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None, app_id=""):
+                 disable_state_checks=False, actor_id=None, app_id="", master_node=None):
         """Should _not_ be overridden in subclasses."""
         super(Actor, self).__init__()
         self._type = actor_type
         self.name = name  # optional: human_readable_name
         self.id = actor_id or calvinuuid.uuid("ACTOR")
+        self.master_node = master_node
         _log.debug("New actor id: %s, supplied actor id %s" % (self.id, actor_id))
         self.app_id = app_id
         self._deployment_requirements = []
         self._signature = None
         self._component_members = set([self.id])  # We are only part of component if this is extended
-        self._managed = set(('id', 'name', '_deployment_requirements', '_signature'))
+        self._managed = set(('id', 'name', '_deployment_requirements', '_signature', 'master_node'))
         self._calvinsys = None
         self._using = {}
         self.control = calvincontrol.get_calvincontrol()

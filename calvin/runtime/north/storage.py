@@ -539,7 +539,11 @@ class Storage(object):
         """
         _log.debug("Add actor %s id %s" % (actor, node_id))
 
-        data = {"name": actor.name, "type": actor._type, "master_node": node_id, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
+        if not actor.master_node:
+            _log.debug("Setting master node of actor {} to {}".format(actor.name, node_id))
+            actor.master_node = node_id
+
+        data = {"name": actor.name, "type": actor._type, "master_node": actor.master_node, "node_id": node_id, 'app_id': app_id, 'replicate': actor.replicate}
 
         inports = []
         for p in actor.inports.values():
