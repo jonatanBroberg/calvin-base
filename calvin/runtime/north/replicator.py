@@ -21,15 +21,26 @@ class Replicator(object):
         self.replica_id = None
         self.replica_value = None
         self.lost_node = lost_node
-        self.pending_replications = []
-        self.failed_requests = []
+        self.pending_replications = set()
+        self.failed_requests = set()
         self.do_delete = do_delete
 
     @property
     def connected_nodes(self):
-        connected = self.node.network.list_links()
-        connected.append(self.node.id)
+        connected = set(self.node.network.list_links())
+        connected.add(self.node.id)
         return connected
+
+    def not_allowed(self, current_nodes):
+        not_allowed = copy.deepcopy(current_nodes)
+        not_allowed |= self.pending_replications
+        not_allowed |= self.failed_requests
+        not_allowed.add(self.lost_node)
+        not_allowed.add(self.master_node)
+        not_allowed = set(filter(None, not_allowed))
+
+        _log.debug("Not allowed: {}".format(not_allowed))
+        return not_allowed
 
     def replicate_lost_actor(self, cb):
         if self.actor_info['replicate']:
@@ -52,7 +63,7 @@ class Replicator(object):
         connected_nodes = self.connected_nodes
         _log.debug("Connected nodes: {}".format(connected_nodes))
 
-        current_nodes = list(set(filter(lambda n: n in connected_nodes, value)))
+        current_nodes = set(filter(lambda n: n in connected_nodes, value))
         if self.do_delete and self.actor_info['node_id'] in current_nodes:
             current_nodes.remove(self.actor_info['node_id'])
         elif self.lost_node in current_nodes:
@@ -109,12 +120,13 @@ class Replicator(object):
         return is_match
 
     def _valid_node(self, current_nodes, node_id):
+        links = set(self.node.network.list_links())
         _log.debug("Checking if {} is a valid node. Links {}. Master {}. Current {}".format(
-            node_id, self.node.network.list_links(), self.master_node, current_nodes))
+            node_id, links, self.master_node, current_nodes))
         if not node_id:
             return False
 
-        if node_id != self.node.id and node_id not in self.node.network.list_links():
+        if node_id != self.node.id and node_id not in links:
             _log.debug("{} not in network links".format(node_id))
             return False
         if node_id == self.master_node:
@@ -156,15 +168,16 @@ class Replicator(object):
                     to_node_id = None
                     break
 
-            connected = self.node.network.list_links()
+            connected = set(self.node.network.list_links())
             if self.node.id != self.master_node:
-                connected.append(self.node.id)
+                connected.add(self.node.id)
+
             if not to_node_id or to_node_id not in connected:
                 _log.error("Not enough available nodes")
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             else:
                 replica_node = self.replica_value['node_id']
-                self.pending_replications.append(to_node_id)
+                self.pending_replications.add(to_node_id)
                 cb = CalvinCB(func=self.collect_new_replicas, to_node_id=to_node_id, current_nodes=current_nodes,
                               start_time_millis=start_time_millis, cb=cb)
                 if replica_node == self.node.id:
@@ -176,24 +189,17 @@ class Replicator(object):
                     self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
 
     def _find_available_nodes(self, current_nodes):
-        available_nodes = []
-        _log.debug("Finding available nodes among: {}".format(self.node.network.list_links()))
+        available_nodes = set()
         connected_nodes = self.connected_nodes
+        _log.debug("Finding available nodes among: {}".format(connected_nodes))
 
-        not_allowed = copy.deepcopy(current_nodes)
-        not_allowed.extend(self.pending_replications)
-        not_allowed.extend(self.failed_requests)
-        not_allowed.append(self.lost_node)
-        not_allowed.append(self.master_node)
-        not_allowed = set(filter(None, not_allowed))
-        _log.debug("Not allowed: {}".format(not_allowed))
-
+        not_allowed = self.not_allowed(current_nodes)
         for node_id in connected_nodes:
             uri = self.node.resource_manager.node_uris.get(node_id, "")
             uri = uri if uri else ""
             if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
                 _log.debug("Adding {} to available nodes".format(node_id))
-                available_nodes.append(node_id)
+                available_nodes.add(node_id)
 
         available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'])
         _log.debug("Available nodes: {}".format(available_nodes))
@@ -213,10 +219,10 @@ class Replicator(object):
             if len(self.new_replicas) == 1:
                 stop_time_millis = int(round(time.time() * 1000))
                 self.node.resource_manager.update_replication_time(self.replica_value['type'], stop_time_millis - start_time_millis)
-            current_nodes.append(to_node_id)
+            current_nodes.add(to_node_id)
         else:
             _log.error("Failed to replicate to {}".format(to_node_id))
-            self.failed_requests.append(to_node_id)
+            self.failed_requests.add(to_node_id)
 
-        current_nodes = list(set(filter(None, current_nodes)))
+        current_nodes = set(filter(None, current_nodes))
         self._replicate(current_nodes, start_time_millis, cb)
