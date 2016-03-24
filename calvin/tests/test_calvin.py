@@ -1630,17 +1630,17 @@ class TestLosingActors(CalvinTestBase):
     def testLoseLocalSnkOneReplica(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
-        utils.replicate(self.rt1, snk, self.rt2.id)
+        replica = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
 
-        utils.disable(self.rt1, snk)
+        utils.disable(self.rt2, replica)
         time.sleep(0.2)
 
-        utils.lost_actor(self.rt1, snk)
+        utils.lost_actor(self.rt2, replica)
         time.sleep(0.2)
-        self.assertIsNone(utils.get_actor(self.rt1, snk))
+        self.assertIsNone(utils.get_actor(self.rt2, replica))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
@@ -1659,16 +1659,16 @@ class TestLosingActors(CalvinTestBase):
         actual_snk_before = actual_tokens(self.rt1, snk)
         expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
 
-        utils.disable(self.rt1, src)
+        utils.disable(self.rt2, replica)
         time.sleep(0.2)
 
-        utils.lost_actor(self.rt1, src)
+        utils.lost_actor(self.rt2, replica)
         time.sleep(0.2)
-        self.assertIsNone(utils.get_actor(self.rt1, src))
+        self.assertIsNone(utils.get_actor(self.rt2, replica))
 
         self._check_reliability(app_id, 'simple:src', self.src_type)
 
-        self._check_src_replicas(app_id, snk, self.rt1, replica, self.rt2, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
+        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSrcOneReplica(self):
         (d, app_id, src, snk) = self._start_app(replicate_src=1)
@@ -1723,12 +1723,12 @@ class TestLosingActors(CalvinTestBase):
 
         expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
 
-        utils.disable(self.rt1, snk)
+        utils.disable(self.rt2, snk2)
         time.sleep(0.2)
 
-        utils.lost_actor(self.rt1, snk)
+        utils.lost_actor(self.rt2, snk2)
         time.sleep(0.2)
-        self.assertIsNone(utils.get_actor(self.rt1, snk))
+        self.assertIsNone(utils.get_actor(self.rt2, snk2))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
@@ -1776,13 +1776,13 @@ class TestLosingActors(CalvinTestBase):
 
         utils.lost_actor(self.rt2, snk2)
 
-        utils.disable(self.rt1, snk)
+        utils.disable(self.rt3, snk3)
         time.sleep(0.2)
 
-        utils.lost_actor(self.rt1, snk)
+        utils.lost_actor(self.rt3, snk3)
         time.sleep(0.2)
-        self.assertIsNone(utils.get_actor(self.rt1, snk))
         self.assertIsNone(utils.get_actor(self.rt2, snk2))
+        self.assertIsNone(utils.get_actor(self.rt3, snk3))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
