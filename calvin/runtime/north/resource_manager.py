@@ -86,7 +86,7 @@ class ResourceManager(object):
     def _average_replication_time(self, actor_type):
         if not self.replication_times_millis[actor_type]:
             return 200
-        time = sum(x[1] for x in self.replication_times_millis[actor_type]) / self.history_size
+        time = sum(x[1] for x in self.replication_times_millis[actor_type]) / len(self.replication_times_millis[actor_type])
         return time
 
     def _sync_replication_times(self, replication_times):

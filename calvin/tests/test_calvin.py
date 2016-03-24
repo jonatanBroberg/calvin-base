@@ -1989,7 +1989,8 @@ class TestDyingRuntimes(CalvinTestBase):
         reliabilities.remove(min(reliabilities))
 
         app = utils.get_application(rt, app_id)
-        assert(1 - reduce(operator.mul, reliabilities, 1) > app['required_reliability'])
+        reliability = (1 - reduce(operator.mul, reliabilities, 1))
+        assert reliability > app['required_reliability']
 
         return actor_runtimes
 
