@@ -171,6 +171,25 @@ class Node(object):
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
 
+        self._send_rm_info(peer_node_id)
+
+    def _send_rm_info(self, peer_node_id):
+        # Send own times to new peers and retreive there times
+        callback = CalvinCB(self._send_rm_info_cb)
+        rm_info = self.resource_manager.sync_info()
+
+        self.proto.send_rm_info(peer_node_id, rm_info, callback)
+
+    def _send_rm_info_cb(self, status, *args, **kwargs):
+        # Receives other peers rm info
+        print status.data
+        if status.data:
+            self.resource_manager.sync_info(status.data[0])
+
+    def sync_rm_info(self, rm_info, callback):
+        # sync received info
+        callback(rm_info=self.resource_manager.sync_info(rm_info), status=response.CalvinResponse(True))
+
     def logging_callback(self, preamble=None, *args, **kwargs):
         _log.debug("\n%s# NODE: %s \n# %s %s %s \n%s" %
                    ('#' * 40, self.id, preamble if preamble else "*", args, kwargs, '#' * 40))
@@ -271,7 +290,6 @@ class Node(object):
         self.resource_manager.register(self.id, usage, self.uri)
 
         self._print_stats()
-
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, callback=callback)
