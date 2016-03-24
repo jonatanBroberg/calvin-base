@@ -94,6 +94,8 @@ class ResourceManager(object):
         Sync the replication_times for each actor_type stored on another node.
         replication_times is a sent as a list but stored as a deque
         """
+        _log.debug("Syncing replication times {} with new replication times {}".format(
+            self.replication_times_millis, replication_times))
         for (actor_type, times) in replication_times.iteritems():
             sorted_times = sorted(times, key=lambda x:x[0])
             sorted_times = [(x,y) for x,y in sorted_times]
@@ -102,6 +104,7 @@ class ResourceManager(object):
             else:
                 for key, value in sorted_times:
                     self.replication_times_millis[actor_type].append((key, value))
+        _log.debug("Replication times: {}".format(self.replication_times_millis))
 
     def _update_deque(self, new_values, old_values):
         for tup in new_values:
@@ -109,8 +112,10 @@ class ResourceManager(object):
                 old_values.append(tup)
 
     def _sync_failure_counts(self, failure_counts):
+        _log.debug("Syncing failure counts {} with new failure counts {}".format(self.failure_counts, failure_counts))
         for (uri, count) in failure_counts.iteritems():
             self.failure_counts[uri] = max(self.failure_counts[uri], failure_counts[uri])
+        _log.debug("Failure counts: {}".format(failure_counts))
 
     def update_replication_time(self, actor_type, replication_time):
         _log.info('New replication time: {}'.format(replication_time))
@@ -121,7 +126,7 @@ class ResourceManager(object):
         """Sorts after number of failures"""
         node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: x[1])
-        _log.info("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
+        _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
     def current_reliability(self, current_nodes, actor_type):
