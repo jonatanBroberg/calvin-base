@@ -147,5 +147,6 @@ class ResourceManager(object):
     def get_highest_reliable_node(self, node_ids):
         reliabilities = {}
         for node_id in node_ids:
-            reliabilities[node_id] = self.get_reliability(node_id, None)
+            reliabilities[node_id] = self.get_reliability(node_id, "actions:src")
+        _log.debug("Reliabilities: {}".format(reliabilities))
         return max(reliabilities.iteritems(), key=operator.itemgetter(1))[0]
