@@ -23,9 +23,8 @@ class ResourceManager(object):
         self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
-        self.new_rep_times_available = False
 
-    def register(self, node_id, usage, uri, failure_counts=None, replication_times=None):
+    def register(self, node_id, usage, uri, failure_counts=None):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
@@ -36,8 +35,6 @@ class ResourceManager(object):
             self.usages[node_id].append(usage)
         if failure_counts:
             self._sync_failure_counts(failure_counts)
-        if replication_times:
-            self._sync_replication_times(replication_times)
 
     def lost_node(self, node_id, uri):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
@@ -78,12 +75,6 @@ class ResourceManager(object):
         replication_time = self._average_replication_time(actor_type)
         return self.reliability_calculator.calculate_reliability(fail_count, failure_info, start_time, replication_time)
 
-    def new_rep_times(self):
-        if self.new_rep_times_available:
-            self.new_rep_times_available = False
-            return self.replication_times_millis
-        return {}
-
     def _average_replication_time(self, actor_type):
         _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
         if not self.replication_times_millis[actor_type]:
@@ -120,10 +111,12 @@ class ResourceManager(object):
             self.failure_counts[uri] = max(self.failure_counts[uri], failure_counts[uri])
         _log.debug("Failure counts: {}".format(failure_counts))
 
-    def update_replication_time(self, actor_type, replication_time):
+    def update_replication_time(self, actor_type, replication_time, timestamp):
         _log.info('New replication time: {}'.format(replication_time))
-        self.replication_times_millis[actor_type].append((time.time(), replication_time))
-        self.new_rep_times_available = True
+        if not self.replication_times_millis[actor_type]:
+            self.replication_times_millis[actor_type].append((timestamp, replication_time))
+        elif timestamp not in [x[0] for x in self.replication_times_millis[actor_type]]:
+            self.replication_times_millis[actor_type].append((timestamp, replication_time))
 
     def sort_nodes_reliability(self, node_ids, actor_type):
         """Sorts after number of failures"""
