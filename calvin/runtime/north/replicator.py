@@ -25,9 +25,15 @@ class Replicator(object):
         self.failed_requests = []
         self.do_delete = do_delete
 
+    @property
+    def connected_nodes(self):
+        connected = self.node.network.list_links()
+        connected.append(self.node.id)
+        return connected
+
     def replicate_lost_actor(self, cb):
         if self.actor_info['replicate']:
-            _log.info("Replicating lost actor: {}".format(self.actor_id))
+            _log.info("Replicating lost actor: {}".format(self.actor_info))
             start_time_millis = int(round(time.time() * 1000))
             cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
@@ -43,17 +49,10 @@ class Replicator(object):
             cb(status=response.CalvinResponse(False))
             return
 
-        connected_nodes = self.node.network.list_links()
-
-        _log.debug("Self {}, master {}".format(self.node.id, self.master_node))
-        if not self.node.id == self.master_node:
-            connected_nodes.append(self.node.id)
-
+        connected_nodes = self.connected_nodes
         _log.debug("Connected nodes: {}".format(connected_nodes))
-        _log.debug("Replica nodes: {}".format(value))
-        current_nodes = list(set(filter(lambda n: n in connected_nodes, value)))
 
-        _log.debug("Current replica nodes: {}".format(current_nodes))
+        current_nodes = list(set(filter(lambda n: n in connected_nodes, value)))
         if self.do_delete and self.actor_info['node_id'] in current_nodes:
             current_nodes.remove(self.actor_info['node_id'])
         elif self.lost_node in current_nodes:
@@ -73,8 +72,12 @@ class Replicator(object):
         self._find_a_replica(value, current_nodes, start_time_millis, index=0, cb=cb)
 
     def _find_a_replica(self, actors, current_nodes, start_time_millis, index, cb):
-        _log.debug("Searching for a replica")
-        if index < len(actors) and not (self.lost_node and actors[index] == self.actor_id):
+        _log.debug("Searching for a replica for {}".format(self.actor_info))
+        if index < len(actors):
+            if self.lost_node and actors[index] == self.actor_id:
+                _log.debug("{} is the lost one, ignoring".format(actors[index]))
+                return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
+
             _log.debug("Trying {}".format(actors[index]))
             cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes,
                           start_time_millis=start_time_millis, index=index, cb=cb)
@@ -87,13 +90,18 @@ class Replicator(object):
 
     def _check_for_original(self, key, value, actors, current_nodes, start_time_millis, index, cb):
         _log.debug("Check for original: {} - {}".format(key, value))
-        if value and self._is_match(value['name'], self.actor_info['name']) and value['node_id'] in self.node.network.list_links():
+        if not value:
+            return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
+        elif value['node_id'] not in self.connected_nodes:
+            _log.warning("Not connected to node {} of actor {}".format(value['node_id'], value))
+            return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
+        elif self._is_match(value['name'], self.actor_info['name']):
             _log.debug("Found a replica of lost actor: {}".format(value))
             self.replica_id = key
             self.replica_value = value
-            self._replicate(current_nodes, start_time_millis, cb)
-        else:
-            self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
+            return self._replicate(current_nodes, start_time_millis, cb)
+
+        return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
 
     def _is_match(self, first, second):
         is_match = calvinuuid.remove_uuid(first) == calvinuuid.remove_uuid(second)
@@ -106,7 +114,7 @@ class Replicator(object):
         if not node_id:
             return False
 
-        if node_id not in self.node.network.list_links():
+        if node_id != self.node.id and node_id not in self.node.network.list_links():
             _log.debug("{} not in network links".format(node_id))
             return False
         if node_id == self.master_node:
@@ -116,6 +124,7 @@ class Replicator(object):
             _log.debug("{} is in current nodes".format(node_id))
             return False
 
+        _log.debug("{} is a valid node".format(node_id))
         return True
 
     def _replicate(self, current_nodes, start_time_millis, cb):
@@ -147,7 +156,10 @@ class Replicator(object):
                     to_node_id = None
                     break
 
-            if not to_node_id or to_node_id not in self.node.network.list_links():
+            connected = self.node.network.list_links()
+            if self.node.id != self.master_node:
+                connected.append(self.node.id)
+            if not to_node_id or to_node_id not in connected:
                 _log.error("Not enough available nodes")
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             else:
@@ -166,15 +178,17 @@ class Replicator(object):
     def _find_available_nodes(self, current_nodes):
         available_nodes = []
         _log.debug("Finding available nodes among: {}".format(self.node.network.list_links()))
-        connected_nodes = [self.node.id] if "gru" not in self.node.uri else []
-        connected_nodes.extend(self.node.network.list_links())
+        connected_nodes = self.connected_nodes
+
+        not_allowed = copy.deepcopy(current_nodes)
+        not_allowed.extend(self.pending_replications)
+        not_allowed.extend(self.failed_requests)
+        not_allowed.append(self.lost_node)
+        not_allowed.append(self.master_node)
+        not_allowed = set(filter(None, not_allowed))
+        _log.debug("Not allowed: {}".format(not_allowed))
+
         for node_id in connected_nodes:
-            not_allowed = copy.deepcopy(current_nodes)
-            not_allowed.extend(self.pending_replications)
-            not_allowed.extend(self.failed_requests)
-            not_allowed.append(self.lost_node)
-            not_allowed.append(self.master_node)
-            not_allowed = set(filter(None, not_allowed))
             uri = self.node.resource_manager.node_uris.get(node_id, "")
             uri = uri if uri else ""
             if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
