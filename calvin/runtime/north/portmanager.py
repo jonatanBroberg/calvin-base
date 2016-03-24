@@ -516,7 +516,7 @@ class PortManager(object):
         self.node.storage.add_port(outport, self.node.id, outport.owner.id, "out")
 
     def close_all_ports_to_node(self, actors, node_id):
-        _log.debug("Closing all ports to node {}".format(node_id))
+        _log.info("Closing all ports to node {}".format(node_id))
         disconnected = []
         for actor in actors:
             for inport in actor.inports.values():
@@ -532,10 +532,12 @@ class PortManager(object):
                             ep.peer_node_id == node_id):
                         disconnected.extend(outport.disconnect(ep.peer_port_id))
 
+        links = self.node.network.list_links()
         for ep in disconnected:
-            if isinstance(ep, endpoint.TunnelOutEndpoint):
-                self.monitor.unregister_out_endpoint(ep)
-            ep.destroy()
+            if ep.peer_node_id not in links:
+                if isinstance(ep, endpoint.TunnelOutEndpoint):
+                    self.monitor.unregister_out_endpoint(ep)
+                ep.destroy()
 
     def disconnect(self, callback=None, actor_id=None, port_name=None, port_dir=None, port_id=None):
         """ Do disconnect for port(s)
