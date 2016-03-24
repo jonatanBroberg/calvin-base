@@ -53,8 +53,6 @@ class LostNodeHandler(object):
             cb.kwargs_update(prio_node=highest_prio_node)
             self.node.proto.lost_node(highest_prio_node, node_id, cb)
 
-        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
-
     def _delete_node(self, key, value):
         _log.debug("Deleting node {} with value {}".format(key, value))
         if not value:
@@ -78,6 +76,8 @@ class LostNodeHandler(object):
         for cb in self._callbacks[node_id]:
             _log.debug("Calling cb {} with status {}".format(cb, status))
             cb(status=status)
+
+        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
 
     def _highest_prio_node(self, node_id):
         node_ids = self.node.network.list_links()
