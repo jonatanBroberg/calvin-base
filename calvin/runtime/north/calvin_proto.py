@@ -758,22 +758,38 @@ class CalvinProto(CalvinCBClass):
     def _lost_node(self, to_rt_uuid, callback, node_id, status, uri=None, *args, **kwargs):
         """ Got link? continue actor new """
         if status:
+            _log.debug("Sending LOST_NODE of node {} to {} - {}".format(node_id, to_rt_uuid, self.node.resource_manager.node_uris.get(to_rt_uuid)))
             msg = {'cmd': 'LOST_NODE',
                    'node_id': node_id}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
+            _log.error("Failed to send LOST_NODE of node {} to {} - {}".format(node_id, to_rt_uuid, self.node.resource_manager.node_uris.get(to_rt_uuid)))
             callback(status=status)
 
     def lost_node_handler(self, payload):
         """ Peer request new actor with state and connections """
-        self.node.lost_node(payload['node_id'])
-        #cb=CalvinCB(self._lost_node_handler, payload))
-        self._lost_node_handler(payload, status=response.CalvinResponse(True))
+        from_node = self.node.resource_manager.node_uris.get(payload['from_rt_uuid'])
+        node = self.node.resource_manager.node_uris.get(payload['node_id'])
+        _log.debug("Handling lost node request of node {} - {} sent from {}".format(payload['node_id'], node, from_node))
+        cb = CalvinCB(self._lost_node_handler, payload=payload)
+        self.node.lost_node(payload['node_id'], cb)
 
     def _lost_node_handler(self, payload, status, **kwargs):
         """ Potentially created actor, reply to requesting node """
+        if isinstance(status, int):
+            status = response.CalvinResponse(status)
+
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
-        self.network.links[payload['from_rt_uuid']].send(msg)
+        from_rt_uuid = payload['from_rt_uuid']
+        if self.node.network.link_request(from_rt_uuid, CalvinCB(self._lost_node_reply, to_rt_uuid=from_rt_uuid, msg=msg)):
+            self._lost_node_reply(to_rt_uuid=from_rt_uuid, msg=msg, status=response.CalvinResponse(True))
+
+    def _lost_node_reply(self, to_rt_uuid, msg, status, **kwargs):
+        if status:
+            self.network.links[to_rt_uuid].send(msg)
+        else:
+            from_node = self.node.resource_manager.node_uris.get(to_rt_uuid)
+            _log.error("Failed to send reply to {} - {}".format(to_rt_uuid, from_node))
 
     ### RESOURCE USAGE ###
 

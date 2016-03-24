@@ -39,12 +39,13 @@ class Replicator(object):
 
     def _find_replica_nodes_cb(self, key, value, start_time_millis, cb):
         if not value:
-            _log.error("Failed to get replica nodes or no there is no replica")
+            _log.error("Failed to get replica nodes for {} or no there is no replica. Storage returned {}".format(key, value))
             cb(status=response.CalvinResponse(False))
             return
 
         connected_nodes = self.node.network.list_links()
 
+        _log.debug("Self {}, master {}".format(self.node.id, self.master_node))
         if not self.node.id == self.master_node:
             connected_nodes.append(self.node.id)
 
@@ -57,6 +58,7 @@ class Replicator(object):
             current_nodes.remove(self.actor_info['node_id'])
         elif self.lost_node in current_nodes:
             current_nodes.remove(self.lost_node)
+        _log.debug("Current replica nodes: {}".format(current_nodes))
 
         cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, start_time_millis=start_time_millis, cb=cb)
         self.node.storage.get_application_actors(self.actor_info['app_id'], cb)
@@ -99,10 +101,22 @@ class Replicator(object):
         return is_match
 
     def _valid_node(self, current_nodes, node_id):
+        _log.debug("Checking if {} is a valid node. Links {}. Master {}. Current {}".format(
+            node_id, self.node.network.list_links(), self.master_node, current_nodes))
         if not node_id:
             return False
 
-        return node_id in self.node.network.list_links() and node_id != self.master_node and node_id not in current_nodes
+        if node_id not in self.node.network.list_links():
+            _log.debug("{} not in network links".format(node_id))
+            return False
+        if node_id == self.master_node:
+            _log.debug("{} is master node".format(node_id))
+            return False
+        if node_id in current_nodes:
+            _log.debug("{} is in current nodes".format(node_id))
+            return False
+
+        return True
 
     def _replicate(self, current_nodes, start_time_millis, cb):
         if not self.replica_id:
@@ -162,6 +176,7 @@ class Replicator(object):
             not_allowed.append(self.master_node)
             not_allowed = set(filter(None, not_allowed))
             uri = self.node.resource_manager.node_uris.get(node_id, "")
+            uri = uri if uri else ""
             if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
                 _log.debug("Adding {} to available nodes".format(node_id))
                 available_nodes.append(node_id)
@@ -172,7 +187,11 @@ class Replicator(object):
         return available_nodes
 
     def collect_new_replicas(self, status, current_nodes, to_node_id, start_time_millis, cb):
-        _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, status, to_node_id))
+        try:
+            st = str(status)
+        except:
+            st = ""
+        _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, st, to_node_id))
         self.pending_replications.remove(to_node_id)
         if status in status.success_list:
             _log.info("Successfully replicated to {}".format(to_node_id))

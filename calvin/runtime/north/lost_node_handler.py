@@ -1,4 +1,6 @@
 
+from collections import defaultdict
+
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities.calvinlogger import get_logger
 import calvin.utilities.calvinresponse as response
@@ -12,13 +14,18 @@ class LostNodeHandler(object):
     def __init__(self, node, resource_manager, port_manager, actor_manager, storage):
         self.node = node
         self._lost_nodes = set()
+        self._callbacks = defaultdict(set)
         self.resource_manager = resource_manager
         self.pm = port_manager
         self.am = actor_manager
         self.storage = storage
 
-    def handle_lost_node(self, node_id):
+    def handle_lost_node(self, node_id, cb):
         _log.debug("Handling lost node {}".format(node_id))
+        if cb:
+            _log.debug("Adding callback: {} for node {}".format(cb, node_id))
+            self._callbacks[node_id].add(cb)
+
         if node_id in self._lost_nodes:
             _log.debug("Got multiple lost node signals, ignoring")
             return
@@ -33,16 +40,18 @@ class LostNodeHandler(object):
                 self.storage.delete_replica_node(actor.app_id, node_id, actor.name)
 
         highest_prio_node = self._highest_prio_node(node_id)
-        _log.debug("Highest prio node: {}".format(highest_prio_node))
+
         self._lost_nodes.add(node_id)
+
+        cb = CalvinCB(self._lost_node_cb, node_id=node_id, cb=cb)
         if highest_prio_node == self.node.id:
             _log.debug("We have highest id, replicate actors")
-            self.replicate_node_actors(node_id, cb=CalvinCB(self._lost_node_cb, node_id=node_id))
+            self.replicate_node_actors(node_id, cb=cb)
         elif highest_prio_node:
-            _log.debug("Sending lost node msg")
-            self.node.proto.lost_node(highest_prio_node, node_id, CalvinCB(self._lost_node_cb, node_id=node_id))
-
-        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
+            _log.debug("Sending lost node msg to {} - {}".format(
+                highest_prio_node, self.resource_manager.node_uris.get(highest_prio_node)))
+            cb.kwargs_update(prio_node=highest_prio_node)
+            self.node.proto.lost_node(highest_prio_node, node_id, cb)
 
     def _delete_node(self, key, value):
         _log.debug("Deleting node {} with value {}".format(key, value))
@@ -52,17 +61,27 @@ class LostNodeHandler(object):
         indexed_public = value['attributes'].get('indexed_public')
         self.storage.delete_node(key, indexed_public)
 
-    def _lost_node_cb(self, status, node_id):
+    def _lost_node_cb(self, status, node_id, cb, prio_node=None):
         if not status:
-            _log.error("Failed to handle lost node: {}".format(status))
+            if prio_node:
+                _log.error("Node {} failed to handle lost node {}: {}".format(prio_node, node_id, status))
+                self._lost_nodes.remove(node_id)
+                self.handle_lost_node(node_id, cb)
+            else:
+                _log.error("Failed to handle lost node {}: {}".format(node_id, status))
         else:
-            _log.debug("Successfully handled lost node")
+            _log.debug("Successfully handled lost node {}".format(node_id))
 
         self.storage.get_node(node_id, self._delete_node)
+        for cb in self._callbacks[node_id]:
+            _log.debug("Calling cb {} with status {}".format(cb, status))
+            cb(status=status)
+
+        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
 
     def _highest_prio_node(self, node_id):
-        _log.debug("Getting highest_prio_node")
         node_ids = self.node.network.list_links()
+        _log.debug("Getting highest_prio_node among {}".format(node_ids))
         if not node_ids:
             # We are not connected to anyone
             return None
@@ -77,9 +96,11 @@ class LostNodeHandler(object):
         if not node_ids:
             return None
 
-        rel_node = self.resource_manager.get_highest_reliable_node(node_ids)
-        _log.debug("highest prio node: {}".format(rel_node))
-        return rel_node
+        return sorted(node_ids)[0]
+
+        #rel_node = self.resource_manager.get_highest_reliable_node(node_ids)
+        #_log.debug("Highest prio node: {}".format(rel_node))
+        #return rel_node
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
@@ -98,7 +119,7 @@ class LostNodeHandler(object):
             cb(status=response.CalvinResponse(False))
             return
         elif value == []:
-            _log.debug("No value returned from storage when fetching node actors")
+            _log.debug("No value returned from storage when fetching node actors for node {}".format(node_id))
             cb(status=response.CalvinResponse(True))
             return
 

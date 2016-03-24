@@ -157,6 +157,7 @@ class Node(object):
         else:
             callback = CalvinCB(self.peersetup_collect_cb, peers=peers_copy, peer_node_ids=peer_node_ids, org_cb=cb)
 
+        peers = filter(None, peers)
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
@@ -292,7 +293,7 @@ class Node(object):
         self.resource_manager.register(node_id, usage, uri, failure_counts=failure_counts, replication_times=replication_times)
         callback(status=response.CalvinResponse(True))
 
-    def lost_node(self, node_id):
+    def lost_node(self, node_id, cb=None):
         _log.info("Lost node: {}".format(node_id))
         self._print_stats(lost_node_id=node_id)
         _log.analyze(self.id, "+", "Lost node {}".format(node_id))
@@ -300,7 +301,7 @@ class Node(object):
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
-        self.lost_node_handler.handle_lost_node(node_id)
+        self.lost_node_handler.handle_lost_node(node_id, cb)
 
     def lost_actor(self, lost_actor_id, lost_actor_info, required_reliability, cb):
         _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
