@@ -516,28 +516,34 @@ class PortManager(object):
         self.node.storage.add_port(outport, self.node.id, outport.owner.id, "out")
 
     def close_all_ports_to_node(self, actors, node_id):
-        _log.info("Closing all ports to node {}".format(node_id))
+        _log.debug("Closing all ports to node {}".format(node_id))
         disconnected = []
+        links = set(self.node.network.list_links())
         for actor in actors:
+            _log.debug("Closing ports of actor {}".format(actor))
             for inport in actor.inports.values():
                 endpoints = inport.endpoints
                 for ep in endpoints:
                     if ((isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint)) and
-                            ep.peer_node_id == node_id):
-                        disconnected.extend(inport.disconnect(ep.peer_port_id))
+                            ep.peer_node_id == node_id and ep.peer_node_id not in links):
+                        eps = inport.disconnect(ep.peer_port_id)
+                        _log.debug("Adding endpoints from inport for disconnecting: {}".format(eps))
+                        disconnected.extend(eps)
             for outport in actor.outports.values():
                 endpoints = outport.endpoints
                 for ep in endpoints:
                     if ((isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint)) and
-                            ep.peer_node_id == node_id):
-                        disconnected.extend(outport.disconnect(ep.peer_port_id))
+                            ep.peer_node_id == node_id and ep.peer_node_id not in links):
+                        eps = outport.disconnect(ep.peer_port_id)
+                        _log.debug("Adding endpoints from outport for disconnecting: {}".format(eps))
+                        disconnected.extend(eps)
 
-        links = self.node.network.list_links()
         for ep in disconnected:
-            if ep.peer_node_id not in links:
-                if isinstance(ep, endpoint.TunnelOutEndpoint):
-                    self.monitor.unregister_out_endpoint(ep)
-                ep.destroy()
+            _log.debug("Closing endpoint {} to {}".format(ep, ep.peer_node_id))
+            if isinstance(ep, endpoint.TunnelOutEndpoint):
+                self.monitor.unregister_out_endpoint(ep)
+            ep.destroy()
+            self.node.storage.delete_port(ep.peer_port_id)
 
     def disconnect(self, callback=None, actor_id=None, port_name=None, port_dir=None, port_id=None):
         """ Do disconnect for port(s)
