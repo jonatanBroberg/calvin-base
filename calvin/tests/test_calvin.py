@@ -21,6 +21,7 @@ import time
 import pytest
 import multiprocessing
 import copy
+import operator
 from collections import Counter
 
 from calvin.tests.helpers import expected_tokens, actual_tokens
@@ -1524,10 +1525,11 @@ class TestLosingActors(CalvinTestBase):
         return (d, app_id, src, snk)
 
     def _get_reliability(self, app_id, actor_name, actor_type):
-        reliability = 0
+        reliabilities = []
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id, actor_type)))
-        return reliability
+            reliabilities.append(1-utils.get_reliability(self.rt1, node_id, actor_type))
+        reliabilities.remove(min(reliabilities))
+        return 1 - reduce(operator.mul, reliabilities, 1)
 
     def _check_reliability(self, app_id, name, actor_type):
         reliability = self._get_reliability(app_id, name, actor_type)
@@ -1550,8 +1552,7 @@ class TestLosingActors(CalvinTestBase):
         actual_replicas = []
         replicas = self._get_replicas(app_id, 'simple:src')
         for actor_id, rt in replicas.iteritems():
-            if actor_id != src:
-                actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
+            actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
         print 'actual_replicas', actual_replicas
 
         expected = expected_tokens(src_rt, src, actor_type)
@@ -1564,7 +1565,7 @@ class TestLosingActors(CalvinTestBase):
             assert len(actuals) > len(replica_before)
 
         counts = Counter(actual_snk)
-        unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt < len(actual_replicas)]
         print '\nunique_elements', unique_elements
         assert len(unique_elements) > 0
 
@@ -1576,7 +1577,7 @@ class TestLosingActors(CalvinTestBase):
         print 'filtered_expected_replicas', filtered_expected_replicas
 
         filtered_expected_total = [x for x in filtered_expected]
-        for i in range(len(actual_replicas)):
+        for i in range(len(actual_replicas)-1):
             filtered_expected_total += filtered_expected
         self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual_snk))
         for filtered_expected_replica in filtered_expected_replicas:
@@ -1822,10 +1823,11 @@ class TestDynamicReliability(CalvinTestBase):
         return (d, app_id, src, snk)
 
     def _get_reliability(self, app_id, actor_name, actor_type):
-        reliability = 0
+        reliabilities = []
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            reliability = (1 - (1-reliability) * (1-utils.get_reliability(self.rt1, node_id, actor_type)))
-        return reliability
+            reliabilities.append(1-utils.get_reliability(self.rt1, node_id, actor_type))
+        reliabilities.remove(min(reliabilities))
+        return 1 - reduce(operator.mul, reliabilities, 1)
 
     def _check_reliability(self, app_id, name, actor_type):
         reliability = self._get_reliability(app_id, name, actor_type)
@@ -1867,6 +1869,7 @@ class TestDyingRuntimes(CalvinTestBase):
         self.ip_addr = ip_addr
         self.runtime = runtime
         self.runtime2 = runtimes[0]
+        self.runtime3 = runtimes[1]
 
         csruntime(ip_addr, port=5028, controlport=5029, attr={}, storage=True)
         time.sleep(0.2)
@@ -1969,7 +1972,7 @@ class TestDyingRuntimes(CalvinTestBase):
         return new_actors, new_replicas
 
     def _check_app_reliability(self, rt, new_actors, app_id, actor_name):
-        reliability = 0
+        reliabilities = []
         runtimes = self.runtimes
         runtimes.append(self.runtime)
         actor_runtimes = {}
@@ -1978,13 +1981,15 @@ class TestDyingRuntimes(CalvinTestBase):
             if a:
                 name = calvinuuid.remove_uuid(a['name'])
                 if name == actor_name:
-                    reliability = (1 - (1 - reliability) * (1 - utils.get_reliability(rt, a['node_id'], a['type'])))
+                    reliabilities.append(1 - utils.get_reliability(rt, a['node_id'], a['type']))
                 for rt in runtimes:
                     if a['node_id'] == rt.id:
                         actor_runtimes[actor] = rt
 
+        reliabilities.remove(min(reliabilities))
+
         app = utils.get_application(rt, app_id)
-        assert(reliability > app['required_reliability'])
+        assert(1 - reduce(operator.mul, reliabilities, 1) > app['required_reliability'])
 
         return actor_runtimes
 
