@@ -130,6 +130,7 @@ class ResourceManager(object):
         return [x[0] for x in node_ids]
 
     def current_reliability(self, current_nodes, actor_type):
+        current_nodes = list(set(current_nodes))
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
         failure = []
         for node_id in current_nodes:
