@@ -15,6 +15,7 @@
 # limitations under the License.
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
+from calvin.utilities import calvinuuid
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
 import calvin.utilities.calvinresponse as response
@@ -88,6 +89,14 @@ class ActorManager(object):
         state['id'] = args.pop('id')
         state['name'] = args.pop('name')
         state['set_ports'] = False
+
+        replica_name = calvinuuid.remove_uuid(state['name'])
+        for a in self.actors.values():
+            if replica_name == calvinuuid.remove_uuid(a.name) and app_id == a.app_id:
+                _log.warning("We have replica {} already, aborting replica request".format(replica_name))
+                if callback:
+                    callback(status=response.CalvinResponse(False, data={'actor_id': None}))
+                return
 
         a = self._new(actor_type, args, state, app_id=app_id)
 
