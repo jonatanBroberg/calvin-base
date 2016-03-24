@@ -736,7 +736,7 @@ class TestActorMigration(CalvinTestBase):
         id_ = rt.id
         peer = self.runtimes[0]
         peer_id = peer.id
-        
+
         (snk, sum_, src) = self._start_sum_app(rt, peer, peer)
 
         actual_x = []
@@ -862,7 +862,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(peer0, 'io.StandardOut', 'snk', store_tokens=1)
         wrapper = utils.new_actor(rt, 'misc.ExplicitStateExample', 'wrapper')
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk:peer0, wrapper:rt, src:rt}) 
+        self.actors.update({snk:peer0, wrapper:rt, src:rt})
 
         utils.connect(peer0, snk, 'token', id_, wrapper, 'token')
         utils.connect(rt, wrapper, 'token', id_, src, 'integer')
@@ -885,7 +885,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk_1:rt, snk_2:rt, src:rt}) 
+        self.actors.update({snk_1:rt, snk_2:rt, src:rt})
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(rt, snk_2, 'token', rt.id, src, 'integer')
@@ -916,7 +916,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk_1:rt, snk_2:peer, src:rt}) 
+        self.actors.update({snk_1:rt, snk_2:peer, src:rt})
 
         utils.connect(rt, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
@@ -947,7 +947,7 @@ class TestActorMigration(CalvinTestBase):
         snk_1 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         snk_2 = utils.new_actor_wargs(peer, 'io.StandardOut', 'snk', store_tokens=1)
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk_1:peer, snk_2:peer, src:rt}) 
+        self.actors.update({snk_1:peer, snk_2:peer, src:rt})
 
         utils.connect(peer, snk_1, 'token', rt.id, src, 'integer')
         utils.connect(peer, snk_2, 'token', rt.id, src, 'integer')
@@ -978,7 +978,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk:rt, src_1:rt, src_2:rt}) 
+        self.actors.update({snk:rt, src_1:rt, src_2:rt})
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', rt.id, src_2, 'integer')
@@ -1002,7 +1002,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
-        self.actors.update({snk:rt, src_1:rt, src_2:peer}) 
+        self.actors.update({snk:rt, src_1:rt, src_2:peer})
 
         utils.connect(rt, snk, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
@@ -1026,7 +1026,7 @@ class TestActorMigration(CalvinTestBase):
         snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(peer, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(peer, 'std.CountTimer', 'src')
-        self.actors.update({snk:rt, src_1:peer, src_2:peer}) 
+        self.actors.update({snk:rt, src_1:peer, src_2:peer})
 
         utils.connect(rt, snk, 'token', peer.id, src_1, 'integer')
         utils.connect(rt, snk, 'token', peer.id, src_2, 'integer')
@@ -1051,7 +1051,7 @@ class TestActorMigration(CalvinTestBase):
         snk_2 = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
         src_1 = utils.new_actor(rt, 'std.CountTimer', 'src')
         src_2 = utils.new_actor(rt, 'std.CountTimer', 'src')
-        self.actors.update({snk_1:rt, snk_2:rt, src_1:rt, src_2:rt}) 
+        self.actors.update({snk_1:rt, snk_2:rt, src_1:rt, src_2:rt})
 
         utils.connect(rt, snk_1, 'token', rt.id, src_1, 'integer')
         utils.connect(rt, snk_1, 'token', rt.id, src_2, 'integer')
@@ -1755,7 +1755,7 @@ class TestLosingActors(CalvinTestBase):
         self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
-        
+
         expected = expected_tokens(self.rt1, src, 'std.CountTimer')
         assert len(expected) > len(expected_before)
 
@@ -1893,7 +1893,7 @@ class TestDyingRuntimes(CalvinTestBase):
         csruntime(ip_addr, port=5036, controlport=5037, attr={},
                   configfile="/tmp/calvin5030.conf")
         time.sleep(0.2)
-        self.runtime3 = utils.RT("http://%s:5035" % self.ip_addr)
+        self.runtime3 = utils.RT("http://%s:5037" % self.ip_addr)
 
         csruntime(ip_addr, port=5030, controlport=5031, attr={},
                   configfile="/tmp/calvin5030.conf")
@@ -1920,6 +1920,12 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.peer_setup(self.runtime, ["calvinip://%s:5030" % ip_addr])
         utils.peer_setup(self.runtime, ["calvinip://%s:5034" % ip_addr])
         utils.peer_setup(self.runtime, ["calvinip://%s:5036" % ip_addr])
+        utils.peer_setup(self.runtime2, ["calvinip://%s:5030" % ip_addr])
+        utils.peer_setup(self.runtime2, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.runtime2, ["calvinip://%s:5036" % ip_addr])
+        utils.peer_setup(self.runtime3, ["calvinip://%s:5030" % ip_addr])
+        utils.peer_setup(self.runtime3, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.runtime3, ["calvinip://%s:5034" % ip_addr])
 
         time.sleep(0.2)
 

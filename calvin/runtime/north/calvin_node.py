@@ -226,7 +226,7 @@ class Node(object):
             value.remove(lost_node_id)
 
         nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
-        self.info("CURRENT NODES: {}".format(nodes))
+        self.info("CURRENT NODES: {} {}".format(len(nodes), nodes))
 
         rm = self.resource_manager
         rels = []
@@ -235,11 +235,11 @@ class Node(object):
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         self.info("NODE RELIABILITIES: {}".format(rels))
 
-        current_rel, actual_rel = self.resource_manager.current_reliability(value, 'actions:src')
+        current_rel, actual_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
         self.info("RELIABILITY: {}".format(actual_rel))
 
     def _print_replication_time(self):
-        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time("actions:src")))
+        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time('std.CountTimer')))
 
     def _print_reliabilities(self):
         all_nodes = self.network.list_links()
