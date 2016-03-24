@@ -20,6 +20,7 @@ import sys
 import trace
 import logging
 import socket
+import time
 
 from calvin.calvinsys import Sys as CalvinSys
 
@@ -231,7 +232,7 @@ class Node(object):
         rm = self.resource_manager
         rels = []
         for node_id in value:
-            rel = rm.get_reliability(node_id, "actions:src")
+            rel = rm.get_reliability(node_id, "std.CountTimer")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         self.info("NODE RELIABILITIES: {}".format(rels))
 
@@ -247,7 +248,7 @@ class Node(object):
         rels = []
         self.info("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
-            rel = rm.get_reliability(node_id, "actions:src")
+            rel = rm.get_reliability(node_id, "std.CountTimer")
             uri = rm.node_uris.get(node_id)
             if uri:
                 failure_info = rm.failure_info[uri]
@@ -271,13 +272,9 @@ class Node(object):
 
         self._print_stats()
 
-        replication_times = {}
-        for (actor_type, times) in self.resource_manager.new_rep_times().iteritems():
-            replication_times[actor_type] = [(x, y) for x, y in times]
-
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
-            self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, replication_times, callback=callback)
+            self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, callback=callback)
 
         self.app_monitor.check_reliabilities()
 
@@ -287,10 +284,29 @@ class Node(object):
         else:
             _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
-    def register_resource_usage(self, node_id, usage, failure_counts, replication_times, callback):
+    def register_resource_usage(self, node_id, usage, failure_counts, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
-        self.resource_manager.register(node_id, usage, uri, failure_counts=failure_counts, replication_times=replication_times)
+        self.resource_manager.register(node_id, usage, uri, failure_counts=failure_counts)
+        callback(status=response.CalvinResponse(True))
+
+    def report_replication_time(self, actor_type, replication_time):
+        timestamp = time.time()
+        self.resource_manager.update_replication_time(actor_type, replication_time, timestamp)
+
+        for peer_id in self.network.list_links():
+            callback = CalvinCB(self._report_replication_time_cb, peer_id)
+            self.proto.report_replication_time(peer_id, actor_type, {timestamp:replication_time}, callback=callback)
+
+    def _report_replication_time_cb(self, peer_id, status):
+        if not status:
+            _log.error("Failed to report replication time to: {} - {} - {}".format(peer_id, self.resource_manager.node_uris.get(peer_id), status))
+        else:
+            _log.debug("Report replication time callback received status {} for {}".format(status, peer_id))
+
+    def register_new_replication_time(self, actor_type, new_replication_time, callback):
+        _log.debug("Registering new replication time {}".format(new_replication_time))
+        self.resource_manager.update_replication_time(actor_type, new_replication_time.values()[0], new_replication_time.keys()[0])
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id, cb=None):

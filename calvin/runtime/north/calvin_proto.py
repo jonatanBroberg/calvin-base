@@ -166,6 +166,7 @@ class CalvinProto(CalvinCBClass):
             'TUNNEL_DESTROY': [CalvinCB(self.tunnel_destroy_handler)],
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
             'REPORT_USAGE': [CalvinCB(self.report_usage_handler)],
+            'REPORT_NEW_REPLICATION_TIME': [CalvinCB(self.report_new_replication_time_handler)],
             'REPLY': [CalvinCB(self.reply_handler)]})
 
         self.rt_id = node.id
@@ -793,34 +794,59 @@ class CalvinProto(CalvinCBClass):
 
     ### RESOURCE USAGE ###
 
-    def report_usage(self, to_rt_uuid, node_id, usage, failure_counts, replication_times, callback=None):
+    def report_usage(self, to_rt_uuid, node_id, usage, failure_counts, callback=None):
         if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, to_rt_uuid, node_id, usage,
-                                                                failure_counts, replication_times, callback)):
+                                                                failure_counts, callback)):
             # Already have link just continue in _actor_new
-            self._report_usage(to_rt_uuid, node_id, usage, failure_counts, replication_times, callback, response.CalvinResponse(True))
+            self._report_usage(to_rt_uuid, node_id, usage, failure_counts, callback, response.CalvinResponse(True))
 
-    def _report_usage(self, to_rt_uuid, node_id, usage, failure_counts, replication_times, callback, status, uri=None):
-        """ Got link? continue actor new """
+    def _report_usage(self, to_rt_uuid, node_id, usage, failure_counts, callback, status, uri=None):
+        """ Got link? continue report usage """
         if status:
             msg = {'cmd': 'REPORT_USAGE',
                    'node_id': node_id,
                    'usage': usage,
-                   'failure_counts':failure_counts,
-                   'replication_times': replication_times}
+                   'failure_counts':failure_counts}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
 
     def report_usage_handler(self, payload):
-        """ Peer request new actor with state and connections """
+        """ Peer reported new usage """
         _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.register_resource_usage(payload['node_id'], payload['usage'], payload['failure_counts'], payload['replication_times'],
+        self.node.register_resource_usage(payload['node_id'], payload['usage'], payload['failure_counts'],
                                           callback=CalvinCB(self._report_usage_handler, payload))
 
     def _report_usage_handler(self, payload, status, **kwargs):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
+    ### REPORT REPLICAITON TIME ###
+
+    def report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_replication_time, to_rt_uuid, actor_type, new_replication_time, callback)):
+            # Already have link just continue in _actor_new
+            self._report_replication_time(to_rt_uuid, actor_type, new_replication_time, callback, response.CalvinResponse(True))
+
+    def _report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback, status):
+        """ Got link? continue report replication time """
+        if status:
+            msg = {'cmd': 'REPORT_NEW_REPLICATION_TIME',
+                    'actor_type': actor_type,
+                    'new_replication_time': new_replication_time}
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+        elif callback:
+            callback(status=status)
+
+    def report_new_replication_time_handler(self, payload):
+        """ Peer reported new replication time """
+        _log.analyze(self.rt_id, "+", payload, tb=True)
+        self.node.register_new_replication_time(payload['actor_type'], payload['new_replication_time'], 
+                                          callback=CalvinCB(self._report_new_replication_time_handler, payload))
+
+    def _report_new_replication_time_handler(self, payload, status, **kwargs):
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        self.network.links[payload['from_rt_uuid']].send(msg)
 
 if __name__ == '__main__':
     import pytest
