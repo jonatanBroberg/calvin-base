@@ -43,6 +43,8 @@ class LostNodeHandler(object):
 
         self._lost_nodes.add(node_id)
 
+        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
+
         cb = CalvinCB(self._lost_node_cb, node_id=node_id, cb=cb)
         if highest_prio_node == self.node.id:
             _log.debug("We have highest id, replicate actors")
@@ -76,8 +78,6 @@ class LostNodeHandler(object):
         for cb in self._callbacks[node_id]:
             _log.debug("Calling cb {} with status {}".format(cb, status))
             cb(status=status)
-
-        self.pm.close_all_ports_to_node(self.am.actors.values(), node_id)
 
     def _highest_prio_node(self, node_id):
         node_ids = self.node.network.list_links()
