@@ -8,6 +8,7 @@ _log = get_logger(__name__)
 class ConnectionHandler(object):
     def __init__(self, node):
         self.node = node
+        self._pending_connections = {}
 
     def setup_connections(self, actor, prev_connections=None, connection_list=None, callback=None):
         _log.debug("Setting up connections for actor {}, prev_connections {}, connection_list {}".format(
@@ -29,8 +30,19 @@ class ConnectionHandler(object):
         connection_list = self._translate_connection_list(actor, connection_list, port_id_translations)
         state = self._translate_state(actor, state, port_id_translations)
 
-        callback = CalvinCB(self._set_port_states, actor, state, callback)
-        self.connect(actor, connection_list, state, callback=callback)
+        callback = CalvinCB(self._set_port_states, actor=actor, state=state, callback=callback)
+        if not connection_list and callback:
+            callback(status=response.CalvinResponse(False))
+        else:
+            self._pending_connections[actor.id] = []
+            callback = CalvinCB(self._setup_replica_connections, actor_id=actor.id, expected=len(connection_list), callback=callback)
+            self.connect(actor, connection_list, state, callback=callback)
+
+    def _setup_replica_connections(self, status, actor_id, expected, callback, *args, **kwargs):
+        self._pending_connections[actor_id].append(status)
+        if len(self._pending_connections[actor_id]) == expected:
+            callback(status=response.CalvinResponse(status=all(self._pending_connections[actor_id])))
+            del self._pending_connections[actor_id]
 
     def connections(self, actor):
         return actor.connections(self.node.id)
@@ -51,7 +63,7 @@ class ConnectionHandler(object):
         Reconnecting the ports can be done using a connection_list
         of tuples (node_id i.e. our id, port_id, peer_node_id, peer_port_id)
         """
-        _log.debug("Connecting actor {}, connection_list {}".format(actor, connection_list))
+        _log.info("Connecting actor {}, connection_list {}".format(actor.name, connection_list))
         peer_port_ids = [c[3] for c in connection_list]
 
         for node_id, port_id, peer_node_id, peer_port_id in connection_list:

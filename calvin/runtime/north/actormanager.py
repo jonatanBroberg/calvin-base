@@ -100,11 +100,16 @@ class ActorManager(object):
 
         a = self._new(actor_type, args, state, app_id=app_id)
 
-        self.connection_handler.setup_replica_connections(a, state, prev_connections)
-        if callback:
-            callback(status=response.CalvinResponse(True, data={'actor_id': a.id}))
+        callback = CalvinCB(self._new_replica, actor=a, callback=callback)
+        self.connection_handler.setup_replica_connections(a, state, prev_connections, callback)
 
-        return a
+    def _new_replica(self, status, actor, callback):
+        if not status:
+            self.delete_actor(actor.id)
+
+        if not isinstance(status, int):
+            status = status.status
+        callback(status=response.CalvinResponse(status, data={'actor_id': actor.id}))
 
     def delete_actor(self, actor_id, delete_from_app=False):
         actor = self.actors[actor_id]
@@ -278,6 +283,12 @@ class ActorManager(object):
             return
 
         actor = self.actors[actor_id]
+        if actor.fsm.state() not in [actor.STATUS.PENDING, actor.STATUS.ENABLED]:
+            if callback:
+                _log.warning("Can only replicate pending or enabled actors, current state: {}".format(actor.fsm.state()))
+                callback(status=response.CalvinResponse(False))
+            return
+
         actor_type = actor._type
         prev_connections = actor.connections(self.node.id)
         prev_connections['port_names'] = actor.port_names()
