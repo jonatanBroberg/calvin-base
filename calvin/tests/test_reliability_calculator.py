@@ -18,7 +18,7 @@ class TestReliabilityCalculator(unittest.TestCase):
 		node_start_time = time.time()
 
 		reliability = self.reliability_calculator.calculate_reliability(failure_count, failure_info, node_start_time, self.replication_time)
-		assert (reliability == math.exp(-float(self.replication_time)/10000))
+		assert (reliability == math.exp(-float(self.replication_time)/30000))
 
 	def testReliabilityOneFailure(self):
 		failure_count = 1
