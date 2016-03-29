@@ -221,8 +221,8 @@ class Replicator(object):
                 self.node.resource_manager.update_replication_time(self.replica_value['type'], stop_time_millis - start_time_millis)
             current_nodes.add(to_node_id)
         else:
-            _log.error("Failed to replicate to {}".format(to_node_id))
+            _log.error("Failed to replicate to {} - {}".format(to_node_id, st))
             self.failed_requests.add(to_node_id)
 
-        current_nodes = set(filter(None, current_nodes))
-        self._replicate(current_nodes, start_time_millis, cb)
+        cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, cb=cb)
+        self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
