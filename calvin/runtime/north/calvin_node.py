@@ -314,7 +314,7 @@ class Node(object):
 
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_replication_time_cb, peer_id)
-            self.proto.report_replication_time(peer_id, actor_type, {timestamp:replication_time}, callback=callback)
+            self.proto.report_replication_time(peer_id, actor_type, [timestamp, replication_time], callback=callback)
 
     def _report_replication_time_cb(self, peer_id, status):
         if not status:
@@ -324,7 +324,7 @@ class Node(object):
 
     def register_new_replication_time(self, actor_type, new_replication_time, callback):
         _log.debug("Registering new replication time {}".format(new_replication_time))
-        self.resource_manager.update_replication_time(actor_type, new_replication_time.values()[0], new_replication_time.keys()[0])
+        self.resource_manager.update_replication_time(actor_type, new_replication_time[1], new_replication_time[0])
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id, cb=None):
