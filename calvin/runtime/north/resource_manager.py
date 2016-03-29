@@ -10,6 +10,7 @@ from calvin.utilities.calvinlogger import get_logger
 _log = get_logger(__name__)
 
 DEFAULT_HISTORY_SIZE = 5
+DEFAULT_REPLICATION_TIME = 2000
 
 
 class ResourceManager(object):
@@ -45,7 +46,7 @@ class ResourceManager(object):
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     def _average(self, node_id):
-        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
+        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / max(len(self.usages[node_id]), 1)
 
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
@@ -84,9 +85,11 @@ class ResourceManager(object):
         return {}
 
     def _average_replication_time(self, actor_type):
+        _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
         if not self.replication_times_millis[actor_type]:
-            return 200
-        time = sum(x[1] for x in self.replication_times_millis[actor_type]) / self.history_size
+            return DEFAULT_REPLICATION_TIME
+        times = self.replication_times_millis[actor_type]
+        time = sum(x[1] for x in times) / max(len(times), 1)
         return time
 
     def _sync_replication_times(self, replication_times):
