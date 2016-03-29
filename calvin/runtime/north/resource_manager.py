@@ -65,10 +65,13 @@ class ResourceManager(object):
 
     def get_reliability(self, node_id, actor_type):
         uri = self.node_uris.get(node_id)
-        failure_info = self.failure_info[uri]
-        start_time = self.node_start_times[uri]
-        replication_time = self._average_replication_time(actor_type)
-        return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
+        if uri:
+            failure_info = self.failure_info[uri]
+            start_time = self.node_start_times[uri]
+            replication_time = self._average_replication_time(actor_type)
+            return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
+        else:
+            return 0.8
 
     def _average_replication_time(self, actor_type):
         if not self.replication_times_millis[actor_type]:
@@ -91,7 +94,7 @@ class ResourceManager(object):
             else:
                 for key, value in sorted_times:
                     self.replication_times_millis[actor_type].append((key, value))
-        _log.debug("Replication times: {}".format(self.replication_times_millis))
+        _log.debug("\n\nReplication times: {}".format(self.replication_times_millis))
 
     def _update_deque(self, new_values, old_values):
         for tup in new_values:
