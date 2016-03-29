@@ -156,6 +156,9 @@ class ResourceManager(object):
         if replication_times:
             self._sync_replication_times(replication_times)
 
+        if failure_info and len(failure_info) > len(self.failure_info):
+                self.failure_info = failure_info
+
         replication_times = {}
         for (actor_type, times) in self.replication_times_millis.iteritems():
             replication_times[actor_type] = [(x, y) for x, y in times]
