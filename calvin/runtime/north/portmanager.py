@@ -367,7 +367,14 @@ class PortManager(object):
         if not state['peer_node_id'] in self.tunnels.iterkeys():
             # No tunnel to peer, get one first
             _log.analyze(self.node.id, "+ GET TUNNEL", {k: state[k] for k in state.keys() if k != 'callback'}, peer_node_id=state['peer_node_id'])
-            tunnel = self.proto.tunnel_new(state['peer_node_id'], 'token', {})
+            try:
+                tunnel = self.proto.tunnel_new(state['peer_node_id'], 'token', {})
+            except Exception as e:
+                _log.error("Failed to create new tunnel {}".format(e))
+                if state['callback']:
+                    state['callback'](status=response.CalvinResponse(False), **state)
+                return
+
             tunnel.register_tunnel_down(CalvinCB(self.tunnel_down, tunnel))
             tunnel.register_tunnel_up(CalvinCB(self.tunnel_up, tunnel))
             tunnel.register_recv(CalvinCB(self.tunnel_recv_handler, tunnel))
