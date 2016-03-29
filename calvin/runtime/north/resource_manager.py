@@ -84,8 +84,6 @@ class ResourceManager(object):
         time = sum(x[1] for x in times) / max(len(times), 1)
         return time
 
-    # Not used at the moment, replication times are sent one by one
-    # Should be connected to sync_info
     def _sync_replication_times(self, replication_times):
         """
         Sync the replication_times for each actor_type stored on another node.
@@ -159,6 +157,10 @@ class ResourceManager(object):
 
     def sync_info(self, rm_info=None):
         if rm_info:
-            self.test_sync = max(self.test_sync, rm_info)
-            return 30
-        return self.test_sync
+            self._sync_replication_times(rm_info)
+
+        replication_times = {}
+        for (actor_type, times) in self.replication_times_millis.iteritems():
+            replication_times[actor_type] = [(x, y) for x, y in times]
+
+        return replication_times
