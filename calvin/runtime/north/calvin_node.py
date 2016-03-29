@@ -176,19 +176,19 @@ class Node(object):
     def _send_rm_info(self, peer_node_id):
         # Send own times to new peers and retreive there times
         callback = CalvinCB(self._send_rm_info_cb)
-        rm_info = self.resource_manager.sync_info()
+        [replication_times, failure_info] = self.resource_manager.sync_info()
 
-        self.proto.send_rm_info(peer_node_id, rm_info, callback)
+        self.proto.send_rm_info(peer_node_id, replication_times, failure_info, callback)
 
     def _send_rm_info_cb(self, status, *args, **kwargs):
         # Receives other peers rm info
-        print status.data
         if status.data:
-            self.resource_manager.sync_info(status.data[0])
+            self.resource_manager.sync_info(status.data[0], status.data[1])
 
-    def sync_rm_info(self, rm_info, callback):
+    def sync_rm_info(self, replication_times, failure_info, callback):
         # sync received info
-        callback(rm_info=self.resource_manager.sync_info(rm_info), status=response.CalvinResponse(True))
+        [replication_times, failure_info] = self.resource_manager.sync_info(replication_times, failure_info)
+        callback(replication_times, failure_info, status=response.CalvinResponse(True))
 
     def logging_callback(self, preamble=None, *args, **kwargs):
         _log.debug("\n%s# NODE: %s \n# %s %s %s \n%s" %
