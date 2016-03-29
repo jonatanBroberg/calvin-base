@@ -292,7 +292,7 @@ class Node(object):
         self._print_stats()
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
-            self.proto.report_usage(peer_id, self.id, usage, self.resource_manager.failure_counts, callback=callback)
+            self.proto.report_usage(peer_id, self.id, usage, callback=callback)
 
         self.app_monitor.check_reliabilities()
 
@@ -302,10 +302,10 @@ class Node(object):
         else:
             _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
-    def register_resource_usage(self, node_id, usage, failure_counts, callback):
+    def register_resource_usage(self, node_id, usage, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
-        self.resource_manager.register(node_id, usage, uri, failure_counts=failure_counts)
+        self.resource_manager.register(node_id, usage, uri)
         callback(status=response.CalvinResponse(True))
 
     def report_replication_time(self, actor_type, replication_time):

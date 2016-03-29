@@ -18,14 +18,13 @@ class ResourceManager(object):
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
-        self.failure_counts = defaultdict(lambda: 0)
         self.node_uris = {}
         self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.test_sync = 2
 
-    def register(self, node_id, usage, uri, failure_counts=None):
+    def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
@@ -34,13 +33,10 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
-        if failure_counts:
-            self._sync_failure_counts(failure_counts)
 
     def lost_node(self, node_id, uri):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         self.node_uris[node_id] = uri
-        self.failure_counts[uri] += 1
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     def _average(self, node_id):
@@ -70,11 +66,10 @@ class ResourceManager(object):
 
     def get_reliability(self, node_id, actor_type):
         uri = self.node_uris.get(node_id)
-        fail_count = self.failure_counts[uri]
         failure_info = self.failure_info[uri]
         start_time = self.node_start_times[uri]
         replication_time = self._average_replication_time(actor_type)
-        return self.reliability_calculator.calculate_reliability(fail_count, failure_info, start_time, replication_time)
+        return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
 
     def _average_replication_time(self, actor_type):
         _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
@@ -105,12 +100,6 @@ class ResourceManager(object):
         for tup in new_values:
             if tup[0] > old_values[-1][0]:
                 old_values.append(tup)
-
-    def _sync_failure_counts(self, failure_counts):
-        _log.debug("Syncing failure counts {} with new failure counts {}".format(self.failure_counts, failure_counts))
-        for (uri, count) in failure_counts.iteritems():
-            self.failure_counts[uri] = max(self.failure_counts[uri], failure_counts[uri])
-        _log.debug("Failure counts: {}".format(failure_counts))
 
     def update_replication_time(self, actor_type, replication_time, timestamp):
         _log.info('New replication time: {}'.format(replication_time))
@@ -144,7 +133,6 @@ class ResourceManager(object):
     def update_node_failure(self, node_id, nbr_of_failures, uri):
         """ Simulates node failures """
         self.node_uris[node_id] = uri
-        self.failure_counts[uri] += int(nbr_of_failures)
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     # Not used anymore

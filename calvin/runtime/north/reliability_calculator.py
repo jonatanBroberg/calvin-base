@@ -9,14 +9,14 @@ class ReliabilityCalculator(object):
     def __init__(self):
         pass
 
-    def calculate_reliability(self, failure_count, failure_info, node_start_time, replication_time):
+    def calculate_reliability(self, failure_info, node_start_time, replication_time):
         """
-        Calculates and returns the probability that a node (which has experinced failure_count failures)
+        Calculates and returns the probability that a node (which has experinced len(failure_info) failures)
         does not experince any more failure during time replication_time
         """
 
         # Poisson process
-        _lambda = self.failure_rate(failure_count, failure_info, node_start_time, replication_time)
+        _lambda = self.failure_rate(failure_info, node_start_time, replication_time)
         return math.exp(-_lambda)
 
     def get_mtbf(self, node_start_time, failure_info):
@@ -30,7 +30,7 @@ class ReliabilityCalculator(object):
 
         return MTBF
 
-    def failure_rate(self, failure_count, failure_info, node_start_time, replication_time):
+    def failure_rate(self, failure_info, node_start_time, replication_time):
         # Constant
         MTBF = self.get_mtbf(node_start_time, failure_info)
         return float(replication_time) / MTBF
@@ -53,5 +53,5 @@ class ReliabilityCalculator(object):
         p = probability that n failures occur when we have _lambda as the event rate, i.e. the average number of failures during time t
 
         Average number of failures during time t:
-        _lambda = (failure_count + 1)/(total_time) * 1000 * replication_time
+        _lambda = (nbr of failures + 1)/(total_time) * 1000 * replication_time
         """
