@@ -522,28 +522,38 @@ class PortManager(object):
         self.node.storage.add_port(inport, self.node.id, inport.owner.id, "in")
         self.node.storage.add_port(outport, self.node.id, outport.owner.id, "out")
 
-    def close_all_ports_to_node(self, actors, node_id):
-        _log.debug("Closing all ports to node {}".format(node_id))
+    def close_disconnected_ports(self, actors):
+        _log.debug("Closing all ports to lost nodes")
         disconnected = []
         links = set(self.node.network.list_links())
+        _log.debug("Connected to {}".format(links))
         for actor in actors:
             _log.debug("Closing ports of actor {}".format(actor))
             for inport in actor.inports.values():
                 endpoints = inport.endpoints
                 for ep in endpoints:
-                    if ((isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint)) and
-                            ep.peer_node_id == node_id and ep.peer_node_id not in links):
-                        eps = inport.disconnect(ep.peer_port_id)
-                        _log.debug("Adding endpoints from inport for disconnecting: {}".format(eps))
-                        disconnected.extend(eps)
+                    if isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint):
+                        peer_node_id = ep.peer_node_id
+                        peer_node = self.node.resource_manager.node_uris.get(peer_node_id)
+                        _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
+                        if ep.peer_node_id not in links:
+                            eps = inport.disconnect(ep.peer_port_id)
+                            node_ids = [ep.peer_node_id for ep in eps]
+                            _log.debug("Adding endpoints from inport for disconnecting: {}".format(zip(eps, node_ids)))
+                            disconnected.extend(eps)
             for outport in actor.outports.values():
                 endpoints = outport.endpoints
                 for ep in endpoints:
-                    if ((isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint)) and
-                            ep.peer_node_id == node_id and ep.peer_node_id not in links):
-                        eps = outport.disconnect(ep.peer_port_id)
-                        _log.debug("Adding endpoints from outport for disconnecting: {}".format(eps))
-                        disconnected.extend(eps)
+                    if isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint):
+                        peer_node_id = ep.peer_node_id
+                        peer_node = self.node.resource_manager.node_uris.get(peer_node_id)
+                        _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
+                        if ep.peer_node_id not in links:
+                            _log.debug("Should disconnect {}".format(peer_node_id, peer_node))
+                            eps = outport.disconnect(ep.peer_port_id)
+                            node_ids = [ep.peer_node_id for ep in eps]
+                            _log.debug("Adding endpoints from outport for disconnecting: {}".format(zip(eps, node_ids)))
+                            disconnected.extend(eps)
 
         for ep in disconnected:
             _log.debug("Closing endpoint {} to {}".format(ep, ep.peer_node_id))
