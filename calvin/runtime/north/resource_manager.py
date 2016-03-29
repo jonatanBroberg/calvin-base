@@ -152,12 +152,12 @@ class ResourceManager(object):
         _log.debug("Reliabilities: {}".format(reliabilities))
         return max(reliabilities.iteritems(), key=operator.itemgetter(1))[0]
 
-    def sync_info(self, rm_info=None):
-        if rm_info:
-            self._sync_replication_times(rm_info)
+    def sync_info(self, replication_times=None, failure_info=None):
+        if replication_times:
+            self._sync_replication_times(replication_times)
 
         replication_times = {}
         for (actor_type, times) in self.replication_times_millis.iteritems():
             replication_times[actor_type] = [(x, y) for x, y in times]
 
-        return replication_times
+        return [replication_times, self.failure_info]

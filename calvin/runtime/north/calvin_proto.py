@@ -851,16 +851,17 @@ class CalvinProto(CalvinCBClass):
 
     ### Synchronize resource manager information ###
 
-    def send_rm_info(self, to_rt_uuid, rm_info, callback):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, rm_info, callback)):
+    def send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, replication_times, failure_info, callback)):
             # Already have link just continue in _actor_new
-            self._send_rm_info(to_rt_uuid, rm_info, callback, response.CalvinResponse(True))
+            self._send_rm_info(to_rt_uuid, replication_times, failure_info, callback, response.CalvinResponse(True))
 
-    def _send_rm_info(self, to_rt_uuid, rm_info, callback, status):
+    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback, status):
         """ Got link? continue send rm info """
         if status:
             msg = {'cmd': 'SEND_RM_INFO',
-                    'rm_info': rm_info}
+                    'replication_times': replication_times,
+                    'failure_info':failure_info}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
@@ -868,12 +869,12 @@ class CalvinProto(CalvinCBClass):
     def send_rm_info_handler(self, payload):
         """ Peer reported new replication time """
         _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.sync_rm_info(payload['rm_info'], callback=CalvinCB(self._send_rm_info_handler, payload))
+        self.node.sync_rm_info(payload['replication_times'], payload['failure_info'], callback=CalvinCB(self._send_rm_info_handler, payload))
 
-    def _send_rm_info_handler(self, payload, rm_info, status, **kwargs):
+    def _send_rm_info_handler(self, payload, replication_times, failure_info, status, **kwargs):
         value = status.encode()
-        value['data'] = [rm_info]
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'rm_info':rm_info, 'value': value}
+        value['data'] = [replication_times, failure_info]
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': value}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
 
