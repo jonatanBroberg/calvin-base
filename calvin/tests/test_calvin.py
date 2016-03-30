@@ -1528,7 +1528,6 @@ class TestLosingActors(CalvinTestBase):
         reliabilities = []
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
             reliabilities.append(1-utils.get_reliability(self.rt1, node_id, actor_type))
-        reliabilities.remove(min(reliabilities))
         return 1 - reduce(operator.mul, reliabilities, 1)
 
     def _check_reliability(self, app_id, name, actor_type):
@@ -1826,7 +1825,6 @@ class TestDynamicReliability(CalvinTestBase):
         reliabilities = []
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
             reliabilities.append(1-utils.get_reliability(self.rt1, node_id, actor_type))
-        reliabilities.remove(min(reliabilities))
         return 1 - reduce(operator.mul, reliabilities, 1)
 
     def _check_reliability(self, app_id, name, actor_type):
@@ -1985,8 +1983,6 @@ class TestDyingRuntimes(CalvinTestBase):
                 for rt in runtimes:
                     if a['node_id'] == rt.id:
                         actor_runtimes[actor] = rt
-
-        reliabilities.remove(min(reliabilities))
 
         app = utils.get_application(rt, app_id)
         reliability = (1 - reduce(operator.mul, reliabilities, 1))

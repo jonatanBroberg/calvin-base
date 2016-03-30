@@ -30,19 +30,12 @@ class ConnectionHandler(object):
         connection_list = self._translate_connection_list(actor, connection_list, port_id_translations)
         state = self._translate_state(actor, state, port_id_translations)
 
-        callback = CalvinCB(self._set_port_states, actor=actor, state=state, callback=callback)
         if not connection_list and callback:
             callback(status=response.CalvinResponse(False))
         else:
             self._pending_connections[actor.id] = []
-            callback = CalvinCB(self._setup_replica_connections, actor_id=actor.id, expected=len(connection_list), callback=callback)
+            callback = CalvinCB(self._set_port_states, actor=actor, state=state, callback=callback)
             self.connect(actor, connection_list, state, callback=callback)
-
-    def _setup_replica_connections(self, status, actor_id, expected, callback, *args, **kwargs):
-        self._pending_connections[actor_id].append(status)
-        if len(self._pending_connections[actor_id]) == expected:
-            callback(status=response.CalvinResponse(status=all(self._pending_connections[actor_id])))
-            del self._pending_connections[actor_id]
 
     def connections(self, actor):
         return actor.connections(self.node.id)

@@ -135,14 +135,6 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
-    # Not used anymore
-    def get_highest_reliable_node(self, node_ids):
-        reliabilities = {}
-        for node_id in node_ids:
-            reliabilities[node_id] = self.get_reliability(node_id, "actions:src")
-        _log.debug("Reliabilities: {}".format(reliabilities))
-        return max(reliabilities.iteritems(), key=operator.itemgetter(1))[0]
-
     def sync_info(self, replication_times=None, failure_info=None):
         if replication_times:
             self._sync_replication_times(replication_times)
