@@ -171,7 +171,8 @@ class Node(object):
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
 
-        self._send_rm_info(peer_node_id)
+        if peer_node_id:
+            self._send_rm_info(peer_node_id)
 
     def _send_rm_info(self, peer_node_id):
         # Send own times to new peers and retreive there times
@@ -255,7 +256,7 @@ class Node(object):
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         self.info("NODE RELIABILITIES: {}".format(rels))
 
-        current_rel, actual_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
+        actual_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
         self.info("RELIABILITY: {}".format(actual_rel))
 
     def _print_replication_time(self):

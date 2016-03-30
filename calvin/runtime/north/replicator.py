@@ -146,11 +146,11 @@ class Replicator(object):
             return
 
         _log.debug("Replica with current replica nodes: {}".format(current_nodes))
-        current_rel, actual_rel = self.node.resource_manager.current_reliability(current_nodes, self.replica_value['type'])
+        actual_rel = self.node.resource_manager.current_reliability(current_nodes, self.replica_value['type'])
 
-        _log.debug("Current reliability: {}. Desired reliability: {}".format(current_rel, self.required_reliability))
+        _log.debug("Current reliability: {}. Desired reliability: {}".format(actual_rel, self.required_reliability))
 
-        if current_rel > self.required_reliability:
+        if actual_rel > self.required_reliability:
             status = response.CalvinResponse(data=self.new_replicas)
             cb(status=status)
             return
