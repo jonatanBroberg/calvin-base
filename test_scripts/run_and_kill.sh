@@ -1,27 +1,35 @@
+#rand=`python -c "import random; print random.randint(30, 90)"`
 rands=($(python -c "import numpy as np;
-mu=28; sigma=10;
+mu=18; sigma=5;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
         print n
 "))
 i=0
 
-host=localhost
+n=$1
+if [ -z "$n" ]; then
+    n=1
+fi
+port=$((5000+$n))
+controlport=$(($port+1))
+
+host=`hostname -A | awk '{print $1}'`
 while true; do
     rand=${rands[i]}
     i=$((i+1))
     echo "random: $rand"
-	./test_scripts/start5001.sh &
+	./start.sh $port $controlport &
     PID=$!
     sleep 1
 
-    cscontrol http://localhost:5004 nodes add calvinip://$host:5001 &
-    cscontrol http://localhost:5002 nodes add calvinip://$host:5005 &
+    #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:$port"
+    cscontrol http://gru.nefario:5002 nodes add calvinip://$host:$port &
     wait $!
     sleep $rand
     kill $PID
 
-    pkill -f ".*csruntime --host $host --port 5001" &
+    pkill -f ".*csruntime --host $host --port $port" &
     wait $!
     sleep 1
 done
