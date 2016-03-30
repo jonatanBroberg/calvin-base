@@ -85,7 +85,7 @@ class CalvinLink(object):
             # We ignore errors
             return
 
-    def send_with_reply(self, callback, msg):
+    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT):
         """ Adds a message id to the message and send it,
             also registers the callback for the reply.
         """
@@ -94,7 +94,7 @@ class CalvinLink(object):
 
         msg_id = calvinuuid.uuid("MSGID")
         self.replies[msg_id] = callback
-        self.replies_timeout[msg_id] = async.DelayedCall(10.0, CalvinCB(self.reply_timeout, msg_id))
+        self.replies_timeout[msg_id] = async.DelayedCall(timeout, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
         self.send(msg)
 

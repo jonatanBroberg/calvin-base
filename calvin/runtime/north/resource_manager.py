@@ -10,6 +10,8 @@ from calvin.utilities.calvinlogger import get_logger
 _log = get_logger(__name__)
 
 DEFAULT_HISTORY_SIZE = 5
+DEFAULT_REPLICATION_TIME = 2000
+DEFAULT_NODE_REALIABILITY = 0.8
 
 
 class ResourceManager(object):
@@ -39,7 +41,7 @@ class ResourceManager(object):
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
     def _average(self, node_id):
-        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / self.history_size
+        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / max(len(self.usages[node_id]), 1)
 
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
@@ -71,12 +73,14 @@ class ResourceManager(object):
             replication_time = self._average_replication_time(actor_type)
             return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
         else:
-            return 0.8
+            return DEFAULT_NODE_REALIABILITY
 
     def _average_replication_time(self, actor_type):
+        _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
         if not self.replication_times_millis[actor_type]:
-            return 200
-        time = sum(x[1] for x in self.replication_times_millis[actor_type]) / len(self.replication_times_millis[actor_type])
+            return DEFAULT_REPLICATION_TIME
+        times = self.replication_times_millis[actor_type]
+        time = sum(x[1] for x in times) / max(len(times), 1)
         return time
 
     def _sync_replication_times(self, replication_times):
@@ -112,7 +116,7 @@ class ResourceManager(object):
         """Sorts after number of failures"""
         node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: (x[1], x[0]))
-        _log.info("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
+        _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
     def current_reliability(self, current_nodes, actor_type):
@@ -122,13 +126,8 @@ class ResourceManager(object):
         for node_id in current_nodes:
             failure.append(1 - self.get_reliability(node_id, actor_type))
 
-        actual = 1 - reduce(operator.mul, failure, 1)
-        if failure:
-            failure.remove(min(failure))
-
-        p = 1 - reduce(operator.mul, failure, 1)
         _log.debug("Reliability for nodes {} is {}".format(current_nodes, p))
-        return p, actual
+        return p, p  # actual
 
     def update_node_failure(self, node_id, nbr_of_failures, uri):
         """ Simulates node failures """
@@ -148,7 +147,8 @@ class ResourceManager(object):
             self._sync_replication_times(replication_times)
 
         if failure_info and len(failure_info) > len(self.failure_info):
-                self.failure_info = failure_info
+            self.failure_info = defaultdict(lambda: [])
+            self.failure_info.update(failure_info)
 
         replication_times = {}
         for (actor_type, times) in self.replication_times_millis.iteritems():

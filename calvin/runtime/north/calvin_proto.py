@@ -309,7 +309,11 @@ class CalvinProto(CalvinCBClass):
         """ Potentially created actor, reply to requesting node """
         resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode(), }
-        self.network.links[payload['from_rt_uuid']].send(msg)
+        try:
+            self.network.links[payload['from_rt_uuid']].send(msg)
+        except:
+            _log.warning("Failed to send replication reply")
+            pass
 
     def actor_replication_request(self, actor_id, from_node_id, to_node_id, callback):
         """
@@ -345,7 +349,7 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request_send(self, from_node_id, callback, msg, status, *args, **kwargs):
         if status:
-            self.network.links[from_node_id].send_with_reply(callback, msg)
+            self.network.links[from_node_id].send_with_reply(callback, msg, timeout=2)
         elif callback:
             _log.warning("Failed to send actor replication request to: {} - {}".format(from_node_id, status))
             callback(status=status)
@@ -772,7 +776,7 @@ class CalvinProto(CalvinCBClass):
         """ Peer request new actor with state and connections """
         from_node = self.node.resource_manager.node_uris.get(payload['from_rt_uuid'])
         node = self.node.resource_manager.node_uris.get(payload['node_id'])
-        _log.debug("Handling lost node request of node {} - {} sent from {}".format(payload['node_id'], node, from_node))
+        _log.info("Handling lost node request of node {} - {} sent from {}".format(payload['node_id'], node, from_node))
         cb = CalvinCB(self._lost_node_handler, payload=payload)
         self.node.lost_node(payload['node_id'], cb)
 
@@ -788,7 +792,10 @@ class CalvinProto(CalvinCBClass):
 
     def _lost_node_reply(self, to_rt_uuid, msg, status, **kwargs):
         if status:
-            self.network.links[to_rt_uuid].send(msg)
+            try:
+                self.network.links[to_rt_uuid].send(msg)
+            except Exception as e:
+                _log.error("Failed to send reply to {} - {}".format(to_rt_uuid, e))
         else:
             from_node = self.node.resource_manager.node_uris.get(to_rt_uuid)
             _log.error("Failed to send reply to {} - {}".format(to_rt_uuid, from_node))
