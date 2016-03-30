@@ -100,16 +100,16 @@ class ActorManager(object):
 
         a = self._new(actor_type, args, state, app_id=app_id)
 
-        callback = CalvinCB(self._new_replica, actor=a, callback=callback)
+        callback = CalvinCB(self._new_replica, callback=callback)
         self.connection_handler.setup_replica_connections(a, state, prev_connections, callback)
 
-    def _new_replica(self, status, actor, callback):
+    def _new_replica(self, status, actor_id, callback):
         if not status:
-            self.delete_actor(actor.id)
+            self.delete_actor(actor_id)
 
         if not isinstance(status, int):
             status = status.status
-        callback(status=response.CalvinResponse(status, data={'actor_id': actor.id}))
+        callback(status=response.CalvinResponse(status, data={'actor_id': actor_id}))
 
     def delete_actor(self, actor_id, delete_from_app=False):
         actor = self.actors[actor_id]
