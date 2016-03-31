@@ -9,19 +9,19 @@ class ReliabilityCalculator(object):
     def __init__(self):
         pass
 
-    def calculate_reliability(self, failure_info, node_start_time, replication_time):
+    def calculate_reliability(self, failure_info, replication_time):
         """
         Calculates and returns the probability that a node (which has experinced len(failure_info) failures)
         does not experince any more failure during time replication_time
         """
 
         # Poisson process
-        _lambda = self.failure_rate(failure_info, node_start_time, replication_time)
+        _lambda = self.failure_rate(failure_info, replication_time)
         return math.exp(-_lambda)
 
-    def get_mtbf(self, node_start_time, failure_info):
+    def get_mtbf(self, failure_info):
         MTBF = DEFAULT_MTBF  #ms
-        times = [node_start_time]
+        times = []
         times.extend([info[0] for info in failure_info])
 
         if len(times) > 1:
@@ -30,9 +30,9 @@ class ReliabilityCalculator(object):
 
         return MTBF
 
-    def failure_rate(self, failure_info, node_start_time, replication_time):
+    def failure_rate(self, failure_info, replication_time):
         # Constant
-        MTBF = self.get_mtbf(node_start_time, failure_info)
+        MTBF = self.get_mtbf(failure_info)
         return float(replication_time) / MTBF
 
         # Variable failure rate (Curve fitting of failure_info)

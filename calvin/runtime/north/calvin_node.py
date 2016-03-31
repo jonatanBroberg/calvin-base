@@ -272,8 +272,7 @@ class Node(object):
             uri = rm.node_uris.get(node_id)
             if uri:
                 failure_info = rm.failure_info[uri]
-                start_time = rm.node_start_times[uri]
-                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_info)
+                mtbf = rm.reliability_calculator.get_mtbf(failure_info)
                 rels.append((uri, rel, 1 - rel, mtbf))
         self.info("ALL NODE RELIABILITIES: {}".format(rels))
 

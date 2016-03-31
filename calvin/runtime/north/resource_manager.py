@@ -20,7 +20,6 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
-        self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.test_sync = 2
@@ -29,8 +28,6 @@ class ResourceManager(object):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
-        if not uri in self.node_uris.values():
-            self.node_start_times[uri] = time.time()
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
@@ -69,9 +66,8 @@ class ResourceManager(object):
         uri = self.node_uris.get(node_id)
         if uri:
             failure_info = self.failure_info[uri]
-            start_time = self.node_start_times[uri]
             replication_time = self._average_replication_time(actor_type)
-            return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
+            return self.reliability_calculator.calculate_reliability(failure_info, replication_time)
         else:
             return DEFAULT_NODE_REALIABILITY
 
