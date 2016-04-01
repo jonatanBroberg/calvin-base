@@ -21,8 +21,7 @@ class ReliabilityCalculator(object):
 
     def get_mtbf(self, failure_info):
         MTBF = DEFAULT_MTBF  #ms
-        times = []
-        times.extend([info[0] for info in failure_info])
+        times = sorted([info[0] for info in failure_info])
 
         if len(times) > 1:
             time_between_failures = [(j - i) for i, j in zip(times, times[1:])]
