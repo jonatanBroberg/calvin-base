@@ -182,7 +182,7 @@ class LostNodeHandler(object):
         self.storage.delete_replica_node(key, lost_node_id, lost_actor_info['name'])
         if not value:
             _log.error("Failed to get application info from storage for applicaiton {}".format(key))
-            cb(status=respons.CalvinResponse(False))
+            cb(status=response.CalvinResponse(False))
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'],
                                 lost_node=lost_node_id)
