@@ -12,6 +12,7 @@ _log = get_logger(__name__)
 DEFAULT_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
+LOST_NODE_TIME = 1000
 
 
 class ResourceManager(object):
@@ -24,6 +25,7 @@ class ResourceManager(object):
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.test_sync = 2
+        self._lost_nodes = set()
 
     def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
@@ -36,6 +38,9 @@ class ResourceManager(object):
             self.usages[node_id].append(usage)
 
     def lost_node(self, node_id, uri):
+        if node_id in self._lost_nodes:
+            return
+        self._lost_nodes.add(node_id)
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         self.node_uris[node_id] = uri
         self.failure_info[uri].append((time.time(), self._average(node_id)))
@@ -81,7 +86,7 @@ class ResourceManager(object):
             return DEFAULT_REPLICATION_TIME
         times = self.replication_times_millis[actor_type]
         time = sum(x[1] for x in times) / max(len(times), 1)
-        return time
+        return time + LOST_NODE_TIME
 
     def _sync_replication_times(self, replication_times):
         """
