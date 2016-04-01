@@ -21,6 +21,7 @@ import trace
 import logging
 import socket
 import time
+from datetime import datetime
 
 from calvin.calvinsys import Sys as CalvinSys
 
@@ -328,15 +329,26 @@ class Node(object):
         self.resource_manager.update_replication_time(actor_type, new_replication_time[1], new_replication_time[0])
         callback(status=response.CalvinResponse(True))
 
-    def lost_node(self, node_id, cb=None):
-        _log.info("Lost node: {}".format(node_id))
-        self._print_stats(lost_node_id=node_id)
+    def lost_node(self, node_id):
+        _log.debug("Lost node: {}".format(node_id))
         _log.analyze(self.id, "+", "Lost node {}".format(node_id))
         if self.storage_node:
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
-        self.lost_node_handler.handle_lost_node(node_id, cb)
+        print "\n\nLOST NODE: {}\n{}".format(node_id, datetime.now())
+        self.lost_node_handler.handle_lost_node(node_id)
+
+    def lost_node_request(self, node_id, cb):
+        _log.debug("Lost node: {}".format(node_id))
+        _log.analyze(self.id, "+", "Lost node {}".format(node_id))
+        if self.storage_node:
+            _log.debug("{} Is storage node, ignoring lost node".format(self.id))
+            if cb:
+                cb(status=response.CalvinResponse(False))
+            return
+
+        self.lost_node_handler.handle_lost_node_request(node_id, cb)
 
     def lost_actor(self, lost_actor_id, lost_actor_info, required_reliability, cb):
         _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))

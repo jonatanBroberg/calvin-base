@@ -136,6 +136,7 @@ class CalvinNetwork(object):
         self.recv_handler = None
         self.pending_joins = {}  # key: uri, value: list of callbacks or None
         self.pending_joins_by_id = {}  # key: peer id, value: uri
+        self.joins_timeout = {}
 
     def register_recv(self, recv_handler):
         """ Register THE function that will receive all incomming messages on all links """
@@ -254,6 +255,8 @@ class CalvinNetwork(object):
             uri: the uri used for the join
             is_orginator: did this node request the join True/False
         """
+        if peer_id in self.joins_timeout:
+            del self.joins_timeout[peer_id]
         # while a link is pending it is the responsibility of the transport layer, since
         # higher layers don't have any use for it anyway
         _log.analyze(self.node.id, "+", {'uri': uri, 'peer_id': peer_id,
@@ -317,7 +320,7 @@ class CalvinNetwork(object):
         """ Get a link by node id """
         return self.links.get(peer_id, None)
 
-    def link_request(self, peer_id, callback=None):
+    def link_request(self, peer_id, callback=None, timeout=10.0):
         """ Request that a link is established. This is the prefered way
             of joining other nodes.
             peer_id: the node id that the link should be establieshed to
@@ -330,10 +333,10 @@ class CalvinNetwork(object):
             return True
         _log.analyze(self.node.id, "+ CHECK STORAGE", {}, peer_node_id=peer_id, tb=True)
         # We don't have the peer, let's ask for it in storage
-        self.node.storage.get_node(peer_id, CalvinCB(self.link_request_finished, callback=callback))
+        self.node.storage.get_node(peer_id, CalvinCB(self.link_request_finished, callback=callback, timeout=timeout))
         return False
 
-    def link_request_finished(self, key, value, callback):
+    def link_request_finished(self, key, value, callback, timeout):
         """ Called by storage when the node is (not) found """
         _log.analyze(self.node.id, "+", {'value': value}, peer_node_id=key, tb=True)
         # Test if value is None or False indicating node does not currently exist in storage
@@ -345,7 +348,19 @@ class CalvinNetwork(object):
 
         # join the peer node
         # TODO: if connection fails, retry with other transport schemes
-        self.join([self.get_supported_uri(value['uri'])], callback, [key])
+        uri = self.get_supported_uri(value['uri'])
+        self.joins_timeout[key] = async.DelayedCall(timeout, CalvinCB(self._link_request_timeout,
+                                                                      callback=callback,
+                                                                      peer_id=key, uri=uri))
+
+        self.join([uri], callback, [key])
+
+    def _link_request_timeout(self, callback, peer_id, uri):
+        if peer_id in self.pending_joins_by_id:
+            del self.pending_joins_by_id[peer_id]
+        if uri in self.pending_joins:
+            del self.pending_joins[uri]
+        callback(status=response.CalvinResponse(False))
 
     def get_supported_uri(self, uris):
         """ Match configured transport interfaces with uris and return first match.
@@ -363,11 +378,16 @@ class CalvinNetwork(object):
             'reason': reason,
             'links_equal': link == self.links[rt_id].transport if rt_id in self.links else "Gone"},
             peer_node_id=rt_id)
-        _log.debug("Peer {} disconnected from {}".format(rt_id, self.node.id))
+        _log.debug("Peer {} disconnected from {}. Reason: {}".format(rt_id, self.node.id, reason))
         if rt_id in self.links and link == self.links[rt_id].transport:
             self.link_remove(rt_id)
-            if rt_id not in self.links:
-                self.node.lost_node(rt_id)
+            if not self.node.storage_node:
+                callback = CalvinCB(self._lost_node, node_id=rt_id)
+                self.node.proto.report_usage(rt_id, self.node.id, {}, callback=callback, timeout=0.2)
+
+    def _lost_node(self, node_id, status, *args, **kwargs):
+        if not status:
+            self.node.lost_node(node_id)
 
     def link_remove(self, peer_id):
         """ Removes a link to peer id """
