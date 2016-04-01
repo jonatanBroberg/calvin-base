@@ -1,7 +1,11 @@
 import math
 import time
 
-DEFAULT_MTBF = 30000
+from calvin.utilities.calvinlogger import get_logger
+
+DEFAULT_MTBF = 10000
+
+_log = get_logger(__name__)
 
 
 class ReliabilityCalculator(object):
@@ -32,7 +36,9 @@ class ReliabilityCalculator(object):
     def failure_rate(self, failure_info, replication_time):
         # Constant
         MTBF = self.get_mtbf(failure_info)
-        return float(replication_time) / MTBF
+        fr = float(replication_time) / MTBF
+        _log.info("Failure rate: {}".format(fr))
+        return fr
 
         # Variable failure rate (Curve fitting of failure_info)
         # ...
