@@ -8,7 +8,6 @@ _log = get_logger(__name__)
 class ConnectionHandler(object):
     def __init__(self, node):
         self.node = node
-        self._pending_connections = {}
 
     def setup_connections(self, actor, prev_connections=None, connection_list=None, callback=None):
         _log.debug("Setting up connections for actor {}, prev_connections {}, connection_list {}".format(
@@ -33,7 +32,6 @@ class ConnectionHandler(object):
         if not connection_list and callback:
             callback(status=response.CalvinResponse(False))
         else:
-            self._pending_connections[actor.id] = []
             callback = CalvinCB(self._set_port_states, actor=actor, state=state, callback=callback)
             self.connect(actor, connection_list, state, callback=callback)
 
