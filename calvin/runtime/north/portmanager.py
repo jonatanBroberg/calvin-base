@@ -537,10 +537,8 @@ class PortManager(object):
                         peer_node = self.node.resource_manager.node_uris.get(peer_node_id)
                         _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
                         if ep.peer_node_id not in links:
-                            eps = inport.disconnect(ep.peer_port_id)
-                            node_ids = [ep.peer_node_id for ep in eps]
-                            _log.debug("Adding endpoints from inport for disconnecting: {}".format(zip(eps, node_ids)))
-                            disconnected.extend(eps)
+                            cb = CalvinCB(self._disconnect_lost_port, port=inport, ep=ep)
+                            self.node.proto.report_usage(ep.peer_node_id, self.node.id, {}, callback=cb, timeout=0.3)
             for outport in actor.outports.values():
                 endpoints = outport.endpoints
                 for ep in endpoints:
@@ -549,13 +547,15 @@ class PortManager(object):
                         peer_node = self.node.resource_manager.node_uris.get(peer_node_id)
                         _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
                         if ep.peer_node_id not in links:
-                            _log.debug("Should disconnect {}".format(peer_node_id, peer_node))
-                            eps = outport.disconnect(ep.peer_port_id)
-                            node_ids = [ep.peer_node_id for ep in eps]
-                            _log.debug("Adding endpoints from outport for disconnecting: {}".format(zip(eps, node_ids)))
-                            disconnected.extend(eps)
+                            cb = CalvinCB(self._disconnect_lost_port, port=outport, ep=ep)
+                            self.node.proto.report_usage(ep.peer_node_id, self.node.id, {}, callback=cb, timeout=0.3)
 
-        for ep in disconnected:
+    def _disconnect_lost_port(self, status, port, ep, *args, **kwargs):
+        _log.debug("Lost port to node {}? {}".format(ep.peer_node_id, status))
+        if status:
+            return
+        eps = port.disconnect(ep.peer_port_id)
+        for ep in eps:
             _log.debug("Closing endpoint {} to {}".format(ep, ep.peer_node_id))
             if isinstance(ep, endpoint.TunnelOutEndpoint):
                 self.monitor.unregister_out_endpoint(ep)
