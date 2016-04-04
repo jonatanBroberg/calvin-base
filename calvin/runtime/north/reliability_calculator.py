@@ -1,7 +1,11 @@
 import math
 import time
 
-DEFAULT_MTBF = 30000
+from calvin.utilities.calvinlogger import get_logger
+
+DEFAULT_MTBF = 10000
+
+_log = get_logger(__name__)
 
 
 class ReliabilityCalculator(object):
