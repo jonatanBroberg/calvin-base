@@ -42,10 +42,10 @@ class Replicator(object):
         _log.debug("Not allowed: {}".format(not_allowed))
         return not_allowed
 
-    def replicate_lost_actor(self, cb):
+    def replicate_lost_actor(self, cb, start_time_millis):
         if self.actor_info['replicate']:
             _log.info("Replicating lost actor: {}".format(self.actor_info))
-            start_time_millis = int(round(time.time() * 1000))
+            #time.sleep(1)
             cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
         else:
