@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import traceback
+import sys
+import json
 from calvin.utilities import calvinuuid
 from calvin.utilities.utils import enum
 from calvin.utilities.calvin_callback import CalvinCB, CalvinCBClass
@@ -278,6 +280,8 @@ class CalvinProto(CalvinCBClass):
     def _actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, actor_args, app_id, status,
                            *args, **kwargs):
         """ Got link? continue actor replication """
+        prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
+        prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]
         if status:
             msg = {'cmd': 'ACTOR_REPLICATE',
                    'state': {
@@ -287,7 +291,7 @@ class CalvinProto(CalvinCBClass):
                        'app_id': app_id
                    },
                    'args': actor_args}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5)
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5, replicate=True)
         elif callback:
             callback(status=status)
 

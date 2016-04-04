@@ -1191,13 +1191,16 @@ class CalvinControl(object):
             peer_node_id = self.node.resource_manager.least_busy()
 
         _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
+        import time
+        start = time.time()
         self.node.am.replicate(match.group(1), peer_node_id,
-                               callback=CalvinCB(self.actor_replicate_cb, handle, connection))
+                               callback=CalvinCB(self.actor_replicate_cb, handle, connection, start))
 
-    def actor_replicate_cb(self, handle, connection, status, *args, **kwargs):
+    def actor_replicate_cb(self, handle, connection, start, status, *args, **kwargs):
         """ Replicate actor response
         """
         actor_id = status.data.get('actor_id') if status.data else None
+        print "TIME: {}".format(time.time() - start)
         self.send_response(handle, connection,
                            json.dumps({'actor_id': actor_id}), status=status.status)
 
