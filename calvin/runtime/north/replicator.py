@@ -159,6 +159,7 @@ class Replicator(object):
             if not available_nodes:
                 _log.error("Not enough available nodes")
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                return
 
             to_node_id = None
             while not self._valid_node(current_nodes, to_node_id):
@@ -175,6 +176,7 @@ class Replicator(object):
             if not to_node_id or to_node_id not in connected:
                 _log.error("Not enough available nodes")
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                return
             else:
                 replica_node = self.replica_value['node_id']
                 self.pending_replications.add(to_node_id)
