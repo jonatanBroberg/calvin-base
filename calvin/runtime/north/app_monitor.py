@@ -17,6 +17,7 @@ class AppMonitor(object):
         self.storage = storage
 
     def check_reliabilities(self):
+        return
         self._monitor_count += 1
         if self.node.testing:
             return

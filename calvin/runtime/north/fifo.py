@@ -81,7 +81,7 @@ class FIFO(object):
         if not isinstance(reader, basestring):
             raise Exception('Not a string: %s' % reader)
         if reader not in self.readers:
-            self.fifo[reader] = [Token(0)] * self.N
+            self.fifo[reader] = [Token(100)] * self.N
             self.read_pos[reader] = 0
             self.tentative_read_pos[reader] = 0
             self.readers.add(reader)
@@ -104,7 +104,7 @@ class FIFO(object):
             return False
 
         write_pos = self.write_pos[reader]
-        self.fifo[reader][write_pos % self.N] = data
+        #self.fifo[reader][write_pos % self.N] = data
         self.write_pos[reader] = write_pos + 1
         return True
 

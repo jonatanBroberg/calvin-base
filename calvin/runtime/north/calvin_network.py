@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import os
+import sys
+import json
 import glob
 import importlib
 
@@ -86,7 +88,7 @@ class CalvinLink(object):
             # We ignore errors
             return
 
-    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT):
+    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT, replicate=False):
         """ Adds a message id to the message and send it,
             also registers the callback for the reply.
         """
@@ -97,18 +99,21 @@ class CalvinLink(object):
         self.replies[msg_id] = callback
         self.replies_timeout[msg_id] = async.DelayedCall(timeout, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
-        self.send(msg)
+        self.send(msg, replicate=replicate)
 
-    def send(self, msg, timeout=DEFAULT_TIMEOUT):
+    def send(self, msg, timeout=DEFAULT_TIMEOUT, replicate=False):
         """ Adds the from and to node ids to the message and
             sends the message using the transport.
 
             The from and to node ids seems redundant since the link goes only between
             two nodes. But is included for verification and to later allow routing of messages.
         """
+        timeout = DEFAULT_TIMEOUT
         msg['from_rt_uuid'] = self.rt_id
         msg['to_rt_uuid'] = self.peer_id
         _log.analyze(self.rt_id, "SEND", msg)
+        if replicate:
+            print "MESSAGE SIZE: {}".format(sys.getsizeof(json.dumps(msg)))
         self.transport.send(msg)
 
     def close(self):
@@ -330,6 +335,7 @@ class CalvinNetwork(object):
 
             returns: True when link already exist, False when link needs to be established
         """
+        timeout = 10.0
         if peer_id in self.links:
             return True
         _log.analyze(self.node.id, "+ CHECK STORAGE", {}, peer_node_id=peer_id, tb=True)
