@@ -52,8 +52,10 @@ class Replicator(object):
         return not_allowed
 
     def replicate_lost_actor(self, cb, start_time_millis):
+        cb(status=response.CalvinResponse(True))
         for node_id in self.connected_nodes:
             self.node.network.link_request(node_id, timeout=0.1)
+        return
         if self.actor_info['replicate']:
             _log.info("Replicating lost actor: {}".format(self.actor_info))
             #time.sleep(1)
