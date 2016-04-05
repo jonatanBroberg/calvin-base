@@ -100,6 +100,7 @@ class Node(object):
         self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
         self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
+        self.outgoing_heartbeats = {}
 
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:
@@ -171,6 +172,10 @@ class Node(object):
             # Get highest status, i.e. any error
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
+
+        for node_id, status in peer_node_ids.values():
+            if status:
+                self._register_heartbeat_receiver(node_id)
 
         if peer_node_id:
             self._send_rm_info(peer_node_id)
@@ -336,7 +341,13 @@ class Node(object):
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
-        print "\n\nLOST NODE: {}\n{}".format(node_id, datetime.now())
+        print "LOST NODE: {}\n{}".format(node_id, datetime.now())
+
+        if node_id in self.network.links:
+            link = self.network.links[node_id]
+            self.network.peer_disconnected(link, node_id, "Heartbeat timeout")
+        if self.heartbeat_actor:
+            self.heartbeat_actor.deregister(node_id)
         self.lost_node_handler.handle_lost_node(node_id)
 
     def lost_node_request(self, node_id, cb):
@@ -356,6 +367,18 @@ class Node(object):
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
         replicator.replicate_lost_actor(cb)
 
+    def increase_heartbeats(self, node_ids):
+        for node_id in node_ids:
+            if node_id not in self.outgoing_heartbeats:
+                # wait until we get first response
+                return
+            self.outgoing_heartbeats[node_id] += 1
+            if self.outgoing_heartbeats[node_id] > 2:
+                self.lost_node(node_id)
+
+    def clear_outgoing_heartbeat(self, data):
+        if "data" in data:
+            self.outgoing_heartbeats[data['data']] = 0
     #
     # Event loop
     #
@@ -366,6 +389,8 @@ class Node(object):
 
     def start(self):
         """ Run once when main loop is started """
+        if not self.storage_node:
+            self._start_heartbeat_system()
         interfaces = _conf.get(None, 'transports')
         self.network.register(interfaces, ['json'])
         self.network.start_listeners(self.uri)
@@ -397,6 +422,26 @@ class Node(object):
         self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
                      peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
                      peer_port_dir='out', peer_port_id=out_port.id)
+
+
+    def _start_heartbeat_system(self):
+        uri = self.control_uri.replace("http://", "")
+        addr = uri.split(":")[0]
+        port = int(uri.split(":")[1]) + 1
+
+        actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': 0.4})
+        actor = self.am.actors[actor_id]
+        in_port = actor.inports['in']
+        out_port = actor.outports['out']
+        self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
+                     peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
+                     peer_port_dir='out', peer_port_id=out_port.id)
+        self.heartbeat_actor = actor
+
+    def _register_heartbeat_receiver(self, node_id):
+        if not self.heartbeat_actor:
+            self._start_heartbeat_system()
+        self.heartbeat_actor.register(node_id)
 
     def stop(self, callback=None):
         def stopped(*args):
