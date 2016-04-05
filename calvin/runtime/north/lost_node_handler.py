@@ -17,13 +17,14 @@ class LostNodeHandler(object):
         self.node = node
         self._lost_nodes = set()
         self._lost_node_requests = set()
+        self._failed_requests = set()
         self._callbacks = defaultdict(set)
         self.resource_manager = resource_manager
         self.pm = port_manager
         self.am = actor_manager
         self.storage = storage
 
-    def handle_lost_node(self, node_id, cb=None, failed=[]):
+    def handle_lost_node(self, node_id, cb=None):
         _log.debug("Handling lost node {}".format(node_id))
         if cb:
             _log.debug("Adding callback: {} for node {}".format(cb, node_id))
@@ -45,7 +46,7 @@ class LostNodeHandler(object):
             if actor.app_id:
                 self.storage.delete_replica_node(actor.app_id, node_id, actor.name)
 
-        highest_prio_node = self._highest_prio_node(node_id, failed)
+        highest_prio_node = self._highest_prio_node(node_id)
 
         if highest_prio_node == self.node.id:
             self.handle_lost_node_request(node_id)
@@ -89,18 +90,19 @@ class LostNodeHandler(object):
         indexed_public = value['attributes'].get('indexed_public')
         self.storage.delete_node(key, indexed_public)
 
-    def _lost_node_cb(self, status, node_id, cb, prio_node=None, failed=[]):
+    def _lost_node_cb(self, status, node_id, cb, prio_node=None):
         _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
         if not status:
             if prio_node:
-                failed.append(prio_node)
+                if status.status == 504:
+                    self._failed_requests.add(prio_node)
                 prio_node_uri = self.resource_manager.node_uris.get(prio_node)
                 _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
             else:
                 _log.warning("Failed to handle lost node {}: {}".format(node_id, status))
             if node_id in self._lost_nodes:
                 self._lost_nodes.remove(node_id)
-            self.handle_lost_node(node_id, cb, failed)
+            self.handle_lost_node(node_id, cb)
         else:
             _log.debug("Successfully handled lost node {} - {} - {}".format(node_id, prio_node, status))
 
@@ -109,7 +111,7 @@ class LostNodeHandler(object):
                 _log.debug("Calling cb {} with status {}".format(cb, status))
                 cb(status=status)
 
-    def _highest_prio_node(self, node_id, failed):
+    def _highest_prio_node(self, node_id):
         node_ids = self.node.network.list_links()
         _log.debug("Getting highest_prio_node among {}".format(node_ids))
         if not node_ids:
@@ -118,7 +120,7 @@ class LostNodeHandler(object):
 
         if node_id in node_ids:
             node_ids.remove(node_id)
-        for n_id in failed:
+        for n_id in self._failed_requests:
             if n_id in node_ids:
                 node_ids.remove(n_id)
 
@@ -157,7 +159,7 @@ class LostNodeHandler(object):
             return
         elif value == []:
             _log.debug("No value returned from storage when fetching node actors for node {}".format(node_id))
-            cb(status=response.CalvinResponse(True))
+            cb(status=response.CalvinResponse(self.storage.started))
             return
 
         for actor_id in value:
