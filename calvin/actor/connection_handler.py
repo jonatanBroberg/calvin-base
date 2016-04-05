@@ -38,7 +38,14 @@ class ConnectionHandler(object):
     def connections(self, actor):
         return actor.connections(self.node.id)
 
-    def _set_port_states(self, actor, state, callback, *args, **kwargs):
+    def _set_port_states(self, actor, state, callback, status, *args, **kwargs):
+        _log.debug("After connect: {}".format(status))
+        if not status:
+            _log.error("Connection failed")
+            if callback:
+                callback(status=status, *args, **kwargs)
+            return
+
         for port_id in state['inports']:
             port_name = state['inports'][port_id]['name']
             actor.inports[port_name]._set_state(state['inports'][port_id])
@@ -47,7 +54,7 @@ class ConnectionHandler(object):
             actor.outports[port_name]._set_state(state['outports'][port_id])
 
         if callback:
-            callback(*args, **kwargs)
+            callback(status=status, *args, **kwargs)
 
     def connect(self, actor, connection_list, port_states=None, callback=None):
         """
@@ -77,10 +84,12 @@ class ConnectionHandler(object):
                            do not replace it
         """
         # Send negative response if not already done it
+        _log.debug("Actor connected: {}".format(status))
         if not status and peer_port_ids:
             if _callback:
                 del peer_port_ids[:]
                 _callback(status=response.CalvinResponse(False), actor_id=actor_id)
+                return
         if peer_port_id in peer_port_ids:
             # Remove this port from list
             peer_port_ids.remove(peer_port_id)
