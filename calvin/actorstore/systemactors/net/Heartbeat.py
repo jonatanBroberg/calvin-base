@@ -93,12 +93,12 @@ class Heartbeat(Actor):
             if node_id not in links:
                 node_ids.append(node_id)
             elif uri and not self.node.is_storage_node(node_id):
-                _log.debug("Sending heartbeat to node {} at {}".format(node_id, (host, port))
                 uri = uri.replace("http://", "")
                 uri = uri.replace("calvinip://", "")
                 host = uri.split(":")[0]
                 port = uri.split(":")[1]
                 port = int(port) + 2
+                _log.debug("Sending heartbeat to node {} at {}".format(node_id, (host, port)))
                 self.sender.sendto(self.node.id, (host, port))
                 node_ids.append(node_id)
 
