@@ -149,7 +149,7 @@ class LostNodeHandler(object):
             pass
 
     def _replicate_node_actors(self, key, value, node_id, start_time, cb):
-        _log.debug("Replicating lost actors {}".format(value))
+        _log.debug("Replicating lost actors {} for node {}".format(value, node_id))
         if value is None:
             _log.warning("Storage returned None when fetching node actors for node: {} - {}".format(
                 node_id, self.resource_manager.node_uris[node_id]))
