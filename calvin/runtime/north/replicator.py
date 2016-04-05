@@ -80,6 +80,9 @@ class Replicator(object):
             return
         if self.actor_id in value and self.do_delete:
             value.remove(self.actor_id)
+
+        random.shuffle(value)
+
         self._find_a_replica(value, current_nodes, start_time_millis, index=0, cb=cb)
 
     def _find_a_replica(self, actors, current_nodes, start_time_millis, index, cb):
