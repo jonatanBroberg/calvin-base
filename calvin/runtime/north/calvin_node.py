@@ -50,6 +50,9 @@ from calvin.runtime.north.resource_manager import ResourceManager
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
+MAX_HEARTBEAT_TIMEOUT = 2
+HEARTBEAT_DELAY = 0.4
+
 
 def addr_from_uri(uri):
     _, host = uri.split("://")
@@ -367,7 +370,7 @@ class Node(object):
                 # wait until we get first response
                 return
             self.outgoing_heartbeats[node_id] += 1
-            if self.outgoing_heartbeats[node_id] > 2:
+            if self.outgoing_heartbeats[node_id] > MAX_HEARTBEAT_TIMEOUT:
                 self.lost_node(node_id)
 
     def clear_outgoing_heartbeat(self, data):
@@ -423,7 +426,7 @@ class Node(object):
         addr = uri.split(":")[0]
         port = int(uri.split(":")[1]) + 1
 
-        actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': 0.4})
+        actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})
         actor = self.am.actors[actor_id]
         in_port = actor.inports['in']
         out_port = actor.outports['out']
