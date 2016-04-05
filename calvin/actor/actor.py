@@ -564,6 +564,7 @@ class Actor(object):
                 state[key] = obj
 
         state['app_id'] = self.app_id
+        state['master_node'] = self.master_node
 
         return state
 
