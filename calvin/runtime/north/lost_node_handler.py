@@ -98,7 +98,8 @@ class LostNodeHandler(object):
                 _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
             else:
                 _log.warning("Failed to handle lost node {}: {}".format(node_id, status))
-            self._lost_nodes.remove(node_id)
+            if node_id in self._lost_nodes:
+                self._lost_nodes.remove(node_id)
             self.handle_lost_node(node_id, cb, failed)
         else:
             _log.debug("Successfully handled lost node {} - {} - {}".format(node_id, prio_node, status))
