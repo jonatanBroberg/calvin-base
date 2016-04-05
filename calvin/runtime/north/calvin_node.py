@@ -115,6 +115,7 @@ class Node(object):
             return self.storage_node
         #if node_id not in self.network.links:
         #    return False
+
         return self.storage.proxy == self.network.links[node_id].transport.get_uri()
 
     def insert_local_reply(self):
@@ -233,19 +234,15 @@ class Node(object):
     def info(self, s):
         _log.info("[{}] {}".format(self.hostname, s))
 
-    def _print_replicas(self):
-        actors = []
-        for actor in self.am.actors.values():
-            if 'actions:src' in actor.name:
-                actors.append(actor)
-        self.info("REPLICAS: {}".format(len(actors)))
+    def print_stats(self, lost_node_id=None):
+        if self.storage_node:
+            return
 
-    def _print_rel(self, lost_node_id):
         for app in self.app_manager.applications.values():
-            cb = CalvinCB(self._print_reliability, app_id=app.id, lost_node_id=lost_node_id)
+            cb = CalvinCB(self._print_stats, app_id=app.id, lost_node_id=lost_node_id)
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
-    def _print_reliability(self, key, value, app_id, lost_node_id):
+    def _print_stats(self, key, value, app_id, lost_node_id):
         if not value:
             return
 
@@ -253,26 +250,32 @@ class Node(object):
             value.remove(lost_node_id)
 
         nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
-        self.info("CURRENT NODES: {} {}".format(len(nodes), nodes))
+        _log.debug("CURRENT NODES: {} {}".format(len(nodes), nodes))
 
         rm = self.resource_manager
         rels = []
         for node_id in value:
             rel = rm.get_reliability(node_id, "std.CountTimer")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
-        self.info("NODE RELIABILITIES: {}".format(rels))
+        _log.info("NODE RELIABILITIES: {}".format(rels))
 
         actual_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
-        self.info("RELIABILITY: {}".format(actual_rel))
+        _log.debug("RELIABILITY: {}".format(actual_rel))
+        rep_time = self.resource_manager._average_replication_time('std.CountTimer')
+        actors = []
+        for actor in self.am.actors.values():
+            if 'actions:src' in actor.name:
+                actors.append(actor)
+        rels = self._get_rels()
 
-    def _print_replication_time(self):
-        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time('std.CountTimer')))
+        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}]".format(
+            len(nodes), nodes, rels, actual_rel, rep_time))
 
-    def _print_reliabilities(self):
+    def _get_rels(self):
         all_nodes = self.network.list_links()
         rm = self.resource_manager
         rels = []
-        self.info("all nodes: {}".format(all_nodes))
+        _log.debug("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
             rel = rm.get_reliability(node_id, "std.CountTimer")
             uri = rm.node_uris.get(node_id)
@@ -281,22 +284,13 @@ class Node(object):
                 start_time = rm.node_start_times[uri]
                 mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_info)
                 rels.append((uri, rel, 1 - rel, mtbf))
-        self.info("ALL NODE RELIABILITIES: {}".format(rels))
-
-    def _print_stats(self, lost_node_id=None):
-        if self.storage_node:
-            return
-
-        self._print_replicas()
-        self._print_rel(lost_node_id)
-        self._print_replication_time()
-        self._print_reliabilities()
+        return rels
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
-        self._print_stats()
+        self.print_stats()
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
