@@ -368,6 +368,7 @@ class Node(object):
             if node_id not in self.outgoing_heartbeats:
                 # wait until we get first response
                 return
+
             self.outgoing_heartbeats[node_id] += 1
             if self.outgoing_heartbeats[node_id] > MAX_HEARTBEAT_TIMEOUT:
                 self.lost_node(node_id)
@@ -422,8 +423,8 @@ class Node(object):
 
     def _start_heartbeat_system(self):
         uri = self.control_uri.replace("http://", "")
-        addr = uri.split(":")[0]
-        port = int(uri.split(":")[1]) + 1
+        addr = socket.gethostbyname(uri.split(":")[0])
+        port = int(uri.split(":")[1]) + 5000
 
         actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})
         actor = self.am.actors[actor_id]

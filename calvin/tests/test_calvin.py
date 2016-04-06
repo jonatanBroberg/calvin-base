@@ -1924,6 +1924,10 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.peer_setup(self.runtime3, ["calvinip://%s:5030" % ip_addr])
         utils.peer_setup(self.runtime3, ["calvinip://%s:5032" % ip_addr])
         utils.peer_setup(self.runtime3, ["calvinip://%s:5034" % ip_addr])
+        utils.peer_setup(self.dying_rt, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.dying_rt, ["calvinip://%s:5034" % ip_addr])
+        utils.peer_setup(self.dying_rt, ["calvinip://%s:5036" % ip_addr])
+
 
         time.sleep(0.2)
 
@@ -2058,7 +2062,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
-        time.sleep(1)
+        time.sleep(1.3)
 
         actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:snk')
 
@@ -2088,7 +2092,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
-        time.sleep(0.3)
+        time.sleep(1.3)
 
         actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:snk')
 
@@ -2117,7 +2121,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
-        time.sleep(0.3)
+        time.sleep(1.3)
 
         actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.CountTimer')
 
@@ -2139,7 +2143,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
-        time.sleep(0.3)
+        time.sleep(1.3)
 
         actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.CountTimer')
 
@@ -2153,15 +2157,16 @@ class TestDyingRuntimes(CalvinTestBase):
 
         replica = utils.replicate(self.runtime, src, self.dying_rt.id)
         utils.migrate(self.runtime, src, self.runtime2.id)
-        time.sleep(0.2)
+        time.sleep(1.2)
 
         expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
         snk_before = actual_tokens(self.runtime, snk)
         replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
+
         self._kill_dying()
-        time.sleep(0.3)
+        time.sleep(1.3)
 
         app_actors = utils.get_application_actors(self.runtime, app_id)
         new_actors = [actor_id for actor_id in app_actors if actor_id not in actors_before]

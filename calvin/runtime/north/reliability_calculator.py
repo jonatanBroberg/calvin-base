@@ -18,8 +18,8 @@ class ReliabilityCalculator(object):
         Calculates and returns the probability that a node (which has experinced len(failure_info) failures)
         does not experince any more failure during time replication_time
         """
-        _log.debug("Calculating reliability. Failure info {}, node_start_time {}, replication_time {}".format(
-            failure_info, node_start_time, replication_time))
+        _log.debug("Calculating reliability. Failure info {}, replication_time {}".format(
+            failure_info, replication_time))
 
         # Poisson process
         _lambda = self.failure_rate(failure_info, replication_time)
@@ -34,8 +34,8 @@ class ReliabilityCalculator(object):
             time_between_failures = [(j - i) for i, j in zip(times, times[1:])]
             MTBF = 1000 * sum(time_between_failures) / len(time_between_failures)
 
-        _log.debug("Calculating mtbf. Failure info {}, node_start_time {}. mtbf {}".format(
-            failure_info, node_start_time, MTBF))
+        _log.debug("Calculating mtbf. Failure info {}. mtbf {}".format(
+            failure_info, MTBF))
 
         return MTBF
 
