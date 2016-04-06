@@ -235,21 +235,24 @@ class ConnectionHandler(object):
                 if port_id in port_id_translations:
                     new_readers.append("_".join([reader_parts[0], port_id_translations[port_id]]))
 
-            new_tentative_read_pos = {}
-            for reader in fifo['tentative_read_pos']:
-                reader_parts = reader.split("_")
-                port_id = reader_parts[1]
-                if port_id in port_id_translations:
-                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                    new_tentative_read_pos[new_key] = fifo['tentative_read_pos'][reader]
-
             new_read_pos = {}
             for reader in fifo['read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 if port_id in port_id_translations:
                     new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                    new_read_pos[new_key] = fifo['read_pos'][reader]
+                    new_read_pos[new_key] = int(fifo['read_pos'][reader])
+
+            new_tentative_read_pos = {}
+            for reader in fifo['tentative_read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                tr = int(fifo['tentative_read_pos'][reader])
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    if tr > new_read_pos[new_key]:
+                        tr -= 1
+                    new_tentative_read_pos[new_key] = tr
 
             new_write_pos = {}
             for reader in fifo['write_pos']:
