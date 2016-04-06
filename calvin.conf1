@@ -1,6 +1,0 @@
-{
-    "global": {
-        "storage_proxy": "calvinip://localhost:5000",
-	"storage_start": "1"
-    }
-}

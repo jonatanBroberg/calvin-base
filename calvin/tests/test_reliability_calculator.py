@@ -13,36 +13,30 @@ class TestReliabilityCalculator(unittest.TestCase):
 		self.replication_time = 20
 
 	def testReliabilityNoFailures(self):
-		failure_count = 0
 		failure_info = []
-		node_start_time = time.time()
 
-		reliability = self.reliability_calculator.calculate_reliability(failure_count, failure_info, node_start_time, self.replication_time)
+		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
 		assert (reliability == math.exp(-float(self.replication_time)/30000))
 
 	def testReliabilityOneFailure(self):
-		failure_count = 1
 		MTBF = 30
-		node_start_time = time.time() - MTBF
-		failure_info = [(node_start_time + MTBF, 0.2)]
+		failure_info = [(time.time(), 0.2)]
 
-		reliability = self.reliability_calculator.calculate_reliability(failure_count, failure_info, node_start_time, self.replication_time)
+		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
 		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))
 
-	def testReliabilityTwoEqualyDistributedFailures(self):
-		failure_count = 2
+	def testReliabilityTwoFailures(self):
 		MTBF = 30
-		node_start_time = time.time() - 2*MTBF
-		failure_info = [(node_start_time + MTBF, 0.2), (node_start_time + 2*MTBF, 0.2)]
+		t = time.time()
+		failure_info = [(t, 0.2), (t + MTBF, 0.2)]
 
-		reliability = self.reliability_calculator.calculate_reliability(failure_count, failure_info, node_start_time, self.replication_time)
+		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
 		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))
 
-	def testReliabilityTwoUnequalDistributedFailures(self):
-		failure_count = 2
+	def testReliabilityThreeFailures(self):
 		MTBF = 30
-		node_start_time = time.time() - 2*MTBF
-		failure_info = [(node_start_time + 0.3*MTBF, 0.2), (node_start_time + 2*MTBF, 0.2)]
+		t = time.time()
+		failure_info = [(t, 0.2), (t + 1.5*MTBF, 0.2), (t + 2*MTBF, 0.5)]
 
-		reliability = self.reliability_calculator.calculate_reliability(failure_count, failure_info, node_start_time, self.replication_time)
+		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
 		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))

@@ -13,20 +13,20 @@ class ReliabilityCalculator(object):
     def __init__(self):
         pass
 
-    def calculate_reliability(self, failure_info, node_start_time, replication_time):
+    def calculate_reliability(self, failure_info, replication_time):
         """
         Calculates and returns the probability that a node (which has experinced len(failure_info) failures)
         does not experince any more failure during time replication_time
         """
-        _log.debug("Calculating reliability. Failure info {}, node_start_time {}, replication_time {}".format(
-            failure_info, node_start_time, replication_time))
+        _log.debug("Calculating reliability. Failure info {}, replication_time {}".format(
+            failure_info, replication_time))
 
         # Poisson process
-        _lambda = self.failure_rate(failure_info, node_start_time, replication_time)
+        _lambda = self.failure_rate(failure_info, replication_time)
         _log.debug("Lambda: {}".format(_lambda))
         return math.exp(-_lambda)
 
-    def get_mtbf(self, node_start_time, failure_info):
+    def get_mtbf(self, failure_info):
         MTBF = DEFAULT_MTBF  #ms
         times = sorted([info[0] for info in failure_info])
 
@@ -34,14 +34,14 @@ class ReliabilityCalculator(object):
             time_between_failures = [(j - i) for i, j in zip(times, times[1:])]
             MTBF = 1000 * sum(time_between_failures) / len(time_between_failures)
 
-        _log.debug("Calculating mtbf. Failure info {}, node_start_time {}. mtbf {}".format(
-            failure_info, node_start_time, MTBF))
+        _log.debug("Calculating mtbf. Failure info {}. mtbf {}".format(
+            failure_info, MTBF))
 
         return MTBF
 
-    def failure_rate(self, failure_info, node_start_time, replication_time):
+    def failure_rate(self, failure_info, replication_time):
         # Constant
-        MTBF = self.get_mtbf(node_start_time, failure_info)
+        MTBF = self.get_mtbf(failure_info)
         fr = float(replication_time) / MTBF
         _log.debug("Failure rate: {}".format(fr))
         return fr

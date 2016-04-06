@@ -284,8 +284,7 @@ class Node(object):
             uri = rm.node_uris.get(node_id)
             if uri:
                 failure_info = rm.failure_info[uri]
-                start_time = rm.node_start_times[uri]
-                mtbf = rm.reliability_calculator.get_mtbf(start_time, failure_info)
+                mtbf = rm.reliability_calculator.get_mtbf(failure_info)
                 rels.append((uri, rel, 1 - rel, mtbf))
         return rels
 
@@ -362,7 +361,7 @@ class Node(object):
         _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
         self.am.delete_actor(lost_actor_id)
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
-        replicator.replicate_lost_actor(cb)
+        replicator.replicate_lost_actor(cb, int(round(time.time() * 1000)))
 
     def increase_heartbeats(self, node_ids):
         for node_id in node_ids:
@@ -420,10 +419,12 @@ class Node(object):
                      peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
                      peer_port_dir='out', peer_port_id=out_port.id)
 
-
     def _start_heartbeat_system(self):
         uri = self.control_uri.replace("http://", "")
-        addr = uri.split(":")[0]
+        if uri == "localhost":
+            addr = socket.gethostbyname(uri.split(":")[0])
+        else:
+            addr = uri.split(":")[0]
         port = int(uri.split(":")[1]) + 5000
 
         actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})

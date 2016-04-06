@@ -21,7 +21,6 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
-        self.node_start_times = defaultdict(lambda: time.time() - 1)    #For safety reasons
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.test_sync = 2
@@ -31,8 +30,6 @@ class ResourceManager(object):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
-        if not uri in self.node_uris.values():
-            self.node_start_times[uri] = time.time()
         self.node_uris[node_id] = uri
         if usage:
             self.usages[node_id].append(usage)
@@ -74,9 +71,8 @@ class ResourceManager(object):
         uri = self.node_uris.get(node_id)
         if uri:
             failure_info = self.failure_info[uri]
-            start_time = self.node_start_times[uri]
             replication_time = self._average_replication_time(actor_type)
-            return self.reliability_calculator.calculate_reliability(failure_info, start_time, replication_time)
+            return self.reliability_calculator.calculate_reliability(failure_info, replication_time)
         else:
             return DEFAULT_NODE_REALIABILITY
 
@@ -141,14 +137,6 @@ class ResourceManager(object):
         """ Simulates node failures """
         self.node_uris[node_id] = uri
         self.failure_info[uri].append((time.time(), self._average(node_id)))
-
-    # Not used anymore
-    def get_highest_reliable_node(self, node_ids):
-        reliabilities = {}
-        for node_id in node_ids:
-            reliabilities[node_id] = self.get_reliability(node_id, "actions:src")
-        _log.debug("Reliabilities: {}".format(reliabilities))
-        return max(reliabilities.iteritems(), key=operator.itemgetter(1))[0]
 
     def sync_info(self, replication_times=None, failure_info=None):
         if replication_times:

@@ -131,11 +131,8 @@ class LostNodeHandler(object):
         if not node_ids:
             return None
 
+        _log.debug("Highest prio node: {}".format(sorted(node_ids)[0]))
         return sorted(node_ids)[0]
-
-        #rel_node = self.resource_manager.get_highest_reliable_node(node_ids)
-        #_log.debug("Highest prio node: {}".format(rel_node))
-        #return rel_node
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
@@ -188,7 +185,7 @@ class LostNodeHandler(object):
         self.storage.delete_replica_node(key, lost_node_id, lost_actor_info['name'])
         if not value:
             _log.error("Failed to get application info from storage for applicaiton {}".format(key))
-            cb(status=respons.CalvinResponse(False))
+            cb(status=response.CalvinResponse(False))
 
         replicator = Replicator(self.node, lost_actor_id, lost_actor_info, value['required_reliability'],
                                 lost_node=lost_node_id)
