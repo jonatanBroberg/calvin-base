@@ -97,7 +97,7 @@ class Heartbeat(Actor):
                 uri = uri.replace("calvinip://", "")
                 host = uri.split(":")[0]
                 port = uri.split(":")[1]
-                port = int(port) + 2
+                port = int(port) + 5001
                 _log.debug("Sending heartbeat to node {} at {}".format(node_id, (host, port)))
                 self.sender.sendto(self.node.id, (host, port))
                 node_ids.append(node_id)

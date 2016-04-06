@@ -424,7 +424,7 @@ class Node(object):
     def _start_heartbeat_system(self):
         uri = self.control_uri.replace("http://", "")
         addr = uri.split(":")[0]
-        port = int(uri.split(":")[1]) + 1
+        port = int(uri.split(":")[1]) + 5000
 
         actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})
         actor = self.am.actors[actor_id]
