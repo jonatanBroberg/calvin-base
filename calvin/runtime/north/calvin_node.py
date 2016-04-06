@@ -50,6 +50,9 @@ from calvin.runtime.north.resource_manager import ResourceManager
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
+MAX_HEARTBEAT_TIMEOUT = 2
+HEARTBEAT_DELAY = 0.4
+
 
 def addr_from_uri(uri):
     _, host = uri.split("://")
@@ -100,6 +103,7 @@ class Node(object):
         self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
         self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
+        self.outgoing_heartbeats = {}
 
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:
@@ -114,6 +118,7 @@ class Node(object):
             return self.storage_node
         #if node_id not in self.network.links:
         #    return False
+
         return self.storage.proxy == self.network.links[node_id].transport.get_uri()
 
     def insert_local_reply(self):
@@ -172,6 +177,10 @@ class Node(object):
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
 
+        for node_id, status in peer_node_ids.values():
+            if status:
+                self._register_heartbeat_receiver(node_id)
+
         if peer_node_id:
             self._send_rm_info(peer_node_id)
 
@@ -228,19 +237,15 @@ class Node(object):
     def info(self, s):
         _log.info("[{}] {}".format(self.hostname, s))
 
-    def _print_replicas(self):
-        actors = []
-        for actor in self.am.actors.values():
-            if 'actions:src' in actor.name:
-                actors.append(actor)
-        self.info("REPLICAS: {}".format(len(actors)))
+    def print_stats(self, lost_node_id=None):
+        if self.storage_node:
+            return
 
-    def _print_rel(self, lost_node_id):
         for app in self.app_manager.applications.values():
-            cb = CalvinCB(self._print_reliability, app_id=app.id, lost_node_id=lost_node_id)
+            cb = CalvinCB(self._print_stats, app_id=app.id, lost_node_id=lost_node_id)
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
-    def _print_reliability(self, key, value, app_id, lost_node_id):
+    def _print_stats(self, key, value, app_id, lost_node_id):
         if not value:
             return
 
@@ -248,26 +253,32 @@ class Node(object):
             value.remove(lost_node_id)
 
         nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
-        self.info("CURRENT NODES: {} {}".format(len(nodes), nodes))
+        _log.debug("CURRENT NODES: {} {}".format(len(nodes), nodes))
 
         rm = self.resource_manager
         rels = []
         for node_id in value:
             rel = rm.get_reliability(node_id, "std.CountTimer")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
-        self.info("NODE RELIABILITIES: {}".format(rels))
+        _log.info("NODE RELIABILITIES: {}".format(rels))
 
         actual_rel = self.resource_manager.current_reliability(value, 'std.CountTimer')
-        self.info("RELIABILITY: {}".format(actual_rel))
+        _log.debug("RELIABILITY: {}".format(actual_rel))
+        rep_time = self.resource_manager._average_replication_time('std.CountTimer')
+        actors = []
+        for actor in self.am.actors.values():
+            if 'actions:src' in actor.name:
+                actors.append(actor)
+        rels = self._get_rels()
 
-    def _print_replication_time(self):
-        self.info("REPLICATION TIME: {}".format(self.resource_manager._average_replication_time('std.CountTimer')))
+        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}]".format(
+            len(nodes), nodes, rels, actual_rel, rep_time))
 
-    def _print_reliabilities(self):
+    def _get_rels(self):
         all_nodes = self.network.list_links()
         rm = self.resource_manager
         rels = []
-        self.info("all nodes: {}".format(all_nodes))
+        _log.debug("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
             rel = rm.get_reliability(node_id, "std.CountTimer")
             uri = rm.node_uris.get(node_id)
@@ -275,22 +286,13 @@ class Node(object):
                 failure_info = rm.failure_info[uri]
                 mtbf = rm.reliability_calculator.get_mtbf(failure_info)
                 rels.append((uri, rel, 1 - rel, mtbf))
-        self.info("ALL NODE RELIABILITIES: {}".format(rels))
-
-    def _print_stats(self, lost_node_id=None):
-        if self.storage_node:
-            return
-
-        self._print_replicas()
-        self._print_rel(lost_node_id)
-        self._print_replication_time()
-        self._print_reliabilities()
+        return rels
 
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
-        self._print_stats()
+        self.print_stats()
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
@@ -335,7 +337,13 @@ class Node(object):
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
-        print "\n\nLOST NODE: {}\n{}".format(node_id, datetime.now())
+        print "LOST NODE: {}\n{}".format(node_id, datetime.now())
+
+        if node_id in self.network.links:
+            link = self.network.links[node_id]
+            self.network.peer_disconnected(link, node_id, "Heartbeat timeout")
+        if self.heartbeat_actor:
+            self.heartbeat_actor.deregister(node_id)
         self.lost_node_handler.handle_lost_node(node_id)
 
     def lost_node_request(self, node_id, cb):
@@ -355,6 +363,18 @@ class Node(object):
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
         replicator.replicate_lost_actor(cb, int(round(time.time() * 1000)))
 
+    def increase_heartbeats(self, node_ids):
+        for node_id in node_ids:
+            if node_id not in self.outgoing_heartbeats:
+                # wait until we get first response
+                return
+            self.outgoing_heartbeats[node_id] += 1
+            if self.outgoing_heartbeats[node_id] > MAX_HEARTBEAT_TIMEOUT:
+                self.lost_node(node_id)
+
+    def clear_outgoing_heartbeat(self, data):
+        if "data" in data:
+            self.outgoing_heartbeats[data['data']] = 0
     #
     # Event loop
     #
@@ -365,6 +385,8 @@ class Node(object):
 
     def start(self):
         """ Run once when main loop is started """
+        if not self.storage_node:
+            self._start_heartbeat_system()
         interfaces = _conf.get(None, 'transports')
         self.network.register(interfaces, ['json'])
         self.network.start_listeners(self.uri)
@@ -396,6 +418,26 @@ class Node(object):
         self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
                      peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
                      peer_port_dir='out', peer_port_id=out_port.id)
+
+
+    def _start_heartbeat_system(self):
+        uri = self.control_uri.replace("http://", "")
+        addr = uri.split(":")[0]
+        port = int(uri.split(":")[1]) + 1
+
+        actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})
+        actor = self.am.actors[actor_id]
+        in_port = actor.inports['in']
+        out_port = actor.outports['out']
+        self.connect(actor_id, port_name=in_port.name, port_dir='in', port_id=in_port.id,
+                     peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
+                     peer_port_dir='out', peer_port_id=out_port.id)
+        self.heartbeat_actor = actor
+
+    def _register_heartbeat_receiver(self, node_id):
+        if not self.heartbeat_actor:
+            self._start_heartbeat_system()
+        self.heartbeat_actor.register(node_id)
 
     def stop(self, callback=None):
         def stopped(*args):

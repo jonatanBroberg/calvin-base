@@ -962,7 +962,6 @@ class CalvinControl(object):
             if status_code == 200:
                 to_send = set(all_peers)
                 to_send.remove(uri)
-                to_send.add(self.node.uri[0])
                 cb = CalvinCB(self.node.logging_callback)
                 self.node.proto.peer_setup(node_id, [peer for peer in to_send], callback=cb)
 

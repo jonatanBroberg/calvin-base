@@ -381,13 +381,6 @@ class CalvinNetwork(object):
         _log.debug("Peer {} disconnected from {}. Reason: {}".format(rt_id, self.node.id, reason))
         if rt_id in self.links and link == self.links[rt_id].transport:
             self.link_remove(rt_id)
-            if not self.node.storage_node:
-                callback = CalvinCB(self._lost_node, node_id=rt_id)
-                self.node.proto.report_usage(rt_id, self.node.id, {}, callback=callback, timeout=0.2)
-
-    def _lost_node(self, node_id, status, *args, **kwargs):
-        if not status:
-            self.node.lost_node(node_id)
 
     def link_remove(self, peer_id):
         """ Removes a link to peer id """
