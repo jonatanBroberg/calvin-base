@@ -360,7 +360,8 @@ class CalvinNetwork(object):
             del self.pending_joins_by_id[peer_id]
         if uri in self.pending_joins:
             del self.pending_joins[uri]
-        callback(status=response.CalvinResponse(False))
+        if callback:
+            callback(status=response.CalvinResponse(False))
 
     def get_supported_uri(self, uris):
         """ Match configured transport interfaces with uris and return first match.

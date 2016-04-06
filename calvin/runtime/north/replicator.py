@@ -28,6 +28,10 @@ class Replicator(object):
     @property
     def connected_nodes(self):
         connected = set(self.node.network.list_links())
+        for node_id in self.node.heartbeat_actor.nodes:
+            if node_id not in connected:
+                self.node.network.link_request(node_id, timeout=0.1)
+                connected.add(node_id)
         connected.add(self.node.id)
         return connected
 
@@ -197,12 +201,19 @@ class Replicator(object):
         _log.debug("Finding available nodes among: {}".format(connected_nodes))
 
         not_allowed = self.not_allowed(current_nodes)
+        links = set(self.node.network.list_links())
         for node_id in connected_nodes:
             uri = self.node.resource_manager.node_uris.get(node_id, "")
             uri = uri if uri else ""
-            if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
-                _log.debug("Adding {} to available nodes".format(node_id))
-                available_nodes.add(node_id)
+            if node_id not in links:
+                continue
+            try:
+                if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
+                    _log.debug("Adding {} to available nodes".format(node_id))
+                    available_nodes.add(node_id)
+            except Exception as e:
+                _log.warning(e)
+                pass
 
         available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'])
         _log.debug("Available nodes: {}".format(available_nodes))
@@ -215,7 +226,8 @@ class Replicator(object):
         except:
             st = ""
         _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, st, to_node_id))
-        self.pending_replications.remove(to_node_id)
+        if to_node_id in self.pending_replications:
+            self.pending_replications.remove(to_node_id)
         if status in status.success_list:
             _log.info("Successfully replicated to {}".format(to_node_id))
             self.new_replicas[status.data['actor_id']] = to_node_id
