@@ -15,6 +15,8 @@
 # limitations under the License.
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
+from calvin.runtime.south import endpoint
+from calvin.runtime.north.calvin_proto import CalvinTunnel
 from calvin.utilities import calvinuuid
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities.calvin_callback import CalvinCB
@@ -105,6 +107,19 @@ class ActorManager(object):
         self.connection_handler.setup_replica_connections(a, state, prev_connections, callback)
 
     def _new_replica(self, status, actor_id, callback):
+        actor = self.actors[actor_id]
+        ports = actor.inports.values() + actor.outports.values()
+        for port in ports:
+            if not port.endpoints:
+                _log.warning("Replication failed - port has no endpoints")
+                status = response.ClavinResponse(False, data=status.data)
+                break
+            for ep in port.endpoints:
+                if isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint):
+                    if ep.tunnel.status != CalvinTunnel.STATUS.WORKING:
+                        _log.warning("Replication failed - endpoint is not connected")
+                        status = response.ClavinResponse(False, data=status.data)
+                        break
         if not status:
             self.delete_actor(actor_id)
 
