@@ -776,7 +776,12 @@ class CalvinProto(CalvinCBClass):
         if isinstance(status, int):
             status = response.CalvinResponse(status)
 
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
+        if status:
+            status = status.encode()
+        else:
+            status = response.ClavinResponse(410)
+
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status}
         from_rt_uuid = payload['from_rt_uuid']
         if self.node.network.link_request(from_rt_uuid, CalvinCB(self._lost_node_reply, to_rt_uuid=from_rt_uuid, msg=msg)):
             self._lost_node_reply(to_rt_uuid=from_rt_uuid, msg=msg, status=response.CalvinResponse(True))
