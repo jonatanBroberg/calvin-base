@@ -779,7 +779,7 @@ class CalvinProto(CalvinCBClass):
         if status:
             status = status.encode()
         else:
-            status = response.ClavinResponse(410)
+            status = response.CalvinResponse(410)
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status}
         from_rt_uuid = payload['from_rt_uuid']
