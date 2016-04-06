@@ -93,6 +93,7 @@ class FIFO(object):
         del self.read_pos[reader]
         del self.tentative_read_pos[reader]
         del self.write_pos[reader]
+        del self.fifo[reader]
         self.readers.discard(reader)
 
     def can_write(self, reader):
