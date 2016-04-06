@@ -38,7 +38,14 @@ class ConnectionHandler(object):
     def connections(self, actor):
         return actor.connections(self.node.id)
 
-    def _set_port_states(self, actor, state, callback, *args, **kwargs):
+    def _set_port_states(self, actor, state, callback, status, *args, **kwargs):
+        _log.debug("After connect: {}".format(status))
+        if not status:
+            _log.error("Connection failed")
+            if callback:
+                callback(status=status, *args, **kwargs)
+            return
+
         for port_id in state['inports']:
             port_name = state['inports'][port_id]['name']
             actor.inports[port_name]._set_state(state['inports'][port_id])
@@ -47,7 +54,7 @@ class ConnectionHandler(object):
             actor.outports[port_name]._set_state(state['outports'][port_id])
 
         if callback:
-            callback(*args, **kwargs)
+            callback(status=status, *args, **kwargs)
 
     def connect(self, actor, connection_list, port_states=None, callback=None):
         """
@@ -77,10 +84,12 @@ class ConnectionHandler(object):
                            do not replace it
         """
         # Send negative response if not already done it
+        _log.debug("Actor connected: {}".format(status))
         if not status and peer_port_ids:
             if _callback:
                 del peer_port_ids[:]
                 _callback(status=response.CalvinResponse(False), actor_id=actor_id)
+                return
         if peer_port_id in peer_port_ids:
             # Remove this port from list
             peer_port_ids.remove(peer_port_id)
@@ -226,21 +235,24 @@ class ConnectionHandler(object):
                 if port_id in port_id_translations:
                     new_readers.append("_".join([reader_parts[0], port_id_translations[port_id]]))
 
-            new_tentative_read_pos = {}
-            for reader in fifo['tentative_read_pos']:
-                reader_parts = reader.split("_")
-                port_id = reader_parts[1]
-                if port_id in port_id_translations:
-                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                    new_tentative_read_pos[new_key] = fifo['tentative_read_pos'][reader]
-
             new_read_pos = {}
             for reader in fifo['read_pos']:
                 reader_parts = reader.split("_")
                 port_id = reader_parts[1]
                 if port_id in port_id_translations:
                     new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
-                    new_read_pos[new_key] = fifo['read_pos'][reader]
+                    new_read_pos[new_key] = int(fifo['read_pos'][reader])
+
+            new_tentative_read_pos = {}
+            for reader in fifo['tentative_read_pos']:
+                reader_parts = reader.split("_")
+                port_id = reader_parts[1]
+                tr = int(fifo['tentative_read_pos'][reader])
+                if port_id in port_id_translations:
+                    new_key = "_".join([reader_parts[0], port_id_translations[port_id]])
+                    if tr > new_read_pos[new_key]:
+                        tr -= 1
+                    new_tentative_read_pos[new_key] = tr
 
             new_write_pos = {}
             for reader in fifo['write_pos']:

@@ -256,7 +256,7 @@ class Storage(object):
             value = value if value else []
             org_cb(org_key, list(set(value + local_list)))
         else:
-            org_cb(org_key, local_list if local_list else [])
+            org_cb(org_key, local_list if local_list else None)
 
     def get_concat(self, prefix, key, cb):
         """ Get value for key: prefix+key, first look in localstore

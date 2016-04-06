@@ -89,6 +89,7 @@ class ActorManager(object):
         state['id'] = args.pop('id')
         state['name'] = args.pop('name')
         state['set_ports'] = False
+        _log.debug("New replica with prev connections: {}".format(prev_connections))
 
         replica_name = calvinuuid.remove_uuid(state['name'])
         for a in self.actors.values():

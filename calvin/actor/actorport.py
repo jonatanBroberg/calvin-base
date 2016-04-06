@@ -114,6 +114,7 @@ class InPort(Port):
             _log.warning("Inport: No such endpoint")
             return
         self.endpoints.remove(ep)
+        self.fifo.remove_reader(ep.fifo_key)
         if not self.endpoints:
             self.owner.did_disconnect(self)
         return
@@ -246,9 +247,10 @@ class OutPort(Port):
 
     def _detach_endpoint(self, ep):
         if ep not in self.endpoints:
-            _log.debug("Outport: No such endpoint")
+            _log.warning("Outport: No such endpoint")
             return
         self.endpoints.remove(ep)
+        self.fifo.remove_reader(ep.fifo_key)
         if not self.endpoints:
             self.owner.did_disconnect(self)
 
@@ -266,6 +268,7 @@ class OutPort(Port):
             if not port_id or ep.peer_port_id == port_id:
                 self.fifo.commit_reads(ep.fifo_key, False)
                 disconnected_endpoints.append(ep)
+                self._detach_endpoint(ep)
             else:
                 self.endpoints.append(ep)
 

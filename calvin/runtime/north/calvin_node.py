@@ -368,7 +368,6 @@ class Node(object):
             if node_id not in self.outgoing_heartbeats:
                 # wait until we get first response
                 return
-
             self.outgoing_heartbeats[node_id] += 1
             if self.outgoing_heartbeats[node_id] > MAX_HEARTBEAT_TIMEOUT:
                 self.lost_node(node_id)
