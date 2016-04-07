@@ -64,7 +64,7 @@ class Replicator(object):
             cb(status=response.CalvinResponse(False))
             return
 
-        connected_nodes = self.connected_nodes
+        connected_nodes = set(self.node.network.list_links())
         _log.debug("Connected nodes: {}".format(connected_nodes))
 
         current_nodes = set(filter(lambda n: n in connected_nodes, value))
@@ -208,6 +208,7 @@ class Replicator(object):
             uri = self.node.resource_manager.node_uris.get(node_id, "")
             uri = uri if uri else ""
             if node_id not in links:
+                _log.debug("Node {} not in links".format(node_id))
                 continue
             try:
                 if node_id not in not_allowed and not self.node.is_storage_node(node_id) and not "gru" in uri:
