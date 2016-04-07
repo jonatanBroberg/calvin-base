@@ -773,6 +773,7 @@ class CalvinProto(CalvinCBClass):
         if status:
             status = status.encode()
         else:
+            _log.error("Failed to handle lost node {}".format(status))
             status = response.CalvinResponse(410)
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status}
