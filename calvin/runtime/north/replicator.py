@@ -36,11 +36,17 @@ class Replicator(object):
         return connected
 
     def not_allowed(self, current_nodes):
+        _log.debug("Not allowed")
         not_allowed = copy.deepcopy(current_nodes)
+        _log.debug("Current: {}".format(current_nodes))
         not_allowed |= self.pending_replications
+        _log.debug("Pending : {}".format(self.pending_replications))
         not_allowed |= self.failed_requests
+        _log.debug("Failed: {}".format(self.failed_requests))
         not_allowed.add(self.lost_node)
+        _log.debug("Lost node: {}".format(self.lost_node))
         not_allowed.add(self.master_node)
+        _log.debug("Master node: {}".format(self.master_node))
         not_allowed = set(filter(None, not_allowed))
 
         _log.debug("Not allowed: {}".format(not_allowed))
