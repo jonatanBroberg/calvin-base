@@ -24,40 +24,31 @@ class LostNodeHandler(object):
         self.am = actor_manager
         self.storage = storage
 
-    def handle_lost_node(self, node_id, cb=None):
-        _log.debug("Handling lost node {}".format(node_id))
-        if cb:
-            _log.debug("Adding callback: {} for node {}".format(cb, node_id))
-            self._callbacks[node_id].add(cb)
+    def handle_lost_node(self, node_id):
+        _log.debug("Lost node {}".format(node_id))
+        self._delete_replica_nodes(node_id)
+        self._register_lost_node(node_id)
 
         if node_id in self._lost_nodes:
-            _log.debug("Got multiple lost node signals, ignoring")
+            _log.debug("We are already handling lost node {}".format(node_id))
             return
 
         self._lost_nodes.add(node_id)
-
         self.pm.close_disconnected_ports(self.am.actors.values())
-        try:
-            self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
-        except Exception as e:
-            _log.error("{}".format(e))
-
-        for actor in self.node.am.actors.values():
-            if actor.app_id:
-                self.storage.delete_replica_node(actor.app_id, node_id, actor.name)
 
         highest_prio_node = self._highest_prio_node(node_id)
-
         if highest_prio_node == self.node.id:
-            self.handle_lost_node_request(node_id)
+            _log.debug("We have highest id, replicate actors")
+            self._handle_lost_node(node_id)
         elif highest_prio_node:
-            cb = CalvinCB(self._lost_node_cb, node_id=node_id, cb=cb, prio_node=highest_prio_node)
+            cb = CalvinCB(self._lost_node_request_cb, node_id=node_id, prio_node=highest_prio_node)
             _log.debug("Sending lost node msg of node {} to {} - {}".format(
                 node_id, highest_prio_node, self.resource_manager.node_uris.get(highest_prio_node)))
             self.node.proto.lost_node(highest_prio_node, node_id, cb)
 
     def handle_lost_node_request(self, node_id, cb=None):
-        _log.debug("Handling lost node request {}".format(node_id))
+        _log.debug("Got lost node request {}".format(node_id))
+        self._register_lost_node(node_id)
         if cb:
             _log.debug("Adding callback: {} for node {}".format(cb, node_id))
             self._callbacks[node_id].add(cb)
@@ -66,21 +57,30 @@ class LostNodeHandler(object):
             _log.debug("Got multiple lost node signals, ignoring")
             return
 
-        self._lost_node_requests.add(node_id)
-
+        self._delete_replica_nodes(node_id)
         self.pm.close_disconnected_ports(self.am.actors.values())
+
+        self._lost_node_requests.add(node_id)
+        self._lost_nodes.add(node_id)
+        self._handle_lost_node(node_id)
+
+    def _handle_lost_node(self, node_id):
+        _log.info("Handling lost node {}".format(node_id))
+        self.pm.close_disconnected_ports(self.am.actors.values())
+
+        cb = CalvinCB(self._lost_node_cb, node_id=node_id)
+        self.replicate_node_actors(node_id, cb=cb)
+
+    def _register_lost_node(self, node_id):
         try:
             self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
         except Exception as e:
             _log.error("{}".format(e))
 
+    def _delete_replica_nodes(self, node_id):
         for actor in self.node.am.actors.values():
             if actor.app_id:
                 self.storage.delete_replica_node(actor.app_id, node_id, actor.name)
-
-        cb = CalvinCB(self._lost_node_cb, node_id=node_id, cb=cb)
-        _log.debug("We have highest id, replicate actors")
-        self.replicate_node_actors(node_id, cb=cb)
 
     def _delete_node(self, key, value):
         _log.debug("Deleting node {} with value {}".format(key, value))
@@ -90,26 +90,34 @@ class LostNodeHandler(object):
         indexed_public = value['attributes'].get('indexed_public')
         self.storage.delete_node(key, indexed_public)
 
-    def _lost_node_cb(self, status, node_id, cb, prio_node=None):
+    def _lost_node_request_cb(self, status, node_id, prio_node):
+        """ Callback when we sent a request. If the request fails, send to new node """
         _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
         if not status:
-            if prio_node:
-                if status.status == 504:
-                    self._failed_requests.add(prio_node)
-                prio_node_uri = self.resource_manager.node_uris.get(prio_node)
-                _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
-            else:
-                _log.warning("Failed to handle lost node {}: {}".format(node_id, status))
+            self._failed_requests.add(prio_node)
+            prio_node_uri = self.resource_manager.node_uris.get(prio_node)
+            _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
             if node_id in self._lost_nodes:
                 self._lost_nodes.remove(node_id)
-            self.handle_lost_node(node_id, cb)
+            self.handle_lost_node(node_id)
+            _log.warning("Node {} failed to handle lost node {}: {}".format(prio_node, node_id, status))
         else:
-            _log.debug("Successfully handled lost node {} - {} - {}".format(node_id, prio_node, status))
-
+            _log.debug("Node {} successfully handled lost node {} - {}".format(prio_node, node_id, status))
             self.storage.get_node(node_id, self._delete_node)
-            for cb in self._callbacks[node_id]:
-                _log.debug("Calling cb {} with status {}".format(cb, status))
-                cb(status=status)
+
+    def _lost_node_cb(self, status, node_id):
+        """ Callback when we handled lost node """
+        _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
+        if not status:
+            _log.warning("We failed to handle lost node {}: {}".format(node_id, status))
+        else:
+            _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
+
+        self.storage.get_node(node_id, self._delete_node)
+
+        for cb in self._callbacks[node_id]:
+            _log.debug("Calling cb {} with status {}".format(cb, status))
+            cb(status=status)
 
     def _highest_prio_node(self, node_id):
         node_ids = self.node.network.list_links()
