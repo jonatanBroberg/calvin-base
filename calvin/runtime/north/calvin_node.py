@@ -168,6 +168,11 @@ class Node(object):
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
+        _log.debug("Peersetup collect cb: {}".format(status, peers))
+        self.resource_manager.register(peer_node_id, {}, uri)
+        if status:
+            self._register_heartbeat_receiver(peer_node_id)
+
         self.peer_uris[peer_node_id] = uri
         if uri in peers:
             peers.remove(uri)
@@ -176,10 +181,6 @@ class Node(object):
             # Get highest status, i.e. any error
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
-
-        for node_id, status in peer_node_ids.values():
-            if status:
-                self._register_heartbeat_receiver(node_id)
 
         if peer_node_id:
             self._send_rm_info(peer_node_id)
@@ -366,6 +367,8 @@ class Node(object):
     def increase_heartbeats(self, node_ids):
         for node_id in node_ids:
             if node_id not in self.outgoing_heartbeats:
+                uri = self.resource_manager.node_uris.get(node_id)
+                _log.debug("Have not received heartbeat from {} - {} yet".format(node_id, uri))
                 # wait until we get first response
                 return
             self.outgoing_heartbeats[node_id] += 1
@@ -373,8 +376,9 @@ class Node(object):
                 self.lost_node(node_id)
 
     def clear_outgoing_heartbeat(self, data):
-        if "data" in data:
-            self.outgoing_heartbeats[data['data']] = 0
+        if "node_id" in data:
+            self.outgoing_heartbeats[data['node_id']] = 0
+            self.resource_manager.register(data['node_id'], {}, data['uri'])
     #
     # Event loop
     #
