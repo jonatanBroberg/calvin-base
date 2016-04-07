@@ -1,6 +1,6 @@
 #rand=`python -c "import random; print random.randint(30, 90)"`
 rands=($(python -c "import numpy as np;
-mu=5; sigma=1;
+mu=18; sigma=1;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
         print n

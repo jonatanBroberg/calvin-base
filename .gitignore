@@ -25,4 +25,3 @@ build/
 !test_scripts/*.sh
 *.log
 *.csv
-test_scripts/*
