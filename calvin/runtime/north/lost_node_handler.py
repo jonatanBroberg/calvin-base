@@ -66,6 +66,9 @@ class LostNodeHandler(object):
 
     def _handle_lost_node(self, node_id):
         _log.info("Handling lost node {}".format(node_id))
+        if not self.storage.started:
+            self.storage.start()
+
         self.pm.close_disconnected_ports(self.am.actors.values())
 
         cb = CalvinCB(self._lost_node_cb, node_id=node_id)
