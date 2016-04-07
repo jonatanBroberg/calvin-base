@@ -16,6 +16,7 @@
 
 import socket
 import json
+import re
 
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
 
@@ -43,6 +44,9 @@ class Heartbeat(Actor):
 
     @manage(['address', 'port'])
     def init(self, node, address, port, delay=1):
+        is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", address)
+        if not is_ip:
+            address = socket.gethostbyname(address)
         self.address = address
         self.port = port
         self.node = node
@@ -102,7 +106,10 @@ class Heartbeat(Actor):
                 _log.debug("Sending heartbeat to node {} at {}".format(node_id, (host, port)))
                 node_ids.append(node_id)
                 data = {'node_id': self.node.id, 'uri': self.node.uri}
-                self.sender.sendto(json.dumps(data), (host, port))
+                try:
+                    self.sender.sendto(json.dumps(data), (host, port))
+                except Exception as e:
+                    _log.error("Failed to send {} heartbeat to {}: {}".format(data, (host, port), e))
 
         return ActionResult(production=(node_ids, ))
 
