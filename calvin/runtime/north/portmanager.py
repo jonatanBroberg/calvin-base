@@ -539,17 +539,7 @@ class PortManager(object):
                         _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
                         if ep.peer_node_id not in links:
                             cb = CalvinCB(self._disconnect_lost_port, port=inport, ep=ep)
-                            self.node.proto.report_usage(ep.peer_node_id, self.node.id, {}, callback=cb, timeout=0.3)
-            for outport in actor.outports.values():
-                endpoints = outport.endpoints
-                for ep in endpoints:
-                    if isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint):
-                        peer_node_id = ep.peer_node_id
-                        peer_node = self.node.resource_manager.node_uris.get(peer_node_id)
-                        _log.debug("Checking if we should close endpoint to node {}".format(peer_node_id, peer_node))
-                        if ep.peer_node_id not in links:
-                            cb = CalvinCB(self._disconnect_lost_port, port=outport, ep=ep)
-                            self.node.proto.report_usage(ep.peer_node_id, self.node.id, {}, callback=cb, timeout=0.3)
+                            self.node.proto.report_usage(ep.peer_node_id, self.node.id, {}, callback=cb, timeout=0.15)
 
     def _disconnect_lost_port(self, status, port, ep, *args, **kwargs):
         _log.debug("Lost port to node {}? {}".format(ep.peer_node_id, status))
