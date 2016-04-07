@@ -246,7 +246,7 @@ class Node(object):
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
     def _print_stats(self, key, value, app_id, lost_node_id):
-        if not value:
+        if value is None:
             return
 
         if lost_node_id in value:
@@ -257,7 +257,7 @@ class Node(object):
 
         rm = self.resource_manager
         rels = []
-        for node_id in value:
+        for node_id in self.network.list_links():
             rel = rm.get_reliability(node_id, "std.CountTimer")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         _log.info("NODE RELIABILITIES: {}".format(rels))
