@@ -52,6 +52,7 @@ class ResourceManager(object):
             return
         self._lost_nodes.add(node_id)
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
+        uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
         self.node_uris[node_id] = uri
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
