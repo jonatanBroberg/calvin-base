@@ -481,6 +481,7 @@ class PortManager(object):
         invalid_endpoint = port.attach_endpoint(endp)
         # remove previous endpoint
         if invalid_endpoint:
+            _log.warning("Removing invalid endpoint")
             if isinstance(invalid_endpoint, endpoint.TunnelOutEndpoint):
                 self.monitor.unregister_out_endpoint(invalid_endpoint)
             invalid_endpoint.destroy()
