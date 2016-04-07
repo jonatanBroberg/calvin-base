@@ -51,7 +51,7 @@ _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
 MAX_HEARTBEAT_TIMEOUT = 2
-HEARTBEAT_DELAY = 0.4
+HEARTBEAT_DELAY = 0.20
 
 
 def addr_from_uri(uri):

@@ -12,7 +12,7 @@ _log = get_logger(__name__)
 DEFAULT_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
-LOST_NODE_TIME = 1000
+LOST_NODE_TIME = 500
 
 
 class ResourceManager(object):
