@@ -234,6 +234,12 @@ class Replicator(object):
             st = str(status)
         except:
             st = ""
+
+        if status and status.data and 'actor_id' in status.data:
+            actor_id = status.data['actor_id']
+            _log.debug("Node {} returned actor id {}".format(to_node_id, actor_id))
+            self.node.storage.add_node_actor(to_node_id, actor_id)
+
         _log.debug("Collect new replicas. Current: {}. Status {}. to_node_id: {}".format(current_nodes, st, to_node_id))
         if to_node_id in self.pending_replications:
             self.pending_replications.remove(to_node_id)
