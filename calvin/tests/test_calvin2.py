@@ -401,7 +401,7 @@ class TestConnections(CalvinTestBase):
 
         replica_1_id = utils.replicate(self.rt1, snk_id, self.rt2.id)
         time.sleep(.2)
-        replica_2_id = utils.replicate(self.rt2, replica_1_id, self.rt1.id)
+        replica_2_id = utils.replicate(self.rt2, replica_1_id, self.rt3.id)
         time.sleep(.2)
 
         src = utils.get_actor(self.rt1, src_id)
@@ -412,21 +412,21 @@ class TestConnections(CalvinTestBase):
         replica_1_inport_id = replica_1['inports'][0]['id']
         replica_1_inport = utils.get_port(self.rt1, replica_1_id, replica_1_inport_id)
 
-        replica_2 = utils.get_actor(self.rt1, replica_2_id)
+        replica_2 = utils.get_actor(self.rt3, replica_2_id)
         replica_2_inport_id = replica_2['inports'][0]['id']
-        replica_2_inport = utils.get_port(self.rt1, replica_2_id, replica_2_inport_id)
+        replica_2_inport = utils.get_port(self.rt3, replica_2_id, replica_2_inport_id)
 
         assert replica_1_inport['connected']
         assert replica_2_inport['connected']
         assert replica_1_inport['peers'][0] == [self.rt1.id, outport_id]
-        assert replica_2_inport['peers'][0] == ['local', outport_id]
+        assert replica_2_inport['peers'][0] == [self.rt1.id, outport_id]
         assert outport['peers'][1] == [self.rt2.id, replica_1_inport_id]
-        assert outport['peers'][2] == ['local', replica_2_inport_id]
+        assert outport['peers'][2] == [self.rt3.id, replica_2_inport_id]
 
         utils.delete_actor(self.rt1, src_id)
         utils.delete_actor(self.rt1, snk_id)
         utils.delete_actor(self.rt2, replica_1_id)
-        utils.delete_actor(self.rt1, replica_2_id)
+        utils.delete_actor(self.rt3, replica_2_id)
 
     def testReplicateSourceWithMultipleSinks(self):
         _log.analyze("TESTRUN", "+", {})
