@@ -8,7 +8,7 @@ NODE_2_ID = 2
 
 
 def register(rm, node_id, value):
-    rm.register(node_id, {'cpu_percent': value}, 'uri/{}'.format(node_id))
+    rm.register(node_id, {'cpu_percent': value}, 'localhost:{}'.format(node_id))
 
 
 @pytest.fixture
