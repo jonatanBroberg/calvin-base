@@ -112,13 +112,13 @@ class ActorManager(object):
         for port in ports:
             if not port.endpoints:
                 _log.warning("Replication failed - port has no endpoints")
-                status = response.ClavinResponse(False, data=status.data)
+                status = response.CalvinResponse(False, data=status.data)
                 break
             for ep in port.endpoints:
                 if isinstance(ep, endpoint.TunnelOutEndpoint) or isinstance(ep, endpoint.TunnelInEndpoint):
                     if ep.tunnel.status != CalvinTunnel.STATUS.WORKING:
                         _log.warning("Replication failed - endpoint is not connected")
-                        status = response.ClavinResponse(False, data=status.data)
+                        status = response.CalvinResponse(False, data=status.data)
                         break
         if not status:
             self.delete_actor(actor_id)

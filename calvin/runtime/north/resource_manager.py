@@ -34,7 +34,7 @@ class ResourceManager(object):
             uri = uri[0]
 
         if uri:
-            uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
+            uri = uri.replace("calvinip://", "").replace("http://", "")
             addr = uri.split(":")[0]
             port = int(uri.split(":")[1])
 
