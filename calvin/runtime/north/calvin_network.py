@@ -31,6 +31,7 @@ _conf = calvinconfig.get()
 TRANSPORT_PLUGIN_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), *['south', 'plugins', 'transports'])
 TRANSPORT_PLUGIN_NS = "calvin.runtime.south.plugins.transports"
 DEFAULT_TIMEOUT = 5.0
+DEFAULT_LINK_REQUEST_TIMEOUT = 1.0
 
 
 class CalvinLink(object):
@@ -320,7 +321,7 @@ class CalvinNetwork(object):
         """ Get a link by node id """
         return self.links.get(peer_id, None)
 
-    def link_request(self, peer_id, callback=None, timeout=10.0):
+    def link_request(self, peer_id, callback=None, timeout=DEFAULT_LINK_REQUEST_TIMEOUT):
         """ Request that a link is established. This is the prefered way
             of joining other nodes.
             peer_id: the node id that the link should be establieshed to
@@ -360,7 +361,8 @@ class CalvinNetwork(object):
             del self.pending_joins_by_id[peer_id]
         if uri in self.pending_joins:
             del self.pending_joins[uri]
-        callback(status=response.CalvinResponse(False))
+        if callback:
+            callback(status=response.CalvinResponse(504))
 
     def get_supported_uri(self, uris):
         """ Match configured transport interfaces with uris and return first match.

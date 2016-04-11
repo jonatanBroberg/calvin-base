@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import socket
+import json
+import re
 
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
 
@@ -42,6 +44,9 @@ class Heartbeat(Actor):
 
     @manage(['address', 'port'])
     def init(self, node, address, port, delay=1):
+        is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", address)
+        if not is_ip:
+            address = socket.gethostbyname(address)
         self.address = address
         self.port = port
         self.node = node
@@ -49,7 +54,7 @@ class Heartbeat(Actor):
         self.timer = None
         self.sender = None
         self.listener = None
-        self.nodes = []
+        self.nodes = set()
         self.setup()
 
     def connect(self):
@@ -76,7 +81,7 @@ class Heartbeat(Actor):
         self.connect()
 
     def register(self, node_id):
-        self.nodes.append(node_id)
+        self.nodes.add(node_id)
 
     def deregister(self, node_id):
         if node_id in self.nodes:
@@ -99,8 +104,12 @@ class Heartbeat(Actor):
                 port = uri.split(":")[1]
                 port = int(port) + 5001
                 _log.debug("Sending heartbeat to node {} at {}".format(node_id, (host, port)))
-                self.sender.sendto(self.node.id, (host, port))
                 node_ids.append(node_id)
+                data = {'node_id': self.node.id, 'uri': self.node.uri}
+                try:
+                    self.sender.sendto(json.dumps(data), (host, port))
+                except Exception as e:
+                    _log.error("Failed to send {} heartbeat to {}: {}".format(data, (host, port), e))
 
         return ActionResult(production=(node_ids, ))
 
@@ -115,11 +124,14 @@ class Heartbeat(Actor):
         while self.listener.have_data():
             data = self.listener.data_get()
             _log.debug("Received heartbeat from node {}".format(data['data']))
-            if data['data'] not in self.nodes:
-                self.nodes.append(data['data'])
-                self.node.peersetup([data['data']])
+            data = json.loads(data['data'])
+            node_id = data['node_id']
+            uri = data['uri']
 
+            self.node.resource_manager.register(node_id, {}, uri)
+            self.nodes.add(node_id)
             self.node.clear_outgoing_heartbeat(data)
+
         return ActionResult(production=('',))
 
     # URI parsing - 0: protocol, 1: host, 2: port

@@ -359,16 +359,10 @@ class CalvinProto(CalvinCBClass):
             resp = response.CalvinResponse(status=response.CalvinResponse(False))
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
-        cb = CalvinCB(self._send_replication_request_reply, to_rt_uuid=payload['from_rt_uuid'], msg=msg)
-        if self.node.network.link_request(payload['from_rt_uuid'], cb, timeout=0.3):
-            self._send_replication_request_reply(payload['from_rt_uuid'], msg, status=response.CalvinResponse(True))
-
-    def _send_replication_request_reply(self, to_rt_uuid, msg, status, *args, **kwargs):
-        if status:
-            self.network.links[to_rt_uuid].send(msg)
-        else:
-            _log.error("Failed to send reply to actor replication request to node id: {} - {}".format(
-                to_rt_uuid, status))
+        try:
+            self.network.links[payload['from_rt_uuid']].send(msg)
+        except Exception as e:
+            _log.warning("Failed to reply to actor replication request sent from node {}".format(payload['from_rt_uuid']))
 
     def actor_migrate(self, to_rt_uuid, callback, actor_id, requirements, extend=False, move=False):
         """ Request actor on to_rt_uuid node to migrate accoring to new deployment requirements
@@ -779,6 +773,7 @@ class CalvinProto(CalvinCBClass):
         if status:
             status = status.encode()
         else:
+            _log.error("Failed to handle lost node {}".format(status))
             status = response.CalvinResponse(410)
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status}

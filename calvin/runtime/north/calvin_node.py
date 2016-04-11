@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from multiprocessing import Process
+from collections import defaultdict
 # For trace
 import sys
 import trace
@@ -50,8 +51,8 @@ from calvin.runtime.north.resource_manager import ResourceManager
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
-MAX_HEARTBEAT_TIMEOUT = 2
-HEARTBEAT_DELAY = 0.4
+HEARTBEAT_TIMEOUT = 0.5
+HEARTBEAT_DELAY = 0.20
 
 
 def addr_from_uri(uri):
@@ -103,7 +104,7 @@ class Node(object):
         self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
         self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
-        self.outgoing_heartbeats = {}
+        self.outgoing_heartbeats = defaultdict(list)
 
         # The initialization that requires the main loop operating is deferred to start function
         if self_start:
@@ -168,6 +169,11 @@ class Node(object):
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
+        _log.debug("Peersetup collect cb: {}".format(status, peers))
+        self.resource_manager.register(peer_node_id, {}, uri)
+        if status:
+            self._register_heartbeat_receiver(peer_node_id)
+
         self.peer_uris[peer_node_id] = uri
         if uri in peers:
             peers.remove(uri)
@@ -176,10 +182,6 @@ class Node(object):
             # Get highest status, i.e. any error
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
-
-        for node_id, status in peer_node_ids.values():
-            if status:
-                self._register_heartbeat_receiver(node_id)
 
         if peer_node_id:
             self._send_rm_info(peer_node_id)
@@ -246,7 +248,7 @@ class Node(object):
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
     def _print_stats(self, key, value, app_id, lost_node_id):
-        if not value:
+        if value is None:
             return
 
         if lost_node_id in value:
@@ -257,7 +259,7 @@ class Node(object):
 
         rm = self.resource_manager
         rels = []
-        for node_id in value:
+        for node_id in self.network.list_links():
             rel = rm.get_reliability(node_id, "std.CountTimer")
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         _log.info("NODE RELIABILITIES: {}".format(rels))
@@ -366,15 +368,29 @@ class Node(object):
     def increase_heartbeats(self, node_ids):
         for node_id in node_ids:
             if node_id not in self.outgoing_heartbeats:
+                uri = self.resource_manager.node_uris.get(node_id)
+                _log.debug("Have not received heartbeat from {} - {} yet".format(node_id, uri))
                 # wait until we get first response
                 return
-            self.outgoing_heartbeats[node_id] += 1
-            if self.outgoing_heartbeats[node_id] > MAX_HEARTBEAT_TIMEOUT:
-                self.lost_node(node_id)
+
+            timeout_call = async.DelayedCall(HEARTBEAT_TIMEOUT, CalvinCB(self._heartbeat_timeout, node_id=node_id))
+            self.outgoing_heartbeats[node_id].append(timeout_call)
+
+    def _heartbeat_timeout(self, node_id):
+        self._clear_heartbeat_timeouts(node_id)
+        self.lost_node(node_id)
 
     def clear_outgoing_heartbeat(self, data):
-        if "data" in data:
-            self.outgoing_heartbeats[data['data']] = 0
+        if "node_id" in data:
+            self._clear_heartbeat_timeouts(data['node_id'])
+            self.resource_manager.register(data['node_id'], {}, data['uri'])
+
+    def _clear_heartbeat_timeouts(self, node_id):
+        for timeout_call in self.outgoing_heartbeats[node_id]:
+            try:
+                timeout_call.cancel()
+            except Exception as e:
+                pass
     #
     # Event loop
     #
@@ -419,10 +435,12 @@ class Node(object):
                      peer_node_id=self.id, peer_actor_id=actor_id, peer_port_name=out_port.name,
                      peer_port_dir='out', peer_port_id=out_port.id)
 
-
     def _start_heartbeat_system(self):
         uri = self.control_uri.replace("http://", "")
-        addr = socket.gethostbyname(uri.split(":")[0])
+        if uri == "localhost":
+            addr = socket.gethostbyname(uri.split(":")[0])
+        else:
+            addr = uri.split(":")[0]
         port = int(uri.split(":")[1]) + 5000
 
         actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})

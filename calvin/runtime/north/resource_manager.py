@@ -1,6 +1,8 @@
 import sys
 import time
 import operator
+import socket
+import re
 
 from collections import defaultdict, deque
 from calvin.runtime.north.reliability_calculator import ReliabilityCalculator
@@ -12,7 +14,7 @@ _log = get_logger(__name__)
 DEFAULT_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
-LOST_NODE_TIME = 1000
+LOST_NODE_TIME = 500
 
 
 class ResourceManager(object):
@@ -30,7 +32,18 @@ class ResourceManager(object):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
-        self.node_uris[node_id] = uri
+
+        if uri:
+            uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
+            addr = uri.split(":")[0]
+            port = int(uri.split(":")[1])
+
+            is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", addr)
+            if not is_ip:
+                addr = socket.gethostbyname(addr)
+
+            self.node_uris[node_id] = "{}:{}".format(addr, port)
+
         if usage:
             self.usages[node_id].append(usage)
 
@@ -39,6 +52,7 @@ class ResourceManager(object):
             return
         self._lost_nodes.add(node_id)
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
+        uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
         self.node_uris[node_id] = uri
         self.failure_info[uri].append((time.time(), self._average(node_id)))
 
