@@ -2173,6 +2173,14 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
 
+    def testLoseNodeWithoutActors(self):
+        self._kill_dying()
+        time.sleep(1.3)
+
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime)
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime2)
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime3)
+
 
 @pytest.mark.essential
 @pytest.mark.slow
