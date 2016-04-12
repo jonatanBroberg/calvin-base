@@ -307,8 +307,7 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
-        resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode(), }
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode(), }
         try:
             self.network.links[payload['from_rt_uuid']].send(msg)
         except:
@@ -327,7 +326,7 @@ class CalvinProto(CalvinCBClass):
                                                                  to_node_id=to_node_id,
                                                                  callback=callback), timeout=0.3):
             # Already have link just continue in _actor_replication
-                self._actor_replication_request(actor_id, from_node_id, to_node_id, callback, response.CalvinResponse(True))
+                self._actor_replication_request(actor_id, from_node_id, to_node_id, callback, status=response.CalvinResponse(True))
 
     def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
@@ -338,7 +337,12 @@ class CalvinProto(CalvinCBClass):
                    'actor_id': actor_id,
                    'from_node_id': from_node_id,
                    'to_node_id': to_node_id}
-            self.network.links[from_node_id].send_with_reply(callback, msg, timeout=0.3)
+            try:
+                self.network.links[from_node_id].send_with_reply(callback, msg, timeout=2.0)
+            except KeyError as e:
+                _log.error("Failed to send actor replication request to: {} - {}".format(from_node_id, e))
+                if callback:
+                    callback(status=response.CalvinResponse(False))
         elif callback:
             _log.warning("Failed to send actor replication request to: {} - {}".format(from_node_id, status))
             callback(status=status)
@@ -353,12 +357,10 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_request_handler(self, payload, status, *args, **kwargs):
         """Potentially requested a successfull replication"""
-        if status.data:
-            resp = response.CalvinResponse(status=status.status, data={'actor_id': status.data.get('actor_id')})
-        else:
-            resp = response.CalvinResponse(status=response.CalvinResponse(False))
+        if not status.data:
+            status = response.CalvinResponse(status=response.CalvinResponse(False))
 
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': resp.encode()}
+        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         try:
             self.network.links[payload['from_rt_uuid']].send(msg)
         except Exception as e:
@@ -785,7 +787,7 @@ class CalvinProto(CalvinCBClass):
         if status:
             try:
                 self.network.links[to_rt_uuid].send(msg)
-            except Exception as e:
+            except KeyError as e:
                 _log.error("Failed to send reply to {} - {}".format(to_rt_uuid, e))
         else:
             from_node = self.node.resource_manager.node_uris.get(to_rt_uuid)
@@ -793,7 +795,7 @@ class CalvinProto(CalvinCBClass):
 
     ### RESOURCE USAGE ###
 
-    def report_usage(self, to_rt_uuid, node_id, usage, callback=None, timeout=0.5):
+    def report_usage(self, to_rt_uuid, node_id, usage, callback=None, timeout=0.3):
         if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_usage, to_rt_uuid, node_id, usage, callback), timeout=timeout):
             # Already have link just continue in _actor_new
             self._report_usage(to_rt_uuid, node_id, usage, callback, response.CalvinResponse(True))
@@ -804,7 +806,11 @@ class CalvinProto(CalvinCBClass):
             msg = {'cmd': 'REPORT_USAGE',
                    'node_id': node_id,
                    'usage': usage}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5)
+            try:
+                self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.3)
+            except KeyError as e:
+                if callback:
+                    callback(status=response.CalvinResponse(False))
         elif callback:
             callback(status=status)
 
@@ -852,13 +858,17 @@ class CalvinProto(CalvinCBClass):
             # Already have link just continue in _actor_new
             self._send_rm_info(to_rt_uuid, replication_times, failure_info, callback, response.CalvinResponse(True))
 
-    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback, status):
+    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback, status, *args, **kwargs):
         """ Got link? continue send rm info """
         if status:
             msg = {'cmd': 'SEND_RM_INFO',
                     'replication_times': replication_times,
                     'failure_info':failure_info}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+            try:
+                self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+            except KeyError as e:
+                if callback:
+                    callback(status=response.CalvinResponse(False))
         elif callback:
             callback(status=status)
 
