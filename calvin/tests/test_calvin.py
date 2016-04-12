@@ -2162,10 +2162,6 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.migrate(self.runtime, src, self.runtime2.id)
         time.sleep(1.2)
 
-        expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
-        snk_before = actual_tokens(self.runtime, snk)
-        replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
-
         actors_before = utils.get_application_actors(self.runtime, app_id)
 
         self._kill_dying()
