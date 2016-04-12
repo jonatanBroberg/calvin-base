@@ -143,8 +143,9 @@ class LostNodeHandler(object):
         if not node_ids:
             return None
 
-        _log.debug("Highest prio node: {}".format(sorted(node_ids)[0]))
-        return sorted(node_ids)[0]
+        highest = sorted(node_ids)[0]
+        _log.info("Highest prio node: {} - {}".format(highest, self.node.resource_manager.node_uris.get(highest)))
+        return highest
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
