@@ -34,6 +34,7 @@ class LostNodeHandler(object):
             return
 
         self._lost_nodes.add(node_id)
+        self._lost_node_requests.add(node_id)
         self.pm.close_disconnected_ports(self.am.actors.values())
 
         highest_prio_node = self._highest_prio_node(node_id)
