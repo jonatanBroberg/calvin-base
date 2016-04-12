@@ -59,17 +59,10 @@ class ActorManager(object):
              connection_list
         """
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
-        a = self._new(actor_type, args, state, signature, app_id)
+        callback = CalvinCB(self._after_new, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
+        return self._new(actor_type, args, state, signature, app_id, callback=callback)
 
-        self.connection_handler.setup_connections(a, prev_connections=prev_connections, connection_list=connection_list,
-                                                  callback=callback)
-
-        if callback:
-            callback(status=response.CalvinResponse(True), actor_id=a.id)
-        else:
-            return a.id
-
-    def _new(self, actor_type, args, state=None, signature=None, app_id=None):
+    def _new(self, actor_type, args, state=None, signature=None, app_id=None, callback=None):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -77,11 +70,22 @@ class ActorManager(object):
         """
         _log.analyze(self.node.id, "+", {'actor_type': actor_type, 'state': state})
 
-        a = self.factory.create_actor(actor_type=actor_type, state=state, args=args, signature=signature, app_id=app_id)
-        self.node.control.log_actor_new(a.id, a.name, actor_type, isinstance(a, ShadowActor))
-        self.actors[a.id] = a
+        return self.factory.create_actor(actor_type=actor_type, state=state, args=args, signature=signature,
+                                         app_id=app_id, callback=callback)
 
-        return a
+    def _after_new(self, actor, status, prev_connections=None, connection_list=None, callback=None):
+        if not status:
+            if callback:
+                callback(status=response.CalvinResponse(False), actor_id=None)
+            return
+
+        self.node.control.log_actor_new(actor.id, actor.name, actor._type, isinstance(actor, ShadowActor))
+        self.actors[actor.id] = actor
+
+        if callback:
+            callback = CalvinCB(callback, actor_id=actor.id)
+        self.connection_handler.setup_connections(actor, prev_connections=prev_connections, connection_list=connection_list,
+                                                  callback=callback)
 
     def new_replica(self, actor_type, args, state, prev_connections, app_id, callback):
         """Creates a new replica"""
@@ -101,10 +105,23 @@ class ActorManager(object):
                     callback(status=response.CalvinResponse(False, data={'actor_id': None}))
                 return
 
-        a = self._new(actor_type, args, state, app_id=app_id)
+        callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, callback=callback)
+        self._new(actor_type, args, state, app_id=app_id, callback=callback)
+
+    def _after_new_replica(self, actor, status, state, prev_connections, callback=None):
+        if not status:
+            if callback:
+                callback(status=response.CalvinResponse(False), actor_id=None)
+            return
+
+        self.node.control.log_actor_new(actor.id, actor.name, actor._type, isinstance(actor, ShadowActor))
+        self.actors[actor.id] = actor
+
+        if callback:
+            callback = CalvinCB(callback, actor_id=actor.id)
 
         callback = CalvinCB(self._new_replica, callback=callback)
-        self.connection_handler.setup_replica_connections(a, state, prev_connections, callback)
+        self.connection_handler.setup_replica_connections(actor, state, prev_connections, callback)
 
     def _new_replica(self, status, actor_id, callback):
         actor = self.actors[actor_id]

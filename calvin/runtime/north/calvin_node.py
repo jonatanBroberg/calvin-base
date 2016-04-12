@@ -207,11 +207,19 @@ class Node(object):
         _log.debug("\n%s# NODE: %s \n# %s %s %s \n%s" %
                    ('#' * 40, self.id, preamble if preamble else "*", args, kwargs, '#' * 40))
 
-    def new(self, actor_type, args, deploy_args=None, state=None, prev_connections=None, connection_list=None):
+    def new(self, actor_type, args, deploy_args=None, state=None, prev_connections=None, connection_list=None, callback=None):
         # TODO requirements should be input to am.new
-        actor_id = self.am.new(actor_type, args, state, prev_connections, connection_list,
-                               app_id=deploy_args['app_id'] if deploy_args else None,
-                               signature=deploy_args['signature'] if deploy_args and 'signature' in deploy_args else None)
+        callback = CalvinCB(self._new, args=args, deploy_args=deploy_args, state=state, prev_connections=prev_connections,
+                            connection_list=connection_list, callback=callback)
+        self.am.new(actor_type, args, state, prev_connections, connection_list,
+                    app_id=deploy_args['app_id'] if deploy_args else None,
+                    signature=deploy_args['signature'] if deploy_args and 'signature' in deploy_args else None, callback=callback)
+
+    def _new(self, actor_id, status, args, deploy_args, state, prev_connections, connection_list, callback):
+        if not status:
+            if callback:
+                callback(status=status, actor_id=actor_id)
+            return
         if deploy_args:
             app_id = deploy_args['app_id']
             if 'app_name' not in deploy_args:
@@ -220,7 +228,9 @@ class Node(object):
                 app_name = deploy_args['app_name']
             self.app_manager.add(app_id, actor_id,
                                  deploy_info = deploy_args['deploy_info'] if 'deploy_info' in deploy_args else None)
-        return actor_id
+
+        if callback:
+            callback(status=status, actor_id=actor_id)
 
     def deployment_control(self, app_id, actor_id, deploy_args):
         """ Updates an actor's deployment """
@@ -423,7 +433,13 @@ class Node(object):
             self._start_resource_reporter()
 
     def _start_resource_reporter(self):
-        actor_id = self.new("sys.NodeResourceReporter", {'node': self})
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.5}, callback=self._start_rr)
+
+    def _start_rr(self, status, actor_id):
+        if not status:
+            _log.error("Failed to start resource reporter")
+            return
+        _log.info("Successfully started resource reporter")
         actor = self.am.actors[actor_id]
         if not actor.inports or not actor.outports:
             _log.warning("Could not set up ResourceReporter: {}".format(actor))
@@ -443,7 +459,13 @@ class Node(object):
             addr = uri.split(":")[0]
         port = int(uri.split(":")[1]) + 5000
 
-        actor_id = self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY})
+        self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY}, callback=self._start_hb)
+
+    def _start_hb(self, status, actor_id):
+        if not status:
+            _log.error("Failed to start heartbeat system: ".format(status))
+            return
+        _log.info("Successfully started heartbeat actor")
         actor = self.am.actors[actor_id]
         in_port = actor.inports['in']
         out_port = actor.outports['out']

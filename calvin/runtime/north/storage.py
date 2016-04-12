@@ -560,31 +560,31 @@ class Storage(object):
         data["outports"] = outports
         data["is_shadow"] = isinstance(actor, ShadowActor)
 
-        self.set(prefix="actor-", key=actor.id, value=data, cb=cb)
         if app_id:
-            self.add_actor_to_app(app_id, actor.id)
+            cb = CalvinCB(self.add_actor_to_app, app_id=app_id, actor_id=actor.id, cb=cb)
             name = calvinuuid.remove_uuid(actor.name)
             if node_id:
-                self.add_replica_nodes(app_id, name, node_id)
-                self.add_node_actor(node_id, actor.id)
+                cb = CalvinCB(self.add_replica_nodes, app_id=app_id, name=name, node_id=node_id, cb=cb)
+                cb = CalvinCB(self.add_node_actor, node_id=node_id, actor_id=actor.id, cb=cb)
             else:
                 _log.warning("Tried to add None to replica nodes of app {} actor {}".format(app_id, name))
 
+        self.set(prefix="actor-", key=actor.id, value=data, cb=cb)
         self.trigger_flush()
 
-    def add_actor_to_app(self, app_id, actor_id):
+    def add_actor_to_app(self, app_id, actor_id, cb=None, *args, **kwargs):
         _log.info("Adding actor {} to app actors for app {}".format(actor_id, app_id))
-        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
         self.append("app-actors-", key=app_id, value=[actor_id], cb=cb)
 
-    def add_replica_nodes(self, app_id, name, node_id):
+    def add_replica_nodes(self, app_id, name, node_id, cb=None, *args, **kwargs):
         _log.info("Adding node {} to replica nodes of app {} actor name {}".format(node_id, app_id, name))
-        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
         self.append("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
 
-    def add_node_actor(self, node_id, actor_id):
+    def add_node_actor(self, node_id, actor_id, cb=None, *args, **kwargs):
         _log.info("Adding actor {} to node actors for node {}".format(actor_id, node_id))
-        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=None)
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
         self.append("node-actors-", key=node_id, value=[actor_id], cb=cb)
 
     def get_actor(self, actor_id, cb=None):

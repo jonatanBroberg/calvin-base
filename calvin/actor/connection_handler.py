@@ -19,6 +19,8 @@ class ConnectionHandler(object):
         if connection_list:
             # Migrated actor
             self.connect(actor, connection_list, callback=callback)
+        elif callback:
+            callback(status=response.CalvinResponse(True))
 
     def setup_replica_connections(self, actor, state, prev_connections, callback=None):
         _log.debug("Setting up replica connections for actor {}, prev_connections {}".format(

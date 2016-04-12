@@ -2,6 +2,8 @@
 from calvin.actorstore.store import ActorStore
 from calvin.utilities.calvinlogger import get_logger
 from calvin.actor.actor import ShadowActor
+from calvin.utilities.calvin_callback import CalvinCB
+import calvin.utilities.calvinresponse as response
 
 _log = get_logger(__name__)
 
@@ -10,7 +12,7 @@ class ActorFactory(object):
     def __init__(self, node):
         self.node = node
 
-    def create_actor(self, actor_type, state=None, args={}, signature=None, app_id=None):
+    def create_actor(self, actor_type, state=None, args={}, signature=None, app_id=None, callback=None):
         try:
             if state:
                 a = self._create_from_state(actor_type, state, app_id)
@@ -18,13 +20,19 @@ class ActorFactory(object):
                 a = self._create_new(actor_type, args, app_id)
         except Exception as e:
             _log.exception("Actor creation failed")
+            if callback:
+                callback(status=response.CalvinResponse(False), actor=None)
             raise(e)
 
         # Store the actor signature to enable GlobalStore lookup
         a.signature_set(signature)
-        self.node.storage.add_actor(a, self.node.id, app_id)
+        callback = CalvinCB(self._create_actor, actor=a, callback=callback)
+        self.node.storage.add_actor(a, self.node.id, app_id, cb=callback)
+        return a.id
 
-        return a
+    def _create_actor(self, key, value, actor, callback, *args, **kwargs):
+        if callback:
+            callback(status=response.CalvinResponse(True if value else False), actor=actor)
 
     def _new_actor(self, actor_type, app_id, actor_id=None):
         """Return a 'bare' actor of actor_type, raises an exception on failure."""
