@@ -41,7 +41,6 @@ class LostNodeHandler(object):
         highest_prio_node = self._highest_prio_node(node_id)
         if highest_prio_node == self.node.id:
             _log.debug("We have highest id, replicate actors")
-            self._lost_node_requests.add(node_id)
             self._handle_lost_node(node_id)
         elif highest_prio_node:
             cb = CalvinCB(self._lost_node_request_cb, node_id=node_id, prio_node=highest_prio_node)
@@ -56,7 +55,7 @@ class LostNodeHandler(object):
             _log.debug("Adding callback: {} for node {}".format(cb, node_id))
             self._callbacks[node_id].add(cb)
 
-        if node_id in self._lost_node_requests:
+        if node_id in self._lost_node_requests or self._lost_nodes.keys():
             _log.debug("Got multiple lost node signals, ignoring")
             if node_id in self._finished_requests.keys():
                 cb(status=self._finished_requests[node_id])
@@ -66,9 +65,10 @@ class LostNodeHandler(object):
         self.pm.close_disconnected_ports(self.am.actors.values())
 
         self._lost_node_requests.add(node_id)
-        if not node_id in self._lost_nodes.keys():
-            lost_node_time = int(round(time.time() * 1000))
-            self._lost_nodes[node_id] = lost_node_time
+
+        lost_node_time = int(round(time.time() * 1000))
+        self._lost_nodes[node_id] = lost_node_time
+
         self._handle_lost_node(node_id)
 
     def _handle_lost_node(self, node_id):
