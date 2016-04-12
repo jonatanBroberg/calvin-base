@@ -104,6 +104,7 @@ class Node(object):
         self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
         self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
+        self.heartbeat_actor = None
         self.outgoing_heartbeats = defaultdict(list)
 
         # The initialization that requires the main loop operating is deferred to start function
@@ -169,8 +170,8 @@ class Node(object):
         self.network.join(peers, callback=callback)
 
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
-        _log.debug("Peersetup collect cb: {}".format(status, peers))
-        self.resource_manager.register(peer_node_id, {}, uri)
+        _log.debug("Peersetup collect cb: {} - {} - {} - {} - {}".format(status, uri, peer_node_id, peer_node_ids, peers))
+        self.resource_manager.register_uri(peer_node_id, uri)
         if status:
             self._register_heartbeat_receiver(peer_node_id)
 
@@ -305,6 +306,7 @@ class Node(object):
         self.resource_manager.register(self.id, usage, self.uri)
 
         self.print_stats()
+        usage['uri'] = self.uri
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
             self.proto.report_usage(peer_id, self.id, usage, callback=callback)
@@ -319,8 +321,10 @@ class Node(object):
 
     def register_resource_usage(self, node_id, usage, callback):
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
-        uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
+        uri = usage.get('uri')
+        #uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
         self.resource_manager.register(node_id, usage, uri)
+        self._register_heartbeat_receiver(node_id)
         callback(status=response.CalvinResponse(True))
 
     def report_replication_time(self, actor_type, replication_time):
@@ -377,11 +381,11 @@ class Node(object):
 
     def increase_heartbeats(self, node_ids):
         for node_id in node_ids:
-            if node_id not in self.outgoing_heartbeats:
-                uri = self.resource_manager.node_uris.get(node_id)
-                _log.debug("Have not received heartbeat from {} - {} yet".format(node_id, uri))
-                # wait until we get first response
-                return
+            #if node_id not in self.outgoing_heartbeats:
+            #    uri = self.resource_manager.node_uris.get(node_id)
+            #    _log.debug("Have not received heartbeat from {} - {} yet".format(node_id, uri))
+            #    # wait until we get first response
+            #    return
 
             timeout_call = async.DelayedCall(HEARTBEAT_TIMEOUT, CalvinCB(self._heartbeat_timeout, node_id=node_id))
             self.outgoing_heartbeats[node_id].append(timeout_call)
@@ -393,7 +397,7 @@ class Node(object):
     def clear_outgoing_heartbeat(self, data):
         if "node_id" in data:
             self._clear_heartbeat_timeouts(data['node_id'])
-            self.resource_manager.register(data['node_id'], {}, data['uri'])
+            self.resource_manager.register_uri(data['node_id'], data['uri'])
 
     def _clear_heartbeat_timeouts(self, node_id):
         for timeout_call in self.outgoing_heartbeats[node_id]:
@@ -475,8 +479,11 @@ class Node(object):
         self.heartbeat_actor = actor
 
     def _register_heartbeat_receiver(self, node_id):
+        if self.storage_node or self.is_storage_node(node_id):
+            return
         if not self.heartbeat_actor:
             self._start_heartbeat_system()
+        _log.debug("Registering receiver: {}".format(node_id))
         self.heartbeat_actor.register(node_id)
 
     def stop(self, callback=None):

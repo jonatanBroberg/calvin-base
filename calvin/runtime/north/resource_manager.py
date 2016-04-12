@@ -28,8 +28,8 @@ class ResourceManager(object):
         self.test_sync = 2
         self._lost_nodes = set()
 
-    def register(self, node_id, usage, uri):
-        _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
+    def register_uri(self, node_id, uri):
+        _log.debug("Registering uri: {} - {}".format(node_id, uri))
         if isinstance(uri, list):
             uri = uri[0]
 
@@ -43,6 +43,12 @@ class ResourceManager(object):
                 addr = socket.gethostbyname(addr)
 
             self.node_uris[node_id] = "{}:{}".format(addr, port)
+
+
+    def register(self, node_id, usage, uri):
+        _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
+        if isinstance(uri, list):
+            uri = uri[0]
 
         if usage:
             self.usages[node_id].append(usage)
@@ -113,7 +119,7 @@ class ResourceManager(object):
             else:
                 for key, value in sorted_times:
                     self.replication_times_millis[actor_type].append((key, value))
-        _log.debug("\n\nReplication times: {}".format(self.replication_times_millis))
+        _log.debug("Replication times: {}".format(self.replication_times_millis))
 
     def _update_deque(self, new_values, old_values):
         for tup in new_values:
