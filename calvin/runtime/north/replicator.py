@@ -29,9 +29,7 @@ class Replicator(object):
     def connected_nodes(self):
         connected = set(self.node.network.list_links())
         for node_id in self.node.heartbeat_actor.nodes:
-            if node_id not in connected:
-                self.node.network.link_request(node_id, timeout=0.1)
-                connected.add(node_id)
+            connected.add(node_id)
         connected.add(self.node.id)
         return connected
 
@@ -53,6 +51,8 @@ class Replicator(object):
         return not_allowed
 
     def replicate_lost_actor(self, cb, start_time_millis):
+        for node_id in self.connected_nodes:
+            self.node.network.link_request(node_id, timeout=0.1)
         if self.actor_info['replicate']:
             _log.info("Replicating lost actor: {}".format(self.actor_info))
             #time.sleep(1)
