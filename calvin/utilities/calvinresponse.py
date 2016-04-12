@@ -81,6 +81,8 @@ class CalvinResponse(object):
     def __init__(self, status=OK, data=None, encoded=None):
         super(CalvinResponse, self).__init__()
         if encoded:
+            if isinstance(encoded['status'], dict):
+                encoded = encoded['status']
             self.set_status(encoded['status'])
             self.data = encoded['data']
             self.success_list = encoded['success_list']
