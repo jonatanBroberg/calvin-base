@@ -30,11 +30,10 @@ class LostNodeHandler(object):
         self._delete_replica_nodes(node_id)
         self._register_lost_node(node_id)
 
-        if node_id in self._lost_nodes.keys():
+        if node_id in self._lost_nodes:
             _log.debug("We are already handling lost node {}".format(node_id))
             return
 
-        self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id)
 
         lost_node_time = int(round(time.time() * 1000))
@@ -59,9 +58,9 @@ class LostNodeHandler(object):
             _log.debug("Adding callback: {} for node {}".format(cb, node_id))
             self._callbacks[node_id].add(cb)
 
-        if node_id in self._lost_node_requests or self._lost_nodes.keys():
+        if node_id in self._lost_node_requests or self._lost_nodes:
             _log.debug("Got multiple lost node signals, ignoring")
-            if node_id in self._finished_requests.keys():
+            if node_id in self._finished_requests:
                 cb(status=self._finished_requests[node_id])
             return
 
@@ -111,7 +110,7 @@ class LostNodeHandler(object):
             self._failed_requests.add(prio_node)
             prio_node_uri = self.resource_manager.node_uris.get(prio_node)
             _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
-            if node_id in self._lost_nodes.keys():
+            if node_id in self._lost_nodes:
                 del self._lost_nodes[node_id]
             self.handle_lost_node(node_id)
         else:
