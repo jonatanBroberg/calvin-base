@@ -1,5 +1,4 @@
 import time
-import os
 
 from calvin.runtime.north.replicator import Replicator
 from calvin.utilities.calvin_callback import CalvinCB
@@ -19,7 +18,7 @@ class AppMonitor(object):
 
     def check_reliabilities(self):
         self._monitor_count += 1
-        if os.environ["CALVIN_TESTING"]:
+        if self.node.testing:
             return
         #self.print_actors()
         if self._monitor_count == 4:

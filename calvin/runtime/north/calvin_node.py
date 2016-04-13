@@ -246,7 +246,11 @@ class Node(object):
 
     @property
     def hostname(self):
-	return socket.gethostname()
+        return socket.gethostname()
+
+    @property
+    def testing(self):
+        return "CALVIN_TESTING" in os.environ and os.environ["CALVIN_TESTING"]
 
     def info(self, s):
         _log.info("[{}] {}".format(self.hostname, s))
@@ -460,7 +464,7 @@ class Node(object):
                      peer_port_dir='out', peer_port_id=out_port.id)
 
     def _start_heartbeat_system(self):
-        if os.environ["CALVIN_TESTING"]:
+        if self.testing:
             return
         uri = self.control_uri.replace("http://", "")
         if uri == "localhost":
@@ -489,7 +493,7 @@ class Node(object):
             return
         if not self.heartbeat_actor:
             self._start_heartbeat_system()
-        if os.environ["CALVIN_TESTING"]:
+        if self.testing:
             return
 
         _log.debug("Registering receiver: {}".format(node_id))
