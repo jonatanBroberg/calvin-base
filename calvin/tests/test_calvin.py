@@ -1199,6 +1199,7 @@ class TestActorReplication(CalvinTestBase):
     def testDoubleReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
+        peer2 = self.runtimes[1]
 
         script = """
             src : std.CountTimer()
@@ -1217,11 +1218,9 @@ class TestActorReplication(CalvinTestBase):
         snk2 = d.actor_map['simple:snk2']
         src = d.actor_map['simple:src']
 
-        utils.migrate(rt, snk1, peer.id)
+        replica_1 = utils.replicate(rt, snk1, peer.id)
         time.sleep(0.2)
-
-        replica_1 = utils.replicate(peer, snk1, rt.id)
-        replica_2 = utils.replicate(rt, snk2, peer.id)
+        replica_2 = utils.replicate(peer, replica_1, peer2.id)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt, app_id)
@@ -1229,10 +1228,10 @@ class TestActorReplication(CalvinTestBase):
         assert replica_2 in actors
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
-        actual_orig_1 = actual_tokens(peer, snk1)
+        actual_orig_1 = actual_tokens(rt, snk1)
         actual_orig_2 = actual_tokens(rt, snk2)
-        actual_replica_1 = actual_tokens(rt, replica_1)
-        actual_replica_2 = actual_tokens(peer, replica_2)
+        actual_replica_1 = actual_tokens(peer, replica_1)
+        actual_replica_2 = actual_tokens(peer2, replica_2)
 
         assert(len(actual_orig_1) > 1)
         assert(len(actual_orig_2) > 1)
@@ -1414,7 +1413,7 @@ class TestActorReplication(CalvinTestBase):
         actual = utils.report(rt, snk)
 
         replica = utils.replicate(rt, ity, peer.id)
-        self.actors[replica] = rt
+        self.actors[replica] = peer
         time.sleep(0.3)
 
         expected_1 = expected_tokens(rt, src, 'std.CountTimer')
@@ -1435,6 +1434,7 @@ class TestActorReplication(CalvinTestBase):
         actual = filter(lambda x: x not in unique_elements, actual)
         self.assert_list_prefix(expected, sorted(actual))
 
+    # May or may not fail. Fails if rt is least busy.
     def testReplicateWithoutNodeIdSelectsLeastBusyNode(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1447,7 +1447,7 @@ class TestActorReplication(CalvinTestBase):
         utils.connect(rt, snk, 'token', rt.id, ity, 'token')
         utils.connect(rt, ity, 'token', rt.id, src, 'integer')
 
-        time.sleep(0.2)
+        time.sleep(5)
         replica = utils.replicate(rt, ity, None)
         self.actors[replica] = rt
         time.sleep(0.2)
@@ -2181,10 +2181,6 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.migrate(self.runtime, src, self.runtime2.id)
         time.sleep(1.2)
 
-        expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
-        snk_before = actual_tokens(self.runtime, snk)
-        replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
-
         actors_before = utils.get_application_actors(self.runtime, app_id)
 
         self._kill_dying()
@@ -2195,6 +2191,14 @@ class TestDyingRuntimes(CalvinTestBase):
         assert(len(new_actors) == 0)
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
+
+    def testLoseNodeWithoutActors(self):
+        self._kill_dying()
+        time.sleep(1.3)
+
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime)
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime2)
+        assert self.dying_rt.id not in utils.get_nodes(self.runtime3)
 
 
 @pytest.mark.essential

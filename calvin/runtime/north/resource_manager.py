@@ -23,7 +23,7 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
-        self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), usages)...}
+        self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), node_id)...}
         self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
         self.test_sync = 2
         self._lost_nodes = set()
@@ -34,7 +34,7 @@ class ResourceManager(object):
             uri = uri[0]
 
         if uri:
-            uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
+            uri = uri.replace("calvinip://", "").replace("http://", "")
             addr = uri.split(":")[0]
             port = int(uri.split(":")[1])
 
@@ -60,7 +60,7 @@ class ResourceManager(object):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
         self.node_uris[node_id] = uri
-        self.failure_info[uri].append((time.time(), self._average(node_id)))
+        self._add_failure_info(uri, [(time.time(), node_id)])
 
     def _average(self, node_id):
         return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / max(len(self.usages[node_id]), 1)
@@ -156,15 +156,29 @@ class ResourceManager(object):
     def update_node_failure(self, node_id, nbr_of_failures, uri):
         """ Simulates node failures """
         self.node_uris[node_id] = uri
-        self.failure_info[uri].append((time.time(), self._average(node_id)))
+        self._add_failure_info(uri, [(time.time(), node_id)])
+
+    def _add_failure_info(self, uri, list_of_failures):
+        old_info = self.failure_info[uri]
+        for (time, node_id) in list_of_failures:
+            if node_id not in [x[1] for x in old_info]:
+                old_info.append((time, node_id))
+        old_info = sorted(old_info, key=lambda x:x[0])
+
+        while len(self.failure_info[uri]) > 4:
+            self.failure_info[uri].pop(0)
 
     def sync_info(self, replication_times=None, failure_info=None):
         if replication_times:
             self._sync_replication_times(replication_times)
 
-        if failure_info and len(failure_info) > len(self.failure_info):
-            self.failure_info = defaultdict(lambda: [])
-            self.failure_info.update(failure_info)
+        if failure_info:
+            for (uri, info_list) in self.failure_info.iteritems():
+                if uri in failure_info.keys():
+                    self._add_failure_info(uri, sorted(info_list, key=lambda x:x[0]))
+            for (uri, info_list) in failure_info.iteritems():
+                if uri not in self.failure_info.keys():
+                    self._add_failure_info(uri, info_list)
 
         replication_times = {}
         for (actor_type, times) in self.replication_times_millis.iteritems():

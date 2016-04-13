@@ -15,9 +15,10 @@ class LostNodeHandler(object):
 
     def __init__(self, node, resource_manager, port_manager, actor_manager, storage):
         self.node = node
-        self._lost_nodes = set()
+        self._lost_nodes = dict()
         self._lost_node_requests = set()
         self._failed_requests = set()
+        self._finished_requests = dict()
         self._callbacks = defaultdict(set)
         self.resource_manager = resource_manager
         self.pm = port_manager
@@ -29,12 +30,16 @@ class LostNodeHandler(object):
         self._delete_replica_nodes(node_id)
         self._register_lost_node(node_id)
 
-        if node_id in self._lost_nodes:
+        if node_id in self._lost_nodes.keys():
             _log.debug("We are already handling lost node {}".format(node_id))
             return
 
         self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id)
+
+        lost_node_time = int(round(time.time() * 1000))
+        self._lost_nodes[node_id] = lost_node_time
+
         self.pm.close_disconnected_ports(self.am.actors.values())
 
         highest_prio_node = self._highest_prio_node(node_id)
@@ -54,15 +59,20 @@ class LostNodeHandler(object):
             _log.debug("Adding callback: {} for node {}".format(cb, node_id))
             self._callbacks[node_id].add(cb)
 
-        if node_id in self._lost_node_requests:
+        if node_id in self._lost_node_requests or self._lost_nodes.keys():
             _log.debug("Got multiple lost node signals, ignoring")
+            if node_id in self._finished_requests.keys():
+                cb(status=self._finished_requests[node_id])
             return
 
         self._delete_replica_nodes(node_id)
         self.pm.close_disconnected_ports(self.am.actors.values())
 
         self._lost_node_requests.add(node_id)
-        self._lost_nodes.add(node_id)
+
+        lost_node_time = int(round(time.time() * 1000))
+        self._lost_nodes[node_id] = lost_node_time
+
         self._handle_lost_node(node_id)
 
     def _handle_lost_node(self, node_id):
@@ -101,16 +111,16 @@ class LostNodeHandler(object):
             self._failed_requests.add(prio_node)
             prio_node_uri = self.resource_manager.node_uris.get(prio_node)
             _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
-            if node_id in self._lost_nodes:
-                self._lost_nodes.remove(node_id)
+            if node_id in self._lost_nodes.keys():
+                del self._lost_nodes[node_id]
             self.handle_lost_node(node_id)
-            _log.warning("Node {} failed to handle lost node {}: {}".format(prio_node, node_id, status))
         else:
             _log.debug("Node {} successfully handled lost node {} - {}".format(prio_node, node_id, status))
 
     def _lost_node_cb(self, status, node_id):
         """ Callback when we handled lost node """
         _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
+        self._finished_requests[node_id] = status
         if not status:
             _log.warning("We failed to handle lost node {}: {}".format(node_id, status))
         else:
@@ -147,7 +157,7 @@ class LostNodeHandler(object):
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
-        start_time = int(round(time.time() * 1000))
+        start_time = self._lost_nodes[node_id]
         try:
             self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors,
                                                               node_id=node_id,
