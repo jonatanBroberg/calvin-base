@@ -1,9 +1,9 @@
 #rand=`python -c "import random; print random.randint(30, 90)"`
 rands=($(python -c "import numpy as np;
-mu=0.9; sigma=1.0;
+mu=18.9; sigma=1.0;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
-    print min(n, 2)
+    print n
 "))
 i=0
 
@@ -23,6 +23,7 @@ start=`date +%s`
 
 while true; do
     rand=${rands[i]}
+	echo $rands
     extra=0
     i=$((i+1))
 
