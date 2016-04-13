@@ -158,7 +158,7 @@ class Node(object):
         """ Sets up a RT to RT communication channel, only needed if the peer can't be found in storage.
             peers: a list of peer uris, e.g. ["calvinip://127.0.0.1:5001"]
         """
-        _log.debug("peersetup(%s)" % (peers))
+        _log.info("peersetup(%s)" % (peers))
         peers_copy = peers[:]
         peer_node_ids = {}
         if not cb:
@@ -255,10 +255,10 @@ class Node(object):
             return
 
         for app in self.app_manager.applications.values():
-            cb = CalvinCB(self._print_stats, app_id=app.id, lost_node_id=lost_node_id)
+            cb = CalvinCB(self._print_stats, app_id=app.id, lost_node_id=lost_node_id, required=app.required_reliability)
             self.storage.get_replica_nodes(app.id, 'actions:src', cb)
 
-    def _print_stats(self, key, value, app_id, lost_node_id):
+    def _print_stats(self, key, value, app_id, lost_node_id, required):
         if value is None:
             return
 
@@ -284,8 +284,8 @@ class Node(object):
                 actors.append(actor)
         rels = self._get_rels()
 
-        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}]".format(
-            len(nodes), nodes, rels, actual_rel, rep_time))
+        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}]".format(
+            len(nodes), nodes, rels, actual_rel, required, rep_time))
 
     def _get_rels(self):
         all_nodes = self.network.list_links()
@@ -354,6 +354,7 @@ class Node(object):
             return
 
         print "LOST NODE: {}\n{}".format(node_id, datetime.now())
+        self.print_stats(lost_node_id=node_id)
 
         if node_id in self.network.links:
             link = self.network.links[node_id]
@@ -437,7 +438,7 @@ class Node(object):
             self._start_resource_reporter()
 
     def _start_resource_reporter(self):
-        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.5}, callback=self._start_rr)
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.25}, callback=self._start_rr)
 
     def _start_rr(self, status, actor_id):
         if not status:
