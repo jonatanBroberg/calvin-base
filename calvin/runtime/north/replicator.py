@@ -28,8 +28,9 @@ class Replicator(object):
     @property
     def connected_nodes(self):
         connected = set(self.node.network.list_links())
-        for node_id in self.node.heartbeat_actor.nodes:
-            connected.add(node_id)
+        if self.node.heartbeat_actor:
+            for node_id in self.node.heartbeat_actor.nodes:
+                connected.add(node_id)
         connected.add(self.node.id)
         return connected
 

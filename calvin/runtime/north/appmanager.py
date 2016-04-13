@@ -582,6 +582,7 @@ class Deployer(object):
         self.verify = verify
         self.cb = cb
         self._deploy_cont_done = False
+        self._instantiations = {}
         if name:
             self.name = name
             self.app_id = self.node.app_manager.new(self.name)
@@ -631,27 +632,38 @@ class Deployer(object):
           - 'argd' is a dictionary with <actor_name>:<argdict> pairs
           - 'signature' is the GlobalStore actor-signature to lookup the actor
         """
+        self._instantiations[actor_name] = False
         req = self.get_req(actor_name)
         found, is_primitive, actor_def = ActorStore().lookup(actor_type)
         if not found or not is_primitive:
             raise Exception("Not known actor type: %s" % actor_type)
 
-        actor_id = self.instantiate_primitive(actor_name, actor_type, argd, req, signature)
-        if not actor_id:
-            raise Exception(
-                "Could not instantiate actor of type: %s" % actor_type)
-        self.actor_map[actor_name] = actor_id
-        self.node.app_manager.add(self.app_id, actor_id)
+        self.instantiate_primitive(actor_name, actor_type, argd, req, signature)
 
     def instantiate_primitive(self, actor_name, actor_type, args, req=None, signature=None):
         # name is <namespace>:<identifier>, e.g. app:src, or app:component:src
         # args is a **dictionary** of key-value arguments for this instance
         # signature is the GlobalStore actor-signature to lookup the actor
         args['name'] = actor_name
-        actor_id = self.node.am.new(actor_type=actor_type, args=args, signature=signature, app_id=self.app_id)
+        callback = CalvinCB(self._instantiate_primitive, actor_name=actor_name,
+                            actor_type=actor_type, req=req)
+        try:
+            self.node.am.new(actor_type=actor_type, args=args, signature=signature,
+                             app_id=self.app_id, callback=callback)
+        except:
+            raise Exception("Could not instantiate actor of type: %s" % actor_type)
+            self._deploy_cont()
+
+    def _instantiate_primitive(self, status, actor_id, actor_name, actor_type, req):
         if req:
             self.node.am.actors[actor_id].requirements_add(req, extend=False)
-        return actor_id
+        if not actor_id or not status:
+            return self._deploy_cont()
+
+        self.actor_map[actor_name] = actor_id
+        self.node.app_manager.add(self.app_id, actor_id)
+        self._instantiations[actor_name] = actor_id
+        self._deploy_cont()
 
     def connectid(self, connection):
         src_actor, src_port, dst_actor, dst_port = connection
@@ -801,7 +813,6 @@ class Deployer(object):
                     self.actor_map[name + ":" + actor_name] = actor_id
                     self.node.app_manager.add(self.app_id, actor_id)
 
-
     def deploy(self):
         """
         Instantiate actors and link them together.
@@ -812,6 +823,7 @@ class Deployer(object):
         unhandled = {}
 
         for actor_name, info in self.deployable['actors'].iteritems():
+            self._instantiations[actor_name] = False
             try:
                 self.instantiate(actor_name, info['actor_type'], info['args'], signature=info['signature'])
             except:
@@ -822,9 +834,11 @@ class Deployer(object):
             self.resolve_remote(unhandled)
             return
 
-        self._deploy_cont()
-
     def _deploy_cont(self):
+        if not all([actor_id for actor_id in self._instantiations.values()]):
+            # Not done yet
+            return
+
         for component_name, actor_names in self.components.iteritems():
             actor_ids = [self.actor_map[n] for n in actor_names]
             for actor_id in actor_ids:

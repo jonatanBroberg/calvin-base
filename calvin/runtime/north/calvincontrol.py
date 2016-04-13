@@ -1026,14 +1026,15 @@ class CalvinControl(object):
         """ Create actor
         """
         try:
-            actor_id = self.node.new(actor_type=data['actor_type'], args=data[
-                                     'args'], deploy_args=data['deploy_args'])
-            status = calvinresponse.OK
-        except:
-            actor_id = None
-            status = calvinresponse.INTERNAL_ERROR
-        self.send_response(
-            handle, connection, None if actor_id is None else json.dumps({'actor_id': actor_id}), status=status)
+            callback = CalvinCB(self._handle_new_actor, handle=handle, connection=connection)
+            self.node.new(actor_type=data['actor_type'], args=data[
+                          'args'], deploy_args=data['deploy_args'],
+                          callback=callback)
+        except Exception as e:
+            _log.error("Failed to handle new actor: {}".format(e))
+
+    def _handle_new_actor(self, status, actor_id, handle, connection):
+        self.send_response(handle, connection, None if actor_id is None else json.dumps({'actor_id': actor_id}), status=status.status)
 
     def handle_get_actors(self, handle, connection, match, data, hdr):
         """ Get actor list

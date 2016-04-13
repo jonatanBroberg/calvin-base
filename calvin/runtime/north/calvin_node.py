@@ -18,6 +18,7 @@ from multiprocessing import Process
 from collections import defaultdict
 # For trace
 import sys
+import os
 import trace
 import logging
 import socket
@@ -284,8 +285,10 @@ class Node(object):
                 actors.append(actor)
         rels = self._get_rels()
 
-        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}]".format(
-            len(nodes), nodes, rels, actual_rel, required, rep_time))
+        failure_info = self.resource_manager.failure_info
+
+        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
+            len(nodes), nodes, rels, actual_rel, required, rep_time, failure_info))
 
     def _get_rels(self):
         all_nodes = self.network.list_links()
@@ -457,6 +460,8 @@ class Node(object):
                      peer_port_dir='out', peer_port_id=out_port.id)
 
     def _start_heartbeat_system(self):
+        if os.environ["CALVIN_TESTING"]:
+            return
         uri = self.control_uri.replace("http://", "")
         if uri == "localhost":
             addr = socket.gethostbyname(uri.split(":")[0])
@@ -484,6 +489,9 @@ class Node(object):
             return
         if not self.heartbeat_actor:
             self._start_heartbeat_system()
+        if os.environ["CALVIN_TESTING"]:
+            return
+
         _log.debug("Registering receiver: {}".format(node_id))
         self.heartbeat_actor.register(node_id)
 

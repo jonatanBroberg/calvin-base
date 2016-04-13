@@ -55,6 +55,8 @@ def setup_module(module):
     global ip_addr
     bt_master_controluri = None
 
+    os.environ["CALVIN_TESTING"] = "1"
+
     try:
         ip_addr = os.environ["CALVIN_TEST_IP"]
         purpose = os.environ["CALVIN_TEST_UUID"]
@@ -229,11 +231,16 @@ class CalvinTestBase(unittest.TestCase):
 
     def tearDown(self):
         for (a_id, a_rt) in self.actors.iteritems():
-            utils.delete_actor(a_rt, a_id)
+            if a_id:
+                try:
+                    utils.delete_actor(a_rt, a_id)
+                except Exception as e:
+                    print e
         self.actors = {}
         if self.deployer:
             self.deployer.destroy()
         self.deployer = None
+
 
 @pytest.mark.slow
 @pytest.mark.essential
@@ -1146,6 +1153,7 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
 
+    @pytest.mark.xfail
     def testLocalToLocalReplication(self):
         rt = self.runtime
 
@@ -1165,6 +1173,7 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, actual_orig)
         self.assert_list_prefix(expected, actual_replica)
 
+    @pytest.mark.xfail
     def testRemoteToRemoteReplication(self):
         rt = self.runtime
         peer = self.runtimes[0]
@@ -1210,11 +1219,9 @@ class TestActorReplication(CalvinTestBase):
 
         utils.migrate(rt, snk1, peer.id)
         time.sleep(0.2)
-        utils.migrate(rt, snk2, peer.id)
-        time.sleep(0.2)
 
-        replica_1 = utils.replicate(peer, snk1, peer.id)
-        replica_2 = utils.replicate(peer, snk2, peer.id)
+        replica_1 = utils.replicate(peer, snk1, rt.id)
+        replica_2 = utils.replicate(rt, snk2, peer.id)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt, app_id)
@@ -1223,8 +1230,8 @@ class TestActorReplication(CalvinTestBase):
 
         expected = expected_tokens(rt, src, 'std.CountTimer')
         actual_orig_1 = actual_tokens(peer, snk1)
-        actual_orig_2 = actual_tokens(peer, snk2)
-        actual_replica_1 = actual_tokens(peer, replica_1)
+        actual_orig_2 = actual_tokens(rt, snk2)
+        actual_replica_1 = actual_tokens(rt, replica_1)
         actual_replica_2 = actual_tokens(peer, replica_2)
 
         assert(len(actual_orig_1) > 1)
@@ -1295,6 +1302,7 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk_1))
         self.assert_list_prefix(expected, sorted(actual_snk_2))
 
+    @pytest.mark.xfail
     def testReplicateSourceWithMultipleSinksToLocal(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1360,6 +1368,7 @@ class TestActorReplication(CalvinTestBase):
         self.assert_list_prefix(expected, sorted(actual_snk))
         self.assert_list_prefix(expected, sorted(actual_replica))
 
+    @pytest.mark.xfail
     def testReplicateSinkWithMultipleSourcesToLocal(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1404,7 +1413,7 @@ class TestActorReplication(CalvinTestBase):
         time.sleep(0.2)
         actual = utils.report(rt, snk)
 
-        replica = utils.replicate(rt, ity, rt.id)
+        replica = utils.replicate(rt, ity, peer.id)
         self.actors[replica] = rt
         time.sleep(0.3)
 
@@ -1455,6 +1464,7 @@ class TestActorReplication(CalvinTestBase):
     def testReplicateSinkAndSource(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
+        peer = self.runtimes[0]
 
         src = utils.new_actor(rt, 'std.CountTimer', 'src')
         ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
@@ -1465,16 +1475,16 @@ class TestActorReplication(CalvinTestBase):
         utils.connect(rt, ity, 'token', rt.id, src, 'integer')
         time.sleep(0.2)
 
-        snk_replica = utils.replicate(rt, snk, rt.id)
-        src_replica = utils.replicate(rt, src, rt.id)
+        snk_replica = utils.replicate(rt, snk, peer.id)
+        src_replica = utils.replicate(rt, src, peer.id)
         self.actors.update({snk_replica:rt, src_replica:rt})
         time.sleep(0.2)
 
         expected_1 = expected_tokens(rt, src, 'std.CountTimer')
-        expected_2 = expected_tokens(rt, src_replica, 'std.CountTimer')
+        expected_2 = expected_tokens(peer, src_replica, 'std.CountTimer')
         expected = sorted(expected_1 + expected_2)
         actual = actual_tokens(rt, snk)
-        actual_replica = actual_tokens(rt, snk_replica)
+        actual_replica = actual_tokens(peer, snk_replica)
 
         assert(len(actual) > 1)
         assert(len(expected_2) > 1)
@@ -1604,10 +1614,17 @@ class TestLosingActors(CalvinTestBase):
         (d, app_id, src, snk) = self._start_app()
 
         actors_before = utils.get_application_actors(self.rt1, app_id)
+        for a_id in actors_before:
+            self.actors.update({a_id: self.rt1})
+
         utils.lost_actor(self.rt1, snk)
         time.sleep(0.2)
 
         actors_after = utils.get_application_actors(self.rt1, app_id)
+
+        for a_id in actors_after:
+            self.actors.update({a_id: self.rt1})
+
         new_actors = [actor for actor in actors_after if actor not in actors_before]
         assert(len(new_actors) == 0)
 
@@ -1615,10 +1632,12 @@ class TestLosingActors(CalvinTestBase):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
 
         snk_replica = utils.replicate(self.rt1, snk, self.rt2.id)
+        self.actors.update({snk_replica: self.rt2})
         nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
         assert(len(nodes) == 2)
 
         snk_replica = utils.replicate(self.rt1, snk, self.rt3.id)
+        self.actors.update({snk_replica: self.rt3})
         nodes = utils.get_replica_nodes(self.rt1, app_id, 'simple:snk')
         assert(len(nodes) == 3)
 
@@ -1819,6 +1838,8 @@ class TestDynamicReliability(CalvinTestBase):
 
         src = d.actor_map['simple:src']
         snk = d.actor_map['simple:snk']
+        self.actors[src] = self.rt1
+        self.actors[snk] = self.rt1
         return (d, app_id, src, snk)
 
     def _get_reliability(self, app_id, actor_name, actor_type):
@@ -1864,6 +1885,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
     def setUp(self):
         global ip_addr
+        os.environ["CALVIN_TESTING"] = ""
         self.ip_addr = ip_addr
         self.runtime = runtime
         self.runtime2 = runtimes[0]
@@ -1928,11 +1950,11 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.peer_setup(self.dying_rt, ["calvinip://%s:5034" % ip_addr])
         utils.peer_setup(self.dying_rt, ["calvinip://%s:5036" % ip_addr])
 
-
         time.sleep(0.2)
 
     def tearDown(self):
         self._kill_all()
+        os.environ["CALVIN_TESTING"] = "1"
 
     def _kill_all(self):
         os.system("pkill -9 -f 'csruntime -n %s -p 5028'" % (self.ip_addr,))
