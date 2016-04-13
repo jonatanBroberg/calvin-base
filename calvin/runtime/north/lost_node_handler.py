@@ -107,7 +107,6 @@ class LostNodeHandler(object):
             _log.warning("Node {} failed to handle lost node {}: {}".format(prio_node, node_id, status))
         else:
             _log.debug("Node {} successfully handled lost node {} - {}".format(prio_node, node_id, status))
-            self.storage.get_node(node_id, self._delete_node)
 
     def _lost_node_cb(self, status, node_id):
         """ Callback when we handled lost node """
@@ -116,8 +115,7 @@ class LostNodeHandler(object):
             _log.warning("We failed to handle lost node {}: {}".format(node_id, status))
         else:
             _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
-
-        self.storage.get_node(node_id, self._delete_node)
+            self.storage.get_node(node_id, self._delete_node)
 
         for cb in self._callbacks[node_id]:
             _log.debug("Calling cb {} with status {}".format(cb, status))
@@ -175,12 +173,12 @@ class LostNodeHandler(object):
         for actor_id in value:
             self.storage.get_actor(actor_id, cb=CalvinCB(self._replicate_node_actor, lost_node_id=node_id,
                                    start_time=start_time, cb=cb))
-            self.storage.delete_actor_from_node(node_id, actor_id)
 
     def _replicate_node_actor(self, key, value, lost_node_id, start_time, cb):
         """ Get app id and actor name from actor info """
         _log.debug("Replicating node actor {}: {}".format(key, value))
         self.storage.delete_actor(key)
+        self.storage.delete_actor_from_node(lost_node_id, key)
 
         if not value:
             _log.error("Failed get actor info from storage for actor {}".format(key))
