@@ -309,6 +309,7 @@ class Node(object):
         return rels
 
     def report_resource_usage(self, usage):
+        return
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
@@ -388,6 +389,7 @@ class Node(object):
         replicator.replicate_lost_actor(cb, int(round(time.time() * 1000)))
 
     def increase_heartbeats(self, node_ids):
+        return
         for node_id in node_ids:
             #if node_id not in self.outgoing_heartbeats:
             #    uri = self.resource_manager.node_uris.get(node_id)

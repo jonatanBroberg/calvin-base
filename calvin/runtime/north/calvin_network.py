@@ -32,7 +32,7 @@ _conf = calvinconfig.get()
 # FIXME should be read from calvin config
 TRANSPORT_PLUGIN_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), *['south', 'plugins', 'transports'])
 TRANSPORT_PLUGIN_NS = "calvin.runtime.south.plugins.transports"
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT = 500000.0
 DEFAULT_LINK_REQUEST_TIMEOUT = 1.0
 
 
@@ -95,6 +95,7 @@ class CalvinLink(object):
         if not self.transport.is_connected():
             callback(status=response.SERVICE_UNAVAILABLE)
 
+        timeout = DEFAULT_TIMEOUT
         msg_id = calvinuuid.uuid("MSGID")
         self.replies[msg_id] = callback
         self.replies_timeout[msg_id] = async.DelayedCall(timeout, CalvinCB(self.reply_timeout, msg_id))
