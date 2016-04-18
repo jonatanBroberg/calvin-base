@@ -30,6 +30,7 @@ class AppMonitor(object):
         self._monitor_count = self._monitor_count % 20
 
     def check_app_reliability(self, app_id, start_time):
+        return
         self.storage.get_application(app_id, cb=CalvinCB(self._check_app_reliability, start_time=start_time))
 
     def print_actors(self):
