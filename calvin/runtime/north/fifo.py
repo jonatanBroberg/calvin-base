@@ -67,7 +67,7 @@ class FIFO(object):
                 self.write_pos[reader] = self.write_pos[state['catchup_fifo_key']]
             else:
                 if not state['fifo'][reader]:
-                    self.fifo[reader] = [Token(0)] * self.N
+                    self.fifo[reader] = [Token(100)] * self.N
                 else:
                     self.fifo[reader] = [Token.decode(token) for token in state['fifo'][reader]]
                 self.write_pos[reader] = state['write_pos'][reader]
