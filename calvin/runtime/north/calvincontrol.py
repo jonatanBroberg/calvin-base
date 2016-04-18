@@ -1163,7 +1163,7 @@ class CalvinControl(object):
         _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
         import time
         start = time.time()
-        self.node.am.replicate(match.group(1), peer_node_id,
+        self.node.am.replicate(match.group(1), peer_node_id, start,
                                callback=CalvinCB(self.actor_replicate_cb, handle, connection, start))
 
     def actor_replicate_cb(self, handle, connection, start, status, *args, **kwargs):

@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import time
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.runtime.south import endpoint
@@ -87,7 +88,7 @@ class ActorManager(object):
         self.connection_handler.setup_connections(actor, prev_connections=prev_connections, connection_list=connection_list,
                                                   callback=callback)
 
-    def new_replica(self, actor_type, args, state, prev_connections, app_id, callback):
+    def new_replica(self, actor_type, args, state, prev_connections, app_id, start_time, callback):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
@@ -105,14 +106,15 @@ class ActorManager(object):
                     callback(status=response.CalvinResponse(False, data={'actor_id': None}))
                 return
 
-        callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, callback=callback)
+        callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, start_time=start_time, callback=callback)
         self._new(actor_type, args, state, app_id=app_id, callback=callback)
 
-    def _after_new_replica(self, actor, status, state, prev_connections, callback=None):
+    def _after_new_replica(self, actor, status, state, prev_connections, start_time, callback=None):
         if not status:
             if callback:
                 callback(status=response.CalvinResponse(False), actor_id=None)
             return
+
 
         self.node.control.log_actor_new(actor.id, actor.name, actor._type, isinstance(actor, ShadowActor))
         self.actors[actor.id] = actor
@@ -305,7 +307,7 @@ class ActorManager(object):
         elif callback:  # FIXME handle errors!!!
             callback(status=status)
 
-    def replicate(self, actor_id, node_id, callback=None):
+    def replicate(self, actor_id, node_id, start_time, callback=None):
         """Replicate an actor actor_id to peer node node_id """
         if actor_id not in self.actors:
             _log.warning("Failed to replicate {} to {}. Can only replicate actors from our node.".format(
@@ -332,7 +334,9 @@ class ActorManager(object):
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
+        print "\nTIME, fetch state: {}".format(time.time() - start_time)
+
+        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id, start_time)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
