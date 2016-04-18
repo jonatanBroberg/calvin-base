@@ -31,7 +31,7 @@ from calvin.utilities.calvinlogger import get_logger
 _log = get_logger(__name__)
 
 #default timeout
-TIMEOUT=5
+TIMEOUT=2000
 
 def get_local_ip():
     import socket

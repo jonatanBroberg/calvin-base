@@ -30,7 +30,7 @@ class FifoFullException(Exception):
 class Port(object):
     """docstring for Port"""
 
-    def __init__(self, name, owner, fifo_size=15000):
+    def __init__(self, name, owner, fifo_size=2000000):
         super(Port, self).__init__()
         # Human readable port name
         self.name = name

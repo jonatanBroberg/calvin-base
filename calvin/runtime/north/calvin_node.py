@@ -173,8 +173,8 @@ class Node(object):
     def peersetup_collect_cb(self, status, uri, peer_node_id, peer_node_ids, peers, org_cb):
         _log.debug("Peersetup collect cb: {} - {} - {} - {} - {}".format(status, uri, peer_node_id, peer_node_ids, peers))
         self.resource_manager.register_uri(peer_node_id, uri)
-        if status:
-            self._register_heartbeat_receiver(peer_node_id)
+        #if status:
+        #    self._register_heartbeat_receiver(peer_node_id)
 
         self.peer_uris[peer_node_id] = uri
         if uri in peers:
@@ -423,8 +423,8 @@ class Node(object):
 
     def start(self):
         """ Run once when main loop is started """
-        if not self.storage_node:
-            self._start_heartbeat_system()
+        #if not self.storage_node:
+        #    self._start_heartbeat_system()
         interfaces = _conf.get(None, 'transports')
         self.network.register(interfaces, ['json'])
         self.network.start_listeners(self.uri)
@@ -441,8 +441,8 @@ class Node(object):
             if self.control_uri is not None:
                 self.control.start(node=self, uri=self.control_uri)
 
-        if not self.storage_node:
-            self._start_resource_reporter()
+        #if not self.storage_node:
+        #    self._start_resource_reporter()
 
     def _start_resource_reporter(self):
         actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.25}, callback=self._start_rr)

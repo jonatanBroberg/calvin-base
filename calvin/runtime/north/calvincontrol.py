@@ -1171,6 +1171,8 @@ class CalvinControl(object):
         """
         actor_id = status.data.get('actor_id') if status.data else None
         print "TIME: {}".format(time.time() - start)
+        if status not in status.success_list:
+            print 'failed', status
         self.send_response(handle, connection,
                            json.dumps({'actor_id': actor_id}), status=status.status)
 
