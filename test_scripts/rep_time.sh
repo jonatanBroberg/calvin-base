@@ -7,4 +7,8 @@ NODE=`cscontrol http://gru.nefario:5002 nodes add calvinip://dave.nefario:5000`
 echo $NODE
 echo $NODE_ID
 NODE_ID=`echo $NODE | perl -nle"print $& if m{(?<=dave.nefario:5000': \[u').*?(?=')}"`
-echo "A=\`cscontrol http://gru.nefario:5002 actor replicate $src_id $NODE_ID\` && cscontrol http://dave.nefario:5001 actor delete $A"
+
+a="A=\`cscontrol http://gru.nefario:5002 actor replicate $src_id $NODE_ID\`"
+#&& cscontrol http://dave.nefario:5001 actor delete $A"
+
+echo "for i in \`seq 11\`; do $a && sleep 1 && cscontrol http://dave.nefario:5001 actor delete \$A && sleep 1; done"
