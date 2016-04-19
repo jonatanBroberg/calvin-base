@@ -35,7 +35,42 @@ class ConnectionHandler(object):
             callback(status=response.CalvinResponse(False))
         else:
             callback = CalvinCB(self._set_port_states, actor=actor, state=state, callback=callback)
-            self.connect(actor, connection_list, state, callback=callback)
+            port_state = self._state_without_fifo(state)
+            self.connect(actor, connection_list, port_state, callback=callback)
+
+    def _state_without_fifo(self, port_states):
+        """Returns the port states excluding the fifo queue to reduce the message size in case of a remote connection.
+
+        Do not use deepcopy because then the fifo queue will first be included and have to be removed, which will use
+        extra memory.
+        """
+        if not port_states:
+            return {}
+
+        new_port_states = {}
+        for key in port_states:
+            if key in ["inports", "outports"]:
+                new_port_states[key] = {}
+                for port in port_states[key]:
+                    new_port_states[key][port] = {}
+                    for port_key in port_states[key][port]:
+                        new_port_states[key][port][port_key] = {}
+                        if port_key == "fifo":
+                            for fifo_key in port_states[key][port][port_key]:
+                                if fifo_key != "fifo":
+                                    new_port_states[key][port][port_key][fifo_key] = port_states[key][port][port_key][fifo_key]
+                                else:
+                                    # This is the part we want to exclude
+                                    # We do not want to include the queue so set it to None for every reader
+                                    new_port_states[key][port][port_key][fifo_key] = {}
+                                    for reader in port_states[key][port][port_key][fifo_key]:
+                                        new_port_states[key][port][port_key][fifo_key][reader] = None
+                        else:
+                            new_port_states[key][port][port_key] = port_states[key][port][port_key]
+            else:
+                new_port_states[key] = port_states[key]
+
+        return new_port_states
 
     def connections(self, actor):
         return actor.connections(self.node.id)
