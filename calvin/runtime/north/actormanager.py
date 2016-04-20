@@ -13,6 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import time
+
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.runtime.south import endpoint
@@ -305,7 +308,7 @@ class ActorManager(object):
         elif callback:  # FIXME handle errors!!!
             callback(status=status)
 
-    def replicate(self, actor_id, node_id, callback=None):
+    def replicate(self, actor_id, node_id, start_time, callback=None):
         """Replicate an actor actor_id to peer node node_id """
         if actor_id not in self.actors:
             _log.warning("Failed to replicate {} to {}. Can only replicate actors from our node.".format(
@@ -332,7 +335,9 @@ class ActorManager(object):
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
 
-        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id)
+        print "TIME, fetch state: ", (time.time() - start_time)
+
+        self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id, start_time)
 
     def peernew_to_local_cb(self, reply, **kwargs):
         if kwargs['actor_id'] == reply:
