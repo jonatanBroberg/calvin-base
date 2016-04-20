@@ -117,9 +117,6 @@ class Replicator(object):
             cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes,
                           start_time_millis=start_time_millis, index=index, cb=cb)
             self.node.storage.get_actor(actors[index], cb=cb)
-        elif index < len(actors):
-            _log.debug("{} is the lost one, ignoring".format(actors[index]))
-            self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
         else:
             self._replicate(current_nodes, start_time_millis, cb)
 

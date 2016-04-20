@@ -19,6 +19,7 @@ import sys
 import json
 import glob
 import importlib
+from datetime import datetime
 
 from calvin.utilities import calvinuuid
 from calvin.utilities.calvin_callback import CalvinCB
@@ -88,7 +89,7 @@ class CalvinLink(object):
             # We ignore errors
             return
 
-    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT, replicate=False):
+    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT, replicate=False, port_connect=False):
         """ Adds a message id to the message and send it,
             also registers the callback for the reply.
         """
@@ -101,9 +102,9 @@ class CalvinLink(object):
         self.replies[msg_id] = callback
         self.replies_timeout[msg_id] = async.DelayedCall(timeout, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
-        self.send(msg, replicate=replicate)
+        self.send(msg, replicate=replicate, port_connect=port_connect)
 
-    def send(self, msg, timeout=DEFAULT_TIMEOUT, replicate=False):
+    def send(self, msg, timeout=DEFAULT_TIMEOUT, replicate=False, port_connect=False):
         """ Adds the from and to node ids to the message and
             sends the message using the transport.
 
@@ -115,7 +116,13 @@ class CalvinLink(object):
         msg['to_rt_uuid'] = self.peer_id
         _log.analyze(self.rt_id, "SEND", msg)
         if replicate:
+            print datetime.now()
             print "MESSAGE SIZE: {}".format(sys.getsizeof(json.dumps(msg)))
+            print datetime.now()
+        elif port_connect:
+            print datetime.now()
+            print "PORT CONNECT: {}".format(sys.getsizeof(json.dumps(msg)))
+            print datetime.now()
         self.transport.send(msg)
 
     def close(self):

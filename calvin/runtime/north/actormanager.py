@@ -88,7 +88,7 @@ class ActorManager(object):
         self.connection_handler.setup_connections(actor, prev_connections=prev_connections, connection_list=connection_list,
                                                   callback=callback)
 
-    def new_replica(self, actor_type, args, state, prev_connections, app_id, start_time, callback):
+    def new_replica(self, actor_type, args, state, prev_connections, app_id, callback):
         """Creates a new replica"""
         _log.debug("Creating new replica of type {}, with args {}, prev_connections {}".format(
             actor_type, args, prev_connections))
@@ -106,10 +106,10 @@ class ActorManager(object):
                     callback(status=response.CalvinResponse(False, data={'actor_id': None}))
                 return
 
-        callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, start_time=start_time, callback=callback)
+        callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, callback=callback)
         self._new(actor_type, args, state, app_id=app_id, callback=callback)
 
-    def _after_new_replica(self, actor, status, state, prev_connections, start_time, callback=None):
+    def _after_new_replica(self, actor, status, state, prev_connections, callback=None):
         if not status:
             if callback:
                 callback(status=response.CalvinResponse(False), actor_id=None)

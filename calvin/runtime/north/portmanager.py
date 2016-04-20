@@ -21,6 +21,7 @@ from calvin.runtime.north.calvin_proto import CalvinTunnel
 import calvin.utilities.calvinresponse as response
 from calvin.utilities import calvinlogger
 from calvin.actor.actor import ShadowActor
+from datetime import datetime
 
 _log = calvinlogger.get_logger(__name__)
 
@@ -432,6 +433,7 @@ class PortManager(object):
 
 
     def _connected_via_tunnel(self, reply, **state):
+        print '_connected_via_tunnel', datetime.now()
         """ Gets called when remote responds to our request for port connection """
         _log.analyze(self.node.id, "+ " + str(reply), {k: state[k] for k in state.keys() if k != 'callback'},
                     peer_node_id=state['peer_node_id'], tb=True)

@@ -18,6 +18,7 @@ import traceback
 import sys
 import json
 import time
+from datetime import datetime
 from calvin.utilities import calvinuuid
 from calvin.utilities.utils import enum
 from calvin.utilities.calvin_callback import CalvinCB, CalvinCBClass
@@ -313,7 +314,6 @@ class CalvinProto(CalvinCBClass):
                                  state=payload['state']['actor_state'],
                                  prev_connections=payload['state']['prev_connections'],
                                  app_id=payload['state']['app_id'],
-                                 start_time=payload['start_time'],
                                  callback=CalvinCB(self._actor_replication_handler, payload))
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
@@ -670,12 +670,14 @@ class CalvinProto(CalvinCBClass):
 
     def _port_connect(self, peer_node_id, msg, callback, status, *args, **kwargs):
         if status:
-            self.network.links[peer_node_id].send_with_reply(callback, msg)
+            self.network.links[peer_node_id].send_with_reply(callback, msg, port_connect=True)
         elif callback:
             callback(status=status)
 
     def port_connect_handler(self, payload):
         """ Request for port connection """
+        print 'port_connect_handler', datetime.now()
+
         reply = self.node.pm.connection_request(payload)
         # Send reply
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}

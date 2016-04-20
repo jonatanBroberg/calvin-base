@@ -1,6 +1,7 @@
 import calvin.utilities.calvinresponse as response
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities.calvinlogger import get_logger
+from datetime import datetime
 
 _log = get_logger(__name__)
 
@@ -76,6 +77,7 @@ class ConnectionHandler(object):
         return actor.connections(self.node.id)
 
     def _set_port_states(self, actor, state, callback, status, *args, **kwargs):
+        print '_set_port_states, before', datetime.now()
         _log.debug("After connect: {}".format(status))
         if not status:
             _log.error("Connection failed")
@@ -89,6 +91,8 @@ class ConnectionHandler(object):
         for port_id in state['outports']:
             port_name = state['outports'][port_id]['name']
             actor.outports[port_name]._set_state(state['outports'][port_id])
+
+        print '_set_port_states, after', datetime.now()
 
         if callback:
             callback(status=status, *args, **kwargs)
