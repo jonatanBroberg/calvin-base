@@ -24,6 +24,8 @@ class Replicator(object):
         self.pending_replications = set()
         self.failed_requests = set()
         self.do_delete = do_delete
+        self._replicas = {}
+        self._replica_values = {}
 
     @property
     def connected_nodes(self):
@@ -35,6 +37,7 @@ class Replicator(object):
         return connected
 
     def not_allowed(self, current_nodes):
+        current_nodes = set(current_nodes)
         _log.debug("Not allowed")
         not_allowed = copy.deepcopy(current_nodes)
         _log.debug("Current: {}".format(current_nodes))
@@ -102,7 +105,20 @@ class Replicator(object):
 
         random.shuffle(value)
 
+        for actor_id in value:
+            callback = CalvinCB(self._add_replica)
+            self.node.storage.get_actor(actor_id, callback)
+
         self._find_a_replica(value, current_nodes, start_time_millis, index=0, cb=cb)
+
+    def _add_replica(self, key, value):
+        if not value:
+            return
+
+        _log.info("Adding actor info {} to replicas".format(value))
+        if self._is_match(value['name'], self.actor_info['name']):
+            self._replicas[value['node_id']] = (key, value)
+            self._replica_values[key] = value
 
     def _find_a_replica(self, actors, current_nodes, start_time_millis, index, cb):
         _log.debug("Searching for a replica for {}".format(self.actor_info))
@@ -114,7 +130,10 @@ class Replicator(object):
             _log.debug("Trying {}".format(actors[index]))
             cb = CalvinCB(self._check_for_original, actors=actors, current_nodes=current_nodes,
                           start_time_millis=start_time_millis, index=index, cb=cb)
-            self.node.storage.get_actor(actors[index], cb=cb)
+            if actors[index] in self._replica_values:
+                cb(key=actors[index], value=self._replica_values[actors[index]])
+            else:
+                self.node.storage.get_actor(actors[index], cb=cb)
         elif index < len(actors):
             _log.debug("{} is the lost one, ignoring".format(actors[index]))
             self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
@@ -133,6 +152,8 @@ class Replicator(object):
             _log.debug("Found a replica of lost actor: {}".format(value))
             self.replica_id = key
             self.replica_value = value
+            self._replicas[value['node_id']] = (key, value)
+            self._replica_values[key] = value
             return self._replicate(current_nodes, start_time_millis, cb)
 
         return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
@@ -175,13 +196,17 @@ class Replicator(object):
 
         if actual_rel > self.required_reliability:
             status = response.CalvinResponse(data=self.new_replicas)
-            cb(status=status)
+            if cb:
+                cb(status=status)
+            self._optimize(current_nodes)
             return
         else:
             available_nodes = self._find_available_nodes(current_nodes)
             if not available_nodes:
                 _log.error("Not enough available nodes")
-                cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                if cb:
+                    cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                self._optimize(current_nodes)
                 return
 
             to_node_id = None
@@ -262,3 +287,78 @@ class Replicator(object):
 
         cb = CalvinCB(self._find_replica_nodes_cb, start_time_millis=start_time_millis, prev_current_nodes=current_nodes, cb=cb)
         self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
+
+    def _optimize(self, current_nodes):
+        _log.info("Optimizing replica nodes")
+        available_nodes = self._find_available_nodes(current_nodes)
+        if not available_nodes or not current_nodes:
+            _log.info("No available nodes or no current nodes. Available: {}. Current: {}".format(available_nodes, current_nodes))
+            return
+
+        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'])
+        available_nodes = list(available_nodes)
+        current_nodes = self.node.resource_manager.sort_nodes_reliability(current_nodes, self.actor_info['type'])
+        current_nodes = list(current_nodes)
+
+        _log.debug("Available nodes: {}".format(available_nodes))
+        _log.debug("Current nodes: {}".format(current_nodes))
+        _log.debug("Searching for replica among: {}".format(self._replicas))
+
+        i = -1
+        lowest = None
+        while not self._replicas.get(lowest) and i > -len(current_nodes):
+            lowest = current_nodes[i]
+            i -= 1
+            current_nodes[-1]
+
+        _log.debug("Lowest: {} - {}".format(lowest, self._replicas.get(lowest)))
+        if not self._replicas.get(lowest):
+            _log.info("Could not find replica")
+            return
+
+        highest = available_nodes[0]
+        highest_rel = self.node.resource_manager.get_reliability(highest, self.actor_info['type'])
+        lowest_rel = self.node.resource_manager.get_reliability(lowest, self.actor_info['type'])
+
+        replica_id, replica_info = self._replicas.get(lowest)
+
+        _log.debug("Comparing lowest node {} with reliability {} with highest available node {} with reliability {}".format(
+            lowest, lowest_rel, highest, highest_rel))
+        if self._valid_node(current_nodes, highest) and highest_rel > lowest_rel:
+            cb = CalvinCB(self._after_replicating, current_nodes=current_nodes,
+                          new_node=highest, prev_node=lowest, actor_id=replica_id)
+            if replica_info['node_id'] == self.node.id:
+                _log.info("We have replica, replicating: {}".format(self.replica_value))
+                self.node.am.replicate(replica_id, highest, cb)
+            else:
+                _log.info("Asking {} to replicate actor {} to node {}".format(
+                    lowest, replica_id, highest))
+                _log.info("Asking {} - {}".format(lowest, self.node.resource_manager.node_uris.get(lowest)))
+                self.node.proto.actor_replication_request(replica_id, lowest, highest, cb)
+        else:
+            _log.info("Removing unnecessary replicas")
+            rel_without_lowest = self.node.resource_manager.current_reliability(current_nodes[:-1], self.actor_info['type'])
+            _log.debug("Reliability without lowest: {}. Desired reliability: {}".format(rel_without_lowest, self.required_reliability))
+            if rel_without_lowest > self.required_reliability:
+                _log.info("Removing lowest: {}".format(lowest))
+                cb = CalvinCB(self._after_deleting, current_nodes=current_nodes, prev_node=lowest)
+                self.node.proto.actor_destroy(lowest, cb, replica_id)
+
+    def _after_replicating(self, status, current_nodes, new_node, prev_node, actor_id):
+        _log.debug("After replicating actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
+        current_nodes = list(current_nodes)
+        if status:
+            _log.info("Successfully replicated actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
+            current_nodes.append(new_node)
+            cb = CalvinCB(self._after_deleting, current_nodes=current_nodes, prev_node=prev_node)
+            self.node.proto.actor_destroy(prev_node, cb, actor_id)
+        else:
+            _log.error("Failed to replicate actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
+            self._optimize(current_nodes)
+
+    def _after_deleting(self, status, current_nodes, prev_node):
+        _log.debug("After deleting replica from node {}: {}".format(prev_node, status))
+        if status:
+            _log.info("Successfully removed previous replica from node: {}".format(prev_node))
+            current_nodes.remove(prev_node)
+        self._optimize(current_nodes)
