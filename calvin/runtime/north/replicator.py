@@ -174,32 +174,29 @@ class Replicator(object):
 
         _log.debug("Current reliability: {}. Desired reliability: {}".format(actual_rel, self.required_reliability))
 
-        #Move replicas to the most reliable nodes
-
-        available_nodes = self._find_available_nodes(current_nodes)
-        if not available_nodes:
-            _log.error("Not enough available nodes")
-            cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
-            return
-        # We have curr and avaiable
 
         if actual_rel > self.required_reliability:
+            #self._optimize(current_nodes, available_nodes)
             status = response.CalvinResponse(data=self.new_replicas)
             cb(status=status)
             return
         else:
+            available_nodes = self._find_available_nodes(current_nodes)
+            if not available_nodes:
+                _log.error("Not enough available nodes")
+                cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                return
+
             to_node_id = None
             while not self._valid_node(current_nodes, to_node_id):
                 try:
                     to_node_id = available_nodes.pop(0)
-                    self._replicate(to_node_id, current_nodes, start_time_millis, cb)
                 except IndexError:
                     to_node_id = None
                     break
+            self._replicate(self.replica_id, self.replica_value, to_node_id, current_nodes, start_time_millis, cb)
 
-        # Remove the unessasary replicas
-
-    def _replicate(self, to_node_id, current_nodes, start_time_millis, cb):
+    def _replicate(self, replica_id, replica_value, to_node_id, current_nodes, start_time_millis, cb):
             connected = set(self.node.network.list_links())
             if self.node.id != self.master_node:
                 connected.add(self.node.id)
@@ -210,18 +207,31 @@ class Replicator(object):
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
                 return
             else:
-                replica_node = self.replica_value['node_id']
+                replica_node = replica_value['node_id']
                 self.pending_replications.add(to_node_id)
                 cb = CalvinCB(func=self.collect_new_replicas, to_node_id=to_node_id, current_nodes=current_nodes,
                               start_time_millis=start_time_millis, cb=cb)
                 if replica_node == self.node.id:
-                    _log.info("We have replica, replicating: {}".format(self.replica_value))
-                    self.node.am.replicate(self.replica_id, to_node_id, cb)
+                    _log.info("We have replica, replicating: {}".format(replica_value))
+                    self.node.am.replicate(replica_id, to_node_id, cb)
                 else:
                     _log.info("Asking {} to replicate actor {} to node {}".format(
-                        self.replica_value['node_id'], self.replica_id, to_node_id))
+                        replica_value['node_id'], replica_id, to_node_id))
                     _log.info("Asking {} - {}".format(to_node_id, self.node.resource_manager.node_uris.get(to_node_id)))
-                    self.node.proto.actor_replication_request(self.replica_id, self.replica_value['node_id'], to_node_id, cb)
+                    self.node.proto.actor_replication_request(replica_id, replica_value['node_id'], to_node_id, cb)
+
+
+    def _optimize(self, current_nodes, available_nodes):
+        #move replicas
+
+        self._replicate()
+
+        self._remove_unecassary()
+
+    def _remove_unecassary(self):
+        #remove replicas if possible
+        ingen_kod = 0
+
 
     def _find_available_nodes(self, current_nodes):
         available_nodes = set()
