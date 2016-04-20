@@ -419,13 +419,13 @@ class CalvinProto(CalvinCBClass):
             self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy,
                                                                 to_rt_uuid=to_rt_uuid,
                                                                 callback=callback,
-                                                                actor_id=actor_id))
+                                                                actor_id=actor_id), timeout=0.3)
 
     def _actor_destroy(self, to_rt_uuid, callback, actor_id, status, peer_node_id=None, uri=None):
         """ Got link? continue actor destruction """
         if status:
             msg = {'cmd': 'ACTOR_DESTROY', 'actor_id':actor_id}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.3)
         elif callback:
             callback(status=status)
 
