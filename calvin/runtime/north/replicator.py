@@ -119,7 +119,7 @@ class Replicator(object):
             _log.debug("{} is the lost one, ignoring".format(actors[index]))
             self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
         else:
-            self._replicate(current_nodes, start_time_millis, cb)
+            self.start_replication(current_nodes, start_time_millis, cb)
 
     def _check_for_original(self, key, value, actors, current_nodes, start_time_millis, index, cb):
         _log.debug("Check for original: {} - {}".format(key, value))
@@ -133,7 +133,7 @@ class Replicator(object):
             _log.debug("Found a replica of lost actor: {}".format(value))
             self.replica_id = key
             self.replica_value = value
-            return self._replicate(current_nodes, start_time_millis, cb)
+            return self.start_replication(current_nodes, start_time_millis, cb)
 
         return self._find_a_replica(actors, current_nodes, start_time_millis, index + 1, cb)
 
@@ -162,7 +162,8 @@ class Replicator(object):
         _log.debug("{} is a valid node".format(node_id))
         return True
 
-    def _replicate(self, current_nodes, start_time_millis, cb):
+
+    def start_replication(self, current_nodes, start_time_millis, cb):
         if not self.replica_id:
             _log.error("Could not find actor to replicate")
             cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
@@ -173,29 +174,37 @@ class Replicator(object):
 
         _log.debug("Current reliability: {}. Desired reliability: {}".format(actual_rel, self.required_reliability))
 
+        #Move replicas to the most reliable nodes
+
+        available_nodes = self._find_available_nodes(current_nodes)
+        if not available_nodes:
+            _log.error("Not enough available nodes")
+            cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+            return
+        # We have curr and avaiable
+
         if actual_rel > self.required_reliability:
             status = response.CalvinResponse(data=self.new_replicas)
             cb(status=status)
             return
         else:
-            available_nodes = self._find_available_nodes(current_nodes)
-            if not available_nodes:
-                _log.error("Not enough available nodes")
-                cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
-                return
-
             to_node_id = None
             while not self._valid_node(current_nodes, to_node_id):
                 try:
                     to_node_id = available_nodes.pop(0)
+                    self._replicate(to_node_id, current_nodes, start_time_millis, cb)
                 except IndexError:
                     to_node_id = None
                     break
 
+        # Remove the unessasary replicas
+
+    def _replicate(self, to_node_id, current_nodes, start_time_millis, cb):
             connected = set(self.node.network.list_links())
             if self.node.id != self.master_node:
                 connected.add(self.node.id)
 
+            #Do the actual replication
             if not to_node_id or to_node_id not in connected:
                 _log.error("Not enough available nodes")
                 cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
