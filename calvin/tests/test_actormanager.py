@@ -35,12 +35,23 @@ class DummyPortManager:
         pass
 
 
+class StorageMock(object):
+    def __init__(self, *args, **kwargs):
+        self.started = True
+    def add_actor(self, actor, node_id, app_id, cb=None):
+        if cb:
+            cb(key=actor.id, value=actor)
+    def delete_actor(self, actor_id, cb=None):
+        if cb:
+            cb(actor_id, True)
+
+
 class DummyNode:
 
     def __init__(self):
         self.id = id(self)
         self.pm = DummyPortManager()
-        self.storage = mock.Mock()
+        self.storage = StorageMock()
         self.control = mock.Mock()
         self.metering = metering.set_metering(metering.Metering(self))
         self.app_manager = mock.Mock()
