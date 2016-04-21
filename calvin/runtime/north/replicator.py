@@ -198,7 +198,9 @@ class Replicator(object):
             status = response.CalvinResponse(data=self.new_replicas)
             if cb:
                 cb(status=status)
-            self._optimize(current_nodes)
+            if not self.lost_node:
+                # Only optimize when heartbeat actor is running.
+                self._optimize(current_nodes)
             return
         else:
             available_nodes = self._find_available_nodes(current_nodes)
@@ -206,7 +208,6 @@ class Replicator(object):
                 _log.error("Not enough available nodes")
                 if cb:
                     cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
-                self._optimize(current_nodes)
                 return
 
             to_node_id = None
@@ -279,7 +280,7 @@ class Replicator(object):
             self.new_replicas[status.data['actor_id']] = to_node_id
             if len(self.new_replicas) == 1:
                 stop_time_millis = int(round(time.time() * 1000))
-                self.node.report_replication_time(self.replica_value['type'], stop_time_millis - start_time_millis)
+                self.node.report_replication_time(self.replica_value['type'], stop_time_millis - start_time_millis, self.lost_node)
             current_nodes.add(to_node_id)
         else:
             _log.error("Failed to replicate to {} - {}".format(to_node_id, status))
@@ -327,6 +328,7 @@ class Replicator(object):
         if self._valid_node(current_nodes, highest) and highest_rel > lowest_rel:
             cb = CalvinCB(self._after_replicating, current_nodes=current_nodes,
                           new_node=highest, prev_node=lowest, actor_id=replica_id)
+            self.pending_replications.add(highest)
             if replica_info['node_id'] == self.node.id:
                 _log.info("We have replica, replicating: {}".format(self.replica_value))
                 self.node.am.replicate(replica_id, highest, cb)
@@ -347,18 +349,24 @@ class Replicator(object):
     def _after_replicating(self, status, current_nodes, new_node, prev_node, actor_id):
         _log.debug("After replicating actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
         current_nodes = list(current_nodes)
-        if status:
-            _log.info("Successfully replicated actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
+        if new_node in self.pending_replications:
+            self.pending_replications.remove(new_node)
+        if status and status.data and 'actor_id' in status.data:
+            new_actor_id = status.data['actor_id']
+            _log.info("Successfully replicated actor {} from node {} to node {}. New replica: {}".format(actor_id, prev_node, new_node, new_actor_id))
+            self.node.storage.add_node_actor(new_node, new_actor_id)
             current_nodes.append(new_node)
             cb = CalvinCB(self._after_deleting, current_nodes=current_nodes, prev_node=prev_node)
             self.node.proto.actor_destroy(prev_node, cb, actor_id)
         else:
             _log.error("Failed to replicate actor {} from node {} to node {}".format(actor_id, prev_node, new_node))
+            self.failed_requests.add(new_node)
             self._optimize(current_nodes)
 
     def _after_deleting(self, status, current_nodes, prev_node):
         _log.debug("After deleting replica from node {}: {}".format(prev_node, status))
         if status:
             _log.info("Successfully removed previous replica from node: {}".format(prev_node))
-            current_nodes.remove(prev_node)
+
+        current_nodes.remove(prev_node)
         self._optimize(current_nodes)

@@ -21,7 +21,7 @@ class AppMonitor(object):
         if self.node.testing:
             return
         #self.print_actors()
-        if self._monitor_count == 4:
+        if self._monitor_count == 10:
             self._monitor_count = 0
             start_time = int(round(time.time() * 1000))
             for app in self.app_manager.applications:
