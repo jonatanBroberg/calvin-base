@@ -943,11 +943,11 @@ class CalvinControl(object):
     def handle_peer_setup(self, handle, connection, match, data, hdr):
         _log.analyze(self.node.id, "+", data)
         self.node.peersetup(data['peers'], cb=CalvinCB(self.handle_peer_setup_cb, handle, connection))
-
-        connected_peers = self.node.network.list_links()
-        for peer in connected_peers:
-            cb = CalvinCB(self.node.logging_callback)
-            self.node.proto.peer_setup(node_id, data['peers'], callback=cb)
+x
+        for node_id in self.node.network.list_links():
+            if node_id != self.node_id:
+                cb = CalvinCB(self.node.logging_callback)
+                self.node.proto.peer_setup(node_id, data['peers'], callback=cb)
 
     def handle_peer_setup_cb(self, handle, connection, status=None, peer_node_ids=None):
         _log.analyze(self.node.id, "+", status.encode())
