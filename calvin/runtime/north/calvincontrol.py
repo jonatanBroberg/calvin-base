@@ -944,8 +944,9 @@ class CalvinControl(object):
     def handle_peer_setup(self, handle, connection, match, data, hdr):
         _log.analyze(self.node.id, "+", data)
         for i in range(len(data['peers'])):
-            if "nefario" in data['peers'][i]:
-                peer_port = data['peers'][i].replace("calvinip://", "").split(":")
+            peer_port = data['peers'][i].replace("calvinip://", "").split(":")
+            is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", peer_port[0])
+            if not is_ip:
                 peer = socket.gethostbyname(peer_port[0])
                 peer = "calvinip://{}:{}".format(peer, peer_port[1])
                 data['peers'][i] = peer
