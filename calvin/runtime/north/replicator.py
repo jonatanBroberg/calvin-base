@@ -158,11 +158,11 @@ class Replicator(object):
         return True
 
     def _replicate(self, current_nodes, start_time_millis, cb):
-        replica_id = random.choice(self._replica_values.keys())
-        if not replica_id:
+        if not self._replica_values:
             _log.error("Could not find actor to replicate")
             cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
             return
+        replica_id = random.choice(self._replica_values.keys())
         replica_value = self._replica_values.get(replica_id)
 
         _log.debug("Replica with current replica nodes: {}".format(current_nodes))
