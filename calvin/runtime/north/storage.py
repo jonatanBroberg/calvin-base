@@ -586,6 +586,7 @@ class Storage(object):
         _log.info("Adding actor {} to node actors for node {}".format(actor_id, node_id))
         cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
         self.append("node-actors-", key=node_id, value=[actor_id], cb=cb)
+        self.trigger_flush()
 
     def get_actor(self, actor_id, cb=None):
         """

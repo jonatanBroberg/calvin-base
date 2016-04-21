@@ -18,6 +18,7 @@ import re
 import time
 import json
 import random
+import socket
 from random import randint
 from calvin.Tools import cscompiler as compiler
 from calvin.runtime.north.appmanager import Deployer
@@ -942,14 +943,22 @@ class CalvinControl(object):
 
     def handle_peer_setup(self, handle, connection, match, data, hdr):
         _log.analyze(self.node.id, "+", data)
-        self.node.peersetup(data['peers'], cb=CalvinCB(self.handle_peer_setup_cb, handle, connection))
-x
+        for i in range(len(data['peers'])):
+            peer_port = data['peers'][i].replace("calvinip://", "").split(":")
+            is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", peer_port[0])
+            if not is_ip:
+                peer = socket.gethostbyname(peer_port[0])
+                peer = "calvinip://{}:{}".format(peer, peer_port[1])
+                data['peers'][i] = peer
+
         for node_id in self.node.network.list_links():
-            if node_id != self.node_id:
+            if node_id != self.node.id:
                 cb = CalvinCB(self.node.logging_callback)
                 self.node.proto.peer_setup(node_id, data['peers'], callback=cb)
+        self.node.peersetup(data['peers'], cb=CalvinCB(self.handle_peer_setup_cb, handle, connection))
 
     def handle_peer_setup_cb(self, handle, connection, status=None, peer_node_ids=None):
+        _log.info("Handle peer setup cb: {} - {}".format(status, peer_node_ids))
         _log.analyze(self.node.id, "+", status.encode())
         if not peer_node_ids:
             data = {}

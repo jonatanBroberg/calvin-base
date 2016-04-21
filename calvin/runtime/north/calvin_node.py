@@ -366,8 +366,6 @@ class Node(object):
         if node_id in self.network.links:
             link = self.network.links[node_id]
             self.network.peer_disconnected(link, node_id, "Heartbeat timeout")
-        if self.heartbeat_actor:
-            self.heartbeat_actor.deregister(node_id)
         self.lost_node_handler.handle_lost_node(node_id)
 
     def lost_node_request(self, node_id, cb):
@@ -400,6 +398,7 @@ class Node(object):
 
     def _heartbeat_timeout(self, node_id):
         self._clear_heartbeat_timeouts(node_id)
+        self.heartbeat_actor.deregister(node_id)
         self.lost_node(node_id)
 
     def clear_outgoing_heartbeat(self, data):
@@ -445,7 +444,7 @@ class Node(object):
             self._start_resource_reporter()
 
     def _start_resource_reporter(self):
-        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.25}, callback=self._start_rr)
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.5}, callback=self._start_rr)
 
     def _start_rr(self, status, actor_id):
         if not status:
@@ -493,10 +492,10 @@ class Node(object):
             return
         if not self.heartbeat_actor:
             self._start_heartbeat_system()
-        if self.testing:
+        if self.testing or node_id in self.heartbeat_actor.nodes:
             return
 
-        _log.debug("Registering receiver: {}".format(node_id))
+        _log.info("Registering receiver: {}".format(node_id))
         self.heartbeat_actor.register(node_id)
 
     def stop(self, callback=None):
