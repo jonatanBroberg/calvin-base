@@ -444,7 +444,7 @@ class Node(object):
             self._start_resource_reporter()
 
     def _start_resource_reporter(self):
-        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.5}, callback=self._start_rr)
+        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.25}, callback=self._start_rr)
 
     def _start_rr(self, status, actor_id):
         if not status:
