@@ -126,8 +126,8 @@ class ResourceManager(object):
             if tup[0] > old_values[-1][0]:
                 old_values.append(tup)
 
-    def update_replication_time(self, actor_type, replication_time, timestamp):
-        _log.info('New replication time: {}'.format(replication_time))
+    def update_replication_time(self, actor_type, replication_time, timestamp, node_id=None):
+        _log.info('New replication time: {} when handling lost node {}'.format(replication_time, node_id))
         if not self.replication_times_millis[actor_type]:
             self.replication_times_millis[actor_type].append((timestamp, replication_time))
         elif timestamp not in [x[0] for x in self.replication_times_millis[actor_type]]:
