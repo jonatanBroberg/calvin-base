@@ -334,13 +334,13 @@ class Node(object):
         self._register_heartbeat_receiver(node_id)
         callback(status=response.CalvinResponse(True))
 
-    def report_replication_time(self, actor_type, replication_time):
+    def report_replication_time(self, actor_type, replication_time, node_id):
         timestamp = time.time()
-        self.resource_manager.update_replication_time(actor_type, replication_time, timestamp)
+        self.resource_manager.update_replication_time(actor_type, replication_time, timestamp, node_id)
 
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_replication_time_cb, peer_id)
-            self.proto.report_replication_time(peer_id, actor_type, [timestamp, replication_time], callback=callback)
+            self.proto.report_replication_time(peer_id, actor_type, [timestamp, replication_time], node_id, callback=callback)
 
     def _report_replication_time_cb(self, peer_id, status):
         if not status:
@@ -348,9 +348,9 @@ class Node(object):
         else:
             _log.debug("Report replication time callback received status {} for {}".format(status, peer_id))
 
-    def register_new_replication_time(self, actor_type, new_replication_time, callback):
+    def register_new_replication_time(self, actor_type, new_replication_time, node_id, callback):
         _log.debug("Registering new replication time {}".format(new_replication_time))
-        self.resource_manager.update_replication_time(actor_type, new_replication_time[1], new_replication_time[0])
+        self.resource_manager.update_replication_time(actor_type, new_replication_time[1], new_replication_time[0], node_id)
         callback(status=response.CalvinResponse(True))
 
     def lost_node(self, node_id):

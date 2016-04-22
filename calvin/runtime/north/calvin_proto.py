@@ -826,17 +826,18 @@ class CalvinProto(CalvinCBClass):
 
     ### REPORT REPLICAITON TIME ###
 
-    def report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_replication_time, to_rt_uuid, actor_type, new_replication_time, callback)):
+    def report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, node_id, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_replication_time, to_rt_uuid, actor_type, new_replication_time, node_id, callback)):
             # Already have link just continue in _actor_new
-            self._report_replication_time(to_rt_uuid, actor_type, new_replication_time, callback, response.CalvinResponse(True))
+            self._report_replication_time(to_rt_uuid, actor_type, new_replication_time, node_id, callback, response.CalvinResponse(True))
 
-    def _report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback, status):
+    def _report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, node_id, callback, status):
         """ Got link? continue report replication time """
         if status:
             msg = {'cmd': 'REPORT_NEW_REPLICATION_TIME',
                     'actor_type': actor_type,
-                    'new_replication_time': new_replication_time}
+                    'new_replication_time': new_replication_time,
+                    'node_id': node_id}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg)
         elif callback:
             callback(status=status)
@@ -845,6 +846,7 @@ class CalvinProto(CalvinCBClass):
         """ Peer reported new replication time """
         _log.analyze(self.rt_id, "+", payload, tb=True)
         self.node.register_new_replication_time(payload['actor_type'], payload['new_replication_time'],
+                                          payload['node_id'],
                                           callback=CalvinCB(self._report_new_replication_time_handler, payload))
 
     def _report_new_replication_time_handler(self, payload, status, **kwargs):
