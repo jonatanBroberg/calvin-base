@@ -855,17 +855,18 @@ class CalvinProto(CalvinCBClass):
 
     ### Synchronize resource manager information ###
 
-    def send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, replication_times, failure_info, callback)):
+    def send_rm_info(self, to_rt_uuid, replication_times, failure_info, usages, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, replication_times, failure_info, usages, callback)):
             # Already have link just continue in _actor_new
-            self._send_rm_info(to_rt_uuid, replication_times, failure_info, callback, response.CalvinResponse(True))
+            self._send_rm_info(to_rt_uuid, replication_times, failure_info, usages, callback, response.CalvinResponse(True))
 
-    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback, status, *args, **kwargs):
+    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, usages, callback, status, *args, **kwargs):
         """ Got link? continue send rm info """
         if status:
             msg = {'cmd': 'SEND_RM_INFO',
                     'replication_times': replication_times,
-                    'failure_info':failure_info}
+                    'failure_info':failure_info,
+                    'usages':usages}
             try:
                 self.network.links[to_rt_uuid].send_with_reply(callback, msg)
             except KeyError as e:
@@ -877,11 +878,11 @@ class CalvinProto(CalvinCBClass):
     def send_rm_info_handler(self, payload):
         """ Peer reported new replication time """
         _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.sync_rm_info(payload['replication_times'], payload['failure_info'], callback=CalvinCB(self._send_rm_info_handler, payload))
+        self.node.sync_rm_info(payload['replication_times'], payload['failure_info'], payload['usages'], callback=CalvinCB(self._send_rm_info_handler, payload))
 
-    def _send_rm_info_handler(self, payload, replication_times, failure_info, status, **kwargs):
+    def _send_rm_info_handler(self, payload, replication_times, failure_info, usages, status, **kwargs):
         value = status.encode()
-        value['data'] = [replication_times, failure_info]
+        value['data'] = [replication_times, failure_info, usages]
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': value}
         self.network.links[payload['from_rt_uuid']].send(msg)
 

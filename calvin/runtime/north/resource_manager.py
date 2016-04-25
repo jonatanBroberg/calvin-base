@@ -12,6 +12,7 @@ from calvin.utilities.calvinlogger import get_logger
 _log = get_logger(__name__)
 
 DEFAULT_HISTORY_SIZE = 5
+DEFAULT_REPLICATION_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
 LOST_NODE_TIME = 500
@@ -24,7 +25,7 @@ class ResourceManager(object):
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), node_id)...}
-        self.replication_times_millis = defaultdict(lambda: deque(maxlen=self.history_size))
+        self.replication_times_millis = defaultdict(lambda: deque(maxlen=DEFAULT_REPLICATION_HISTORY_SIZE))
         self.test_sync = 2
         self._lost_nodes = set()
 
@@ -44,19 +45,19 @@ class ResourceManager(object):
 
             self.node_uris[node_id] = "{}:{}".format(addr, port)
 
-
     def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
         if isinstance(uri, list):
             uri = uri[0]
 
         if usage:
-            self.usages[node_id].append(usage)
+            self.usages[node_id].append(usage['cpu_percent'])
 
     def lost_node(self, node_id, uri):
         if node_id in self._lost_nodes:
             return
         self._lost_nodes.add(node_id)
+        del self.usages[node_id]
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
         self.node_uris[node_id] = uri
@@ -103,23 +104,6 @@ class ResourceManager(object):
         times = self.replication_times_millis[actor_type]
         time = sum(x[1] for x in times) / max(len(times), 1)
         return time + LOST_NODE_TIME
-
-    def _sync_replication_times(self, replication_times):
-        """
-        Sync the replication_times for each actor_type stored on another node.
-        replication_times is a sent as a list but stored as a deque
-        """
-        _log.debug("Syncing replication times {} with new replication times {}".format(
-            self.replication_times_millis, replication_times))
-        for (actor_type, times) in replication_times.iteritems():
-            sorted_times = sorted(times, key=lambda x:x[0])
-            sorted_times = [(x,y) for x,y in sorted_times]
-            if actor_type in self.replication_times_millis.keys() and len(self.replication_times_millis[actor_type]) > 0:
-                self._update_deque(sorted_times, self.replication_times_millis[actor_type])
-            else:
-                for key, value in sorted_times:
-                    self.replication_times_millis[actor_type].append((key, value))
-        _log.debug("Replication times: {}".format(self.replication_times_millis))
 
     def _update_deque(self, new_values, old_values):
         for tup in new_values:
@@ -168,20 +152,61 @@ class ResourceManager(object):
         while len(self.failure_info[uri]) > 4:
             self.failure_info[uri].pop(0)
 
-    def sync_info(self, replication_times=None, failure_info=None):
+    def sync_info(self, replication_times=None, failure_info=None, usages=None):
         if replication_times:
             self._sync_replication_times(replication_times)
 
         if failure_info:
-            for (uri, info_list) in self.failure_info.iteritems():
-                if uri in failure_info.keys():
-                    self._add_failure_info(uri, sorted(info_list, key=lambda x:x[0]))
-            for (uri, info_list) in failure_info.iteritems():
-                if uri not in self.failure_info.keys():
-                    self._add_failure_info(uri, info_list)
+            self._sync_failure_info(failure_info)
+
+        if usages:
+            self.sync_usages(usages)
 
         replication_times = {}
         for (actor_type, times) in self.replication_times_millis.iteritems():
             replication_times[actor_type] = [(x, y) for x, y in times]
 
-        return [replication_times, self.failure_info]
+        usages = {}
+        for (node_id, usage_list) in self.usages.iteritems():
+            usages[node_id] = [usage for usage in usage_list]
+
+        return [replication_times, self.failure_info, usages]
+
+    def _sync_replication_times(self, replication_times):
+        """
+        Sync the replication_times for each actor_type stored on another node.
+        replication_times is a sent as a list but stored as a deque
+        """
+        _log.info("Syncing replication times {} with new replication times {}".format(
+            self.replication_times_millis, replication_times))
+        for (actor_type, times) in replication_times.iteritems():
+            sorted_times = sorted(times, key=lambda x:x[0])
+            sorted_times = [(x,y) for x,y in sorted_times]
+            if actor_type in self.replication_times_millis.keys() and len(self.replication_times_millis[actor_type]) > 0:
+                self._update_deque(sorted_times, self.replication_times_millis[actor_type])
+            else:
+                for key, value in sorted_times:
+                    self.replication_times_millis[actor_type].append((key, value))
+        _log.debug("Replication times: {}".format(self.replication_times_millis))
+
+    def _sync_failure_info(self, failure_info):
+        _log.info("Syncing failure_info {} with new failure_info {}".format(self.failure_info, failure_info))
+        for (uri, info_list) in self.failure_info.iteritems():
+            if uri in failure_info.keys():
+                self._add_failure_info(uri, sorted(info_list, key=lambda x:x[0]))
+        for (uri, info_list) in failure_info.iteritems():
+            if uri not in self.failure_info.keys():
+                self._add_failure_info(uri, info_list)
+
+    def sync_usages(self, usages):
+        """
+        Sync the usages for each node_id stored on another node.
+        usages is a dict of lists but stored as a dict with deques
+        """
+        _log.info("\n\nSyncing usages {} with usages {}".format(self.usages, usages))
+        for (node_id, usage_list) in usages.iteritems():
+            if (not node_id in self.usages.keys() or len(usage_list) > self.usages[node_id]) and not node_id in self._lost_nodes:
+                usage_deq = deque(maxlen=self.history_size)
+                for u in usage_list:
+                    usage_deq.append(u)
+                self.usages[node_id] = usage_deq

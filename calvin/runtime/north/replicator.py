@@ -256,7 +256,7 @@ class Replicator(object):
             self.new_replicas[status.data['actor_id']] = to_node_id
             if len(self.new_replicas) == 1:
                 stop_time_millis = int(round(time.time() * 1000))
-                self.node.report_replication_time(actor_type, stop_time_millis - start_time_millis)
+                self.node.report_replication_time(actor_type, stop_time_millis - start_time_millis, self.lost_node)
             current_nodes.add(to_node_id)
         else:
             _log.error("Failed to replicate to {} - {}".format(to_node_id, status))

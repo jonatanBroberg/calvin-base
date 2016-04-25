@@ -185,25 +185,25 @@ class Node(object):
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
 
-        if peer_node_id:
+        if peer_node_id and not self.is_storage_node(peer_node_id) and not self.storage_node:
             self._send_rm_info(peer_node_id)
 
     def _send_rm_info(self, peer_node_id):
         # Send own times to new peers and retreive there times
         callback = CalvinCB(self._send_rm_info_cb)
-        [replication_times, failure_info] = self.resource_manager.sync_info()
+        [replication_times, failure_info, usages] = self.resource_manager.sync_info()
 
-        self.proto.send_rm_info(peer_node_id, replication_times, failure_info, callback)
+        self.proto.send_rm_info(peer_node_id, replication_times, failure_info, usages, callback)
 
     def _send_rm_info_cb(self, status, *args, **kwargs):
         # Receives other peers rm info
         if status.data:
-            self.resource_manager.sync_info(status.data[0], status.data[1])
+            self.resource_manager.sync_info(status.data[0], status.data[1], status.data[2])
 
-    def sync_rm_info(self, replication_times, failure_info, callback):
+    def sync_rm_info(self, replication_times, failure_info, usages, callback):
         # sync received info
-        [replication_times, failure_info] = self.resource_manager.sync_info(replication_times, failure_info)
-        callback(replication_times, failure_info, status=response.CalvinResponse(True))
+        [replication_times, failure_info, usages] = self.resource_manager.sync_info(replication_times, failure_info, usages)
+        callback(replication_times, failure_info, usages, status=response.CalvinResponse(True))
 
     def logging_callback(self, preamble=None, *args, **kwargs):
         _log.debug("\n%s# NODE: %s \n# %s %s %s \n%s" %
@@ -327,6 +327,9 @@ class Node(object):
             _log.debug("Report resource usage callback received status {} for {}".format(status, peer_id))
 
     def register_resource_usage(self, node_id, usage, callback):
+        if self.storage_node:
+            callback(status=response.CalvinResponse(True))
+            return        
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = usage.get('uri')
         #uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
