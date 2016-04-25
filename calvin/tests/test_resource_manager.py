@@ -36,9 +36,9 @@ def test_register_registers_by_node_id(empty_resource_manager):
     register(empty_resource_manager, 2, 4.5)
 
     assert len(empty_resource_manager.usages[1]) == 1
-    assert empty_resource_manager.usages[1].pop()['cpu_percent'] == 5.5
+    assert empty_resource_manager.usages[1].pop() == 5.5
     assert len(empty_resource_manager.usages[2]) == 1
-    assert empty_resource_manager.usages[2].pop()['cpu_percent'] == 4.5
+    assert empty_resource_manager.usages[2].pop() == 4.5
 
 
 def test_least_busy_returns_least_busy_by_average(resource_manager):
@@ -55,5 +55,5 @@ def test_resource_manager_keeps_history_of_max_max_history():
         register(resource_manager, 1, i)
 
     assert len(resource_manager.usages[1]) == 2
-    assert resource_manager.usages[1].pop()['cpu_percent'] == 9
-    assert resource_manager.usages[1].pop()['cpu_percent'] == 8
+    assert resource_manager.usages[1].pop() == 9
+    assert resource_manager.usages[1].pop() == 8

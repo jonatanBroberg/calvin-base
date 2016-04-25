@@ -64,7 +64,7 @@ class ResourceManager(object):
         self._add_failure_info(uri, [(time.time(), node_id)])
 
     def _average(self, node_id):
-        return sum([usage['cpu_percent'] for usage in self.usages[node_id]]) / max(len(self.usages[node_id]), 1)
+        return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)
 
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
@@ -177,7 +177,7 @@ class ResourceManager(object):
         Sync the replication_times for each actor_type stored on another node.
         replication_times is a sent as a list but stored as a deque
         """
-        _log.info("Syncing replication times {} with new replication times {}".format(
+        _log.debug("Syncing replication times {} with new replication times {}".format(
             self.replication_times_millis, replication_times))
         for (actor_type, times) in replication_times.iteritems():
             sorted_times = sorted(times, key=lambda x:x[0])
@@ -190,7 +190,7 @@ class ResourceManager(object):
         _log.debug("Replication times: {}".format(self.replication_times_millis))
 
     def _sync_failure_info(self, failure_info):
-        _log.info("Syncing failure_info {} with new failure_info {}".format(self.failure_info, failure_info))
+        _log.debug("Syncing failure_info {} with new failure_info {}".format(self.failure_info, failure_info))
         for (uri, info_list) in self.failure_info.iteritems():
             if uri in failure_info.keys():
                 self._add_failure_info(uri, sorted(info_list, key=lambda x:x[0]))
@@ -203,7 +203,7 @@ class ResourceManager(object):
         Sync the usages for each node_id stored on another node.
         usages is a dict of lists but stored as a dict with deques
         """
-        _log.info("\n\nSyncing usages {} with usages {}".format(self.usages, usages))
+        _log.debug("\n\nSyncing usages {} with usages {}".format(self.usages, usages))
         for (node_id, usage_list) in usages.iteritems():
             if (not node_id in self.usages.keys() or len(usage_list) > self.usages[node_id]) and not node_id in self._lost_nodes:
                 usage_deq = deque(maxlen=self.history_size)
