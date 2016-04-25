@@ -186,13 +186,7 @@ class Replicator(object):
                     cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
                 return
 
-            to_node_id = None
-            while not self._valid_node(current_nodes, to_node_id):
-                try:
-                    to_node_id = available_nodes.pop(0)
-                except IndexError:
-                    to_node_id = None
-                    break
+            to_node_id = self._find_node_to_replicate_to(current_nodes, available_nodes)
 
             connected = set(self.node.network.list_links())
             if self.node.id != self.master_node:
@@ -215,6 +209,31 @@ class Replicator(object):
                         replica_value['node_id'], replica_id, to_node_id))
                     _log.info("Asking {} - {}".format(to_node_id, self.node.resource_manager.node_uris.get(to_node_id)))
                     self.node.proto.actor_replication_request(replica_id, replica_value['node_id'], to_node_id, cb)
+
+    def _find_node_to_replicate_to(self, current_nodes, available_nodes):
+        to_node_id = None
+
+        preferred_nodes = self.node.resource_manager.get_preferred_nodes(available_nodes)
+        _log.debug("Searching for a preffered node among {}".format(preferred_nodes))
+        while not self._valid_node(current_nodes, to_node_id):
+            try:
+                to_node_id = preferred_nodes.pop(0)
+            except IndexError:
+                to_node_id = None
+                break
+
+        if to_node_id:
+            return to_node_id
+
+        unpreferred_nodes = [n for n in available_nodes if n not in preferred_nodes]
+        _log.debug("No valid preferred node, searching among {}".format(unpreferred_nodes))
+        while not self._valid_node(current_nodes, to_node_id):
+            try:
+                to_node_id = unpreferred_nodes.pop(0)
+            except IndexError:
+                to_node_id = None
+                break
+        return to_node_id
 
     def _find_available_nodes(self, current_nodes):
         available_nodes = set()

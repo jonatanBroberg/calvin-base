@@ -16,6 +16,7 @@ DEFAULT_REPLICATION_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
 LOST_NODE_TIME = 500
+MAX_PREFERRED_USAGE = 80
 
 
 class ResourceManager(object):
@@ -63,14 +64,14 @@ class ResourceManager(object):
         self.node_uris[node_id] = uri
         self._add_failure_info(uri, [(time.time(), node_id)])
 
-    def _average(self, node_id):
+    def _average_usage(self, node_id):
         return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)
 
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
         min_usage, least_busy = sys.maxint, None
         for node_id in self.usages.keys():
-            average = self._average(node_id)
+            average = self._average_usage(node_id)
             if average < min_usage:
                 min_usage = average
                 least_busy = node_id
@@ -81,7 +82,7 @@ class ResourceManager(object):
         """Returns the id of the node with the highest average CPU usage"""
         min_usage, most_busy = - sys.maxint, None
         for node_id in self.usages.keys():
-            average = self._average(node_id)
+            average = self._average_usage(node_id)
             if average > min_usage:
                 min_usage = average
                 most_busy = node_id
@@ -96,6 +97,13 @@ class ResourceManager(object):
             return self.reliability_calculator.calculate_reliability(failure_info, replication_time)
         else:
             return DEFAULT_NODE_REALIABILITY
+
+    def get_preferred_nodes(self, nodes):
+        preferred = []
+        for node_id in nodes:
+            if self._average_usage(node_id) < MAX_PREFERRED_USAGE:
+                preferred.append(node_id)
+        return preferred
 
     def _average_replication_time(self, actor_type):
         _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
