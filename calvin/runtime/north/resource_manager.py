@@ -11,7 +11,7 @@ from calvin.utilities.calvinlogger import get_logger
 
 _log = get_logger(__name__)
 
-DEFAULT_HISTORY_SIZE = 5
+DEFAULT_HISTORY_SIZE = 20
 DEFAULT_REPLICATION_HISTORY_SIZE = 5
 DEFAULT_REPLICATION_TIME = 2000
 DEFAULT_NODE_REALIABILITY = 0.8
