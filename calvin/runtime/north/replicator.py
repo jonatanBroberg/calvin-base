@@ -289,6 +289,7 @@ class Replicator(object):
             return
 
         available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'])
+        available_nodes = self.node.resource_manager.get_preferred_nodes(available_nodes)
         available_nodes = list(available_nodes)
         current_nodes = self.node.resource_manager.sort_nodes_reliability(current_nodes, self.actor_info['type'])
         current_nodes = list(current_nodes)

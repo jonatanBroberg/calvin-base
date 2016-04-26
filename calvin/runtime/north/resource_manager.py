@@ -98,9 +98,9 @@ class ResourceManager(object):
         else:
             return DEFAULT_NODE_REALIABILITY
 
-    def get_preferred_nodes(self, nodes):
+    def get_preferred_nodes(self, node_ids):
         preferred = []
-        for node_id in nodes:
+        for node_id in node_ids:
             if self._average_usage(node_id) < MAX_PREFERRED_USAGE:
                 preferred.append(node_id)
         return preferred
@@ -126,7 +126,7 @@ class ResourceManager(object):
             self.replication_times_millis[actor_type].append((timestamp, replication_time))
 
     def sort_nodes_reliability(self, node_ids, actor_type):
-        """Sorts after number of failures"""
+        """Sorts after reliability"""
         node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
         node_ids.sort(key=lambda x: (x[1], x[0]), reverse=True)
         _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
