@@ -179,14 +179,7 @@ class Replicator(object):
                 self._optimize(current_nodes)
             return
         else:
-            available_nodes = self._find_available_nodes(current_nodes)
-            if not available_nodes:
-                _log.error("Not enough available nodes")
-                if cb:
-                    cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
-                return
-
-            to_node_id = self._find_node_to_replicate_to(current_nodes, available_nodes)
+            to_node_id = self._find_node_to_replicate_to(current_nodes)
 
             connected = set(self.node.network.list_links())
             if self.node.id != self.master_node:
@@ -194,7 +187,8 @@ class Replicator(object):
 
             if not to_node_id or to_node_id not in connected:
                 _log.error("Not enough available nodes")
-                cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
+                if cb:
+                    cb(status=response.CalvinResponse(status=response.NOT_FOUND, data=self.new_replicas))
                 return
             else:
                 replica_node = replica_value['node_id']
@@ -210,9 +204,12 @@ class Replicator(object):
                     _log.info("Asking {} - {}".format(to_node_id, self.node.resource_manager.node_uris.get(to_node_id)))
                     self.node.proto.actor_replication_request(replica_id, replica_value['node_id'], to_node_id, cb)
 
-    def _find_node_to_replicate_to(self, current_nodes, available_nodes):
-        to_node_id = None
+    def _find_node_to_replicate_to(self, current_nodes):
+        available_nodes = self._find_available_nodes(current_nodes)
+        if not available_nodes:
+            return None
 
+        to_node_id = None
         preferred_nodes = self.node.resource_manager.get_preferred_nodes(available_nodes)
         _log.debug("Searching for a preffered node among {}".format(preferred_nodes))
         while not self._valid_node(current_nodes, to_node_id):
