@@ -67,6 +67,13 @@ class ResourceManager(object):
     def _average_usage(self, node_id):
         return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)
 
+    #Only used for evaluation
+    def get_avg_usages(self):
+        usages = {}
+        for node_id in self.usages.keys():
+            usages[node_id] = self._average_usage(node_id)
+        return usages
+
     def least_busy(self):
         """Returns the id of the node with the lowest average CPU usage"""
         min_usage, least_busy = sys.maxint, None
