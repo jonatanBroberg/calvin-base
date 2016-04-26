@@ -48,8 +48,7 @@ class ResourceManager(object):
 
     def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))
-        if isinstance(uri, list):
-            uri = uri[0]
+        self.register_uri(node_id, uri)
 
         if usage:
             self.usages[node_id].append(usage['cpu_percent'])
@@ -71,7 +70,8 @@ class ResourceManager(object):
     def get_avg_usages(self):
         usages = {}
         for node_id in self.usages.keys():
-            usages[node_id] = self._average_usage(node_id)
+            uri = self.node_uris[node_id]
+            usages[uri] = self._average_usage(node_id)
         return usages
 
     def least_busy(self):
