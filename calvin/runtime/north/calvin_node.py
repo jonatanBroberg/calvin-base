@@ -290,9 +290,12 @@ class Node(object):
         rels = self._get_rels()
 
         failure_info = self.resource_manager.failure_info
+        cpu_avg = {}
+        for node_id in nodes:
+            cpu_avg[node] = self.resource_manager._average_usage(node_id)
 
-        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
-            len(nodes), nodes, rels, actual_rel, required, rep_time, failure_info))
+        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
+            len(nodes), nodes, rels, actual_rel, required, rep_time, failure_info, cpu_avg))
 
     def _get_rels(self):
         all_nodes = self.network.list_links()
