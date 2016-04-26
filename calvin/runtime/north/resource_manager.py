@@ -26,7 +26,7 @@ class ResourceManager(object):
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), node_id)...}
-        self.replication_times_millis = defaultdict(lambda: deque(maxlen=DEFAULT_REPLICATION_HISTORY_SIZE))
+        #self.replication_times_millis = defaultdict(lambda: deque(maxlen=DEFAULT_REPLICATION_HISTORY_SIZE))
         self.test_sync = 2
         self._lost_nodes = set()
 
@@ -96,11 +96,11 @@ class ResourceManager(object):
 
         return most_busy
 
-    def get_reliability(self, node_id, actor_type):
+    def get_reliability(self, node_id, actor_type, replication_times):
         uri = self.node_uris.get(node_id)
         if uri:
             failure_info = self.failure_info[uri]
-            replication_time = self._average_replication_time(actor_type)
+            replication_time = self._average_replication_time(replication_times)
             return self.reliability_calculator.calculate_reliability(failure_info, replication_time)
         else:
             return DEFAULT_NODE_REALIABILITY
@@ -112,12 +112,10 @@ class ResourceManager(object):
                 preferred.append(node_id)
         return preferred
 
-    def _average_replication_time(self, actor_type):
-        _log.debug("Getting replication time for type {} - {}".format(actor_type, self.replication_times_millis))
-        if not self.replication_times_millis[actor_type]:
+    def _average_replication_time(self, replication_times):
+        if not replication_times:
             return DEFAULT_REPLICATION_TIME
-        times = self.replication_times_millis[actor_type]
-        time = sum(x[1] for x in times) / max(len(times), 1)
+        time = sum(replication_times) / max(len(replication_times), 1)
         return time + LOST_NODE_TIME
 
     def _update_deque(self, new_values, old_values):
@@ -125,31 +123,24 @@ class ResourceManager(object):
             if tup[0] > old_values[-1][0]:
                 old_values.append(tup)
 
-    def update_replication_time(self, actor_type, replication_time, timestamp, node_id=None):
-        _log.info('New replication time: {} when handling lost node {}'.format(replication_time, node_id))
-        if not self.replication_times_millis[actor_type]:
-            self.replication_times_millis[actor_type].append((timestamp, replication_time))
-        elif timestamp not in [x[0] for x in self.replication_times_millis[actor_type]]:
-            self.replication_times_millis[actor_type].append((timestamp, replication_time))
-
-    def sort_nodes_reliability(self, node_ids, actor_type):
+    def sort_nodes_reliability(self, node_ids, actor_type, replication_times):
         """Sorts after reliability"""
-        node_ids = [(node_id, self.get_reliability(node_id, actor_type)) for node_id in node_ids]
+        node_ids = [(node_id, self.get_reliability(node_id, actor_type, replication_times)) for node_id in node_ids]
         node_ids.sort(key=lambda x: (x[1], x[0]), reverse=True)
         _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
-    def current_reliability(self, current_nodes, actor_type):
+    def current_reliability(self, current_nodes, actor_type, replication_times):
         current_nodes = list(set(current_nodes))
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
         failure = []
         for node_id in current_nodes:
-            f = 1 - self.get_reliability(node_id, actor_type)
+            f = 1 - self.get_reliability(node_id, actor_type, replication_times)
             _log.debug("Failure for {}: {}".format(node_id, f))
             failure.append(f)
 
         p = 1 - reduce(operator.mul, failure, 1)
-        _log.debug("Reliability for nodes {} is {}".format(current_nodes, p))
+        _log.info("Reliability for nodes {} is {}".format(current_nodes, p))
         return p
 
     def update_node_failure(self, node_id, nbr_of_failures, uri):
@@ -167,42 +158,18 @@ class ResourceManager(object):
         while len(self.failure_info[uri]) > 4:
             self.failure_info[uri].pop(0)
 
-    def sync_info(self, replication_times=None, failure_info=None, usages=None):
-        if replication_times:
-            self._sync_replication_times(replication_times)
-
+    def sync_info(self, failure_info=None, usages=None):
         if failure_info:
             self._sync_failure_info(failure_info)
 
         if usages:
             self.sync_usages(usages)
 
-        replication_times = {}
-        for (actor_type, times) in self.replication_times_millis.iteritems():
-            replication_times[actor_type] = [(x, y) for x, y in times]
-
         usages = {}
         for (node_id, usage_list) in self.usages.iteritems():
             usages[node_id] = [usage for usage in usage_list]
 
-        return [replication_times, self.failure_info, usages]
-
-    def _sync_replication_times(self, replication_times):
-        """
-        Sync the replication_times for each actor_type stored on another node.
-        replication_times is a sent as a list but stored as a deque
-        """
-        _log.debug("Syncing replication times {} with new replication times {}".format(
-            self.replication_times_millis, replication_times))
-        for (actor_type, times) in replication_times.iteritems():
-            sorted_times = sorted(times, key=lambda x:x[0])
-            sorted_times = [(x,y) for x,y in sorted_times]
-            if actor_type in self.replication_times_millis.keys() and len(self.replication_times_millis[actor_type]) > 0:
-                self._update_deque(sorted_times, self.replication_times_millis[actor_type])
-            else:
-                for key, value in sorted_times:
-                    self.replication_times_millis[actor_type].append((key, value))
-        _log.debug("Replication times: {}".format(self.replication_times_millis))
+        return [self.failure_info, usages]
 
     def _sync_failure_info(self, failure_info):
         _log.debug("Syncing failure_info {} with new failure_info {}".format(self.failure_info, failure_info))

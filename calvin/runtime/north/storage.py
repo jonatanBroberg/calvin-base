@@ -625,6 +625,17 @@ class Storage(object):
         _log.debug("Deleting node {} from app {} replica nodes of actor {}".format(node_id, app_id, name))
         self.remove("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
 
+    def new_replication_time(self, actor_type, replication_time, cb=None):
+        _log.info("Storing replication time {} of actor type {}".format(replication_time, actor_type))
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+        self.append("replication-time-", key=actor_type, value=[replication_time], cb=cb)
+
+    def get_replication_times(self, actor_type, cb=None):
+        """
+        Get replication times for actor_type
+        """
+        self.get_concat(prefix="replication-time-", key=actor_type, cb=cb)
+
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
         Add port to storage
