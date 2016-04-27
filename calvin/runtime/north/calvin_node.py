@@ -280,11 +280,11 @@ class Node(object):
         rm = self.resource_manager
         rels = []
         for node_id in self.network.list_links():
-            rel = rm.get_reliability(node_id, "std.CountTimer", value)
+            rel = rm.get_reliability(node_id, value)
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         _log.info("NODE RELIABILITIES: {}".format(rels))
 
-        actual_rel = self.resource_manager.current_reliability(current_nodes, 'std.CountTimer', value)
+        actual_rel = self.resource_manager.current_reliability(current_nodes, value)
         _log.debug("RELIABILITY: {}".format(actual_rel))
         rep_time = self.resource_manager._average_replication_time(value)
         actors = []
@@ -305,7 +305,7 @@ class Node(object):
         rels = []
         _log.debug("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
-            rel = rm.get_reliability(node_id, "std.CountTimer", replication_times)
+            rel = rm.get_reliability(node_id, replication_times)
             uri = rm.node_uris.get(node_id)
             if uri:
                 failure_info = rm.failure_info[uri]
