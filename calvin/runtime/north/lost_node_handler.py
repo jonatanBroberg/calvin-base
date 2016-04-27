@@ -132,7 +132,7 @@ class LostNodeHandler(object):
             #self._register_lost_node(node_id)
             uri = self.node.peer_uris.get(node_id)
             if uri:
-                self.node.storage.add_failure_time(, self._lost_nodes_times[node_id])
+                self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])
             else:
                 _log.warning('Could not store failure info of node {}, no uri'.format(node_id))
                 #Warning?
