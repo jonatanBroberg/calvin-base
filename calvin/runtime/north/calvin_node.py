@@ -277,21 +277,28 @@ class Node(object):
         self.storage.get_replication_times('std.CountTimer', callback)
 
     def _print_stats_cb(self, key, value, nodes, required, current_nodes):
+        callback = CalvinCB(self._print_stats_cb_2, nodes=nodes, required=required, 
+                                current_nodes=current_nodes, replication_times=value)
+        uri = self.resource_manager.node_uris.get(node_id)
+        if uri:
+            self.storage.get_failure_times(uri, callback)
+
+    def _print_stats_cb_2(self, key, value, nodes, required, current_nodes, replication_times):
         rm = self.resource_manager
         rels = []
         for node_id in self.network.list_links():
-            rel = rm.get_reliability(node_id, value)
+            rel = rm.get_reliability(node_id, replication_times, value)
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         _log.info("NODE RELIABILITIES: {}".format(rels))
 
-        actual_rel = self.resource_manager.current_reliability(current_nodes, value)
+        actual_rel = self.resource_manager.current_reliability(current_nodes, replication_times, value)
         _log.debug("RELIABILITY: {}".format(actual_rel))
-        rep_time = self.resource_manager._average_replication_time(value)
+        rep_time = self.resource_manager._average_replication_time(replication_times)
         actors = []
         for actor in self.am.actors.values():
             if 'actions:src' in actor.name:
                 actors.append(actor)
-        rels = self._get_rels(value)
+        rels = self._get_rels(replication_times, value)
 
         failure_info = self.resource_manager.failure_info
         cpu_avgs = self.resource_manager.get_avg_usages()
@@ -299,13 +306,13 @@ class Node(object):
         self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
             len(nodes), nodes, rels, actual_rel, required, rep_time, failure_info, str(cpu_avgs)))
 
-    def _get_rels(self, replication_times):
+    def _get_rels(self, replication_times, failure_times):
         all_nodes = self.network.list_links()
         rm = self.resource_manager
         rels = []
         _log.debug("all nodes: {}".format(all_nodes))
         for node_id in all_nodes:
-            rel = rm.get_reliability(node_id, replication_times)
+            rel = rm.get_reliability(node_id, replication_times, failure_times)
             uri = rm.node_uris.get(node_id)
             if uri:
                 failure_info = rm.failure_info[uri]

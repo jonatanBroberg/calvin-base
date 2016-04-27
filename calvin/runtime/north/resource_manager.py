@@ -123,14 +123,14 @@ class ResourceManager(object):
             if tup[0] > old_values[-1][0]:
                 old_values.append(tup)
 
-    def sort_nodes_reliability(self, node_ids, actor_type, replication_times, failure_info):
+    def sort_nodes_reliability(self, node_ids, replication_times, failure_info):
         """Sorts after reliability"""
         node_ids = [(node_id, self.get_reliability(node_id, replication_times, failure_info)) for node_id in node_ids]
         node_ids.sort(key=lambda x: (x[1], x[0]), reverse=True)
         _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
         return [x[0] for x in node_ids]
 
-    def current_reliability(self, current_nodes, actor_type, replication_times, failure_info):
+    def current_reliability(self, current_nodes, replication_times, failure_info):
         current_nodes = list(set(current_nodes))
         _log.debug("Calculating reliability for nodes: {}".format(current_nodes))
         failure = []
@@ -143,25 +143,7 @@ class ResourceManager(object):
         _log.info("Reliability for nodes {} is {}".format(current_nodes, p))
         return p
 
-#    def update_node_failure(self, node_id, nbr_of_failures, uri):
-#        """ Simulates node failures """
-#        self.node_uris[node_id] = uri
-#        self._add_failure_info(uri, [(time.time(), node_id)])
-    """
-    def _add_failure_info(self, uri, list_of_failures):
-        old_info = self.failure_info[uri]
-        for (time, node_id) in list_of_failures:
-            if node_id not in [x[1] for x in old_info]:
-                old_info.append((time, node_id))
-        old_info = sorted(old_info, key=lambda x:x[0])
-
-        while len(self.failure_info[uri]) > 4:
-            self.failure_info[uri].pop(0)
-    """
     def sync_info(self, failure_info=None, usages=None):
-#        if failure_info:
-#            self._sync_failure_info(failure_info)
-
         if usages:
             self.sync_usages(usages)
 
@@ -170,16 +152,7 @@ class ResourceManager(object):
             usages[node_id] = [usage for usage in usage_list]
 
         return [self.failure_info, usages]
-    """
-    def _sync_failure_info(self, failure_info):
-        _log.debug("Syncing failure_info {} with new failure_info {}".format(self.failure_info, failure_info))
-        for (uri, info_list) in self.failure_info.iteritems():
-            if uri in failure_info.keys():
-                self._add_failure_info(uri, sorted(info_list, key=lambda x:x[0]))
-        for (uri, info_list) in failure_info.iteritems():
-            if uri not in self.failure_info.keys():
-                self._add_failure_info(uri, info_list)
-    """
+
     def sync_usages(self, usages):
         """
         Sync the usages for each node_id stored on another node.

@@ -110,10 +110,11 @@ class Replicator(object):
         uri = key
         if value:
             self._failure_times[uri] = value
-        else:
+        elif uri in self._failure_times:
             del self._failure_times[uri]
 
         if all(v is not None for v in self._failure_times.values()):
+            _log.info('All failure times: {}'.format(self._failure_times))
             cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_application_actors(self.actor_info['app_id'], cb)
 
@@ -192,7 +193,7 @@ class Replicator(object):
         replica_value = self._replica_values.get(replica_id)
 
         _log.debug("Replica with current replica nodes: {}".format(current_nodes))
-        actual_rel = self.node.resource_manager.current_reliability(current_nodes, replica_value['type'], self._replication_times, self._failure_times)
+        actual_rel = self.node.resource_manager.current_reliability(current_nodes, self._replication_times, self._failure_times)
 
         _log.debug("Current reliability: {}. Desired reliability: {}".format(actual_rel, self.required_reliability))
 
@@ -279,7 +280,7 @@ class Replicator(object):
                 _log.warning(e)
                 pass
 
-        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'], self._replication_times, self._failure_times)
+        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self._replication_times, self._failure_times)
         _log.debug("Available nodes: {}".format(available_nodes))
 
         return available_nodes
@@ -315,9 +316,9 @@ class Replicator(object):
             _log.info("No available nodes or no current nodes. Available: {}. Current: {}".format(available_nodes, current_nodes))
             return
 
-        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'], self._replication_times, self._failure_times)
+        available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self._replication_times, self._failure_times)
         available_nodes = list(available_nodes)
-        current_nodes = self.node.resource_manager.sort_nodes_reliability(current_nodes, self.actor_info['type'], self._replication_times, self._failure_times)
+        current_nodes = self.node.resource_manager.sort_nodes_reliability(current_nodes, self._replication_times, self._failure_times)
         current_nodes = list(current_nodes)
 
         _log.debug("Available nodes: {}".format(available_nodes))
@@ -358,7 +359,7 @@ class Replicator(object):
                 self.node.proto.actor_replication_request(replica_id, lowest, highest, cb)
         else:
             _log.info("Removing unnecessary replicas")
-            rel_without_lowest = self.node.resource_manager.current_reliability(current_nodes[:-1], self.actor_info['type'], self._replication_times, self._failure_times)
+            rel_without_lowest = self.node.resource_manager.current_reliability(current_nodes[:-1], self._replication_times, self._failure_times)
             _log.debug("Reliability without lowest: {}. Desired reliability: {}".format(rel_without_lowest, self.required_reliability))
             if rel_without_lowest > self.required_reliability:
                 _log.info("Removing lowest: {}".format(lowest))
