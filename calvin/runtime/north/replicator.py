@@ -291,12 +291,12 @@ class Replicator(object):
     def _optimize(self, current_nodes):
         _log.info("Optimizing replica nodes")
         available_nodes = self._find_available_nodes(current_nodes)
+        available_nodes = self.node.resource_manager.get_preferred_nodes(available_nodes)
         if not available_nodes or not current_nodes:
             _log.info("No available nodes or no current nodes. Available: {}. Current: {}".format(available_nodes, current_nodes))
             return
 
         available_nodes = self.node.resource_manager.sort_nodes_reliability(available_nodes, self.actor_info['type'], self._replication_times)
-        available_nodes = self.node.resource_manager.get_preferred_nodes(available_nodes)
         available_nodes = list(available_nodes)
         current_nodes = self.node.resource_manager.sort_nodes_reliability(current_nodes, self.actor_info['type'], self._replication_times)
         current_nodes = list(current_nodes)
