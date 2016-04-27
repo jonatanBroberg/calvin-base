@@ -129,7 +129,6 @@ class LostNodeHandler(object):
         else:
             _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
             self.storage.get_node(node_id, self._delete_node)
-            #self._register_lost_node(node_id)
             uri = self.node.resource_manager.node_uris.get(node_id)
             if uri:
                 self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])

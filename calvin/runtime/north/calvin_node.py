@@ -312,11 +312,11 @@ class Node(object):
                 actors.append(actor)
         rels = self._get_rels(replication_times, self._failure_times)
 
-        failure_info = self.resource_manager.failure_info
+        #failure_info = self.resource_manager.failure_info
         cpu_avgs = self.resource_manager.get_avg_usages()
 
         self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
-            len(nodes), nodes, rels, actual_rel, required, rep_time, failure_info, str(cpu_avgs)))
+            len(nodes), nodes, rels, actual_rel, required, rep_time, self._failure_times, str(cpu_avgs)))
 
     def _get_rels(self, replication_times, failure_times):
         all_nodes = self.network.list_links()
