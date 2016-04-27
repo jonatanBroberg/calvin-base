@@ -26,7 +26,6 @@ class ResourceManager(object):
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
         self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), node_id)...}
-        #self.replication_times_millis = defaultdict(lambda: deque(maxlen=DEFAULT_REPLICATION_HISTORY_SIZE))
         self.test_sync = 2
         self._lost_nodes = set()
 

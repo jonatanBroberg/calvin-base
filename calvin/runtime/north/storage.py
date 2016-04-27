@@ -636,6 +636,18 @@ class Storage(object):
         """
         self.get_concat(prefix="replication-time-", key=actor_type, cb=cb)
 
+    def add_failure_time(self, uri, timestamp, cb=None):
+        """Store a time for failure for node with uri uri"""
+        _log.info("Storing failure time {} for uri {}".format(timestamp, uri))
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+        self.append("failure-times-", key=uri, value=[timestamp], cb=cb) 
+
+    def get_failure_times(self, uri, cb=None):
+        """
+        Get failure times for actor_type
+        """
+        self.get_concat(prefix="failure-times-", key=uri, cb=cb)        
+
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """
         Add port to storage
