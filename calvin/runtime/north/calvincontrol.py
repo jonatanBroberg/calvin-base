@@ -1008,11 +1008,23 @@ class CalvinControl(object):
     def handle_get_reliability(self, handle, connection, match, data, hdr):
         """ Ge reliability of node
         """
-        self.node.storage.get_replication_times(match.group(2), cb=CalvinCB(self.handle_get_reliability_cb, node_id=match.group(1),
+        self.node.storage.get_replication_times(match.group(2), cb=CalvinCB(self._get_replication_times, node_id=match.group(1),
                                                                         handle=handle, connection=connection))
 
-    def handle_get_reliability_cb(self, key, value, node_id, handle, connection):
-        reliability = self.node.resource_manager.get_reliability(node_id, key, value)
+    def _get_replication_times(self, key, value, node_id, handle, connection):
+        uri = self.node.resource_manager.node_uris[node_id]
+        if uri:
+            self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, node_id=node_id, replication_times=value,
+                                                            handle=handle, connection=connection))
+        else:
+            self._get_failure_times(None, [], node_id, value, handle, connection)            
+
+    def _get_failure_times(self, key, value, node_id, replication_times, handle, connection):
+        failure_times = []
+        if value:
+            failure_times = value
+
+        reliability = self.node.resource_manager.get_reliability(node_id, replication_times, failure_times)
         self.send_response(handle, connection, json.dumps(reliability))
 
     def handle_get_application_actors(self, handle, connection, match, data, hdr):
