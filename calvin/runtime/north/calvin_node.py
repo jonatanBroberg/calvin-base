@@ -280,14 +280,13 @@ class Node(object):
         self._failure_times = {}
 
         for node_id in self.network.list_links():
+            uri = rm.node_uris.get(node_id)
             self._failure_times[uri] = None
 
-        for node_id in self.network.list_links():
-            uri = rm.node_uris.get(node_id)
-            if uri:
-                callback = CalvinCB(self._collect_failure_times, nodes=nodes, required=required, 
-                                    current_nodes=current_nodes, replication_times=value)
-                self.storage.get_failure_times(uri, callback)
+        for uri in self._failure_times:
+            callback = CalvinCB(self._collect_failure_times, nodes=nodes, required=required, 
+                                current_nodes=current_nodes, replication_times=value)
+            self.storage.get_failure_times(uri, callback)
 
     def _collect_failure_times(self, key, value, nodes, required, current_nodes, replication_times):
         if value:
