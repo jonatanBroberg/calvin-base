@@ -277,28 +277,40 @@ class Node(object):
         self.storage.get_replication_times('std.CountTimer', callback)
 
     def _print_stats_cb(self, key, value, nodes, required, current_nodes):
-        callback = CalvinCB(self._print_stats_cb_2, nodes=nodes, required=required, 
+        self._failure_times = {}
+
+        for (node_id, uri) in nodes:
+            self._failure_times[uri] = None
+
+        for (node_id, uri) in nodes:
+            callback = CalvinCB(self._collect_failure_times, nodes=nodes, required=required, 
                                 current_nodes=current_nodes, replication_times=value)
-        uri = self.resource_manager.node_uris.get(node_id)
-        if uri:
             self.storage.get_failure_times(uri, callback)
 
-    def _print_stats_cb_2(self, key, value, nodes, required, current_nodes, replication_times):
+    def _collect_failure_times(self, key, value, nodes, required, current_nodes, replication_times):
+        if value:
+            self._failure_times[key] = value
+        elif key in self._failure_times:
+            del self._failure_times[key]
+
+        if not all(v is not None for v in self._failure_times.values()):
+            return
+
         rm = self.resource_manager
         rels = []
         for node_id in self.network.list_links():
-            rel = rm.get_reliability(node_id, replication_times, value)
+            rel = rm.get_reliability(node_id, replication_times, self._failure_times)
             rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
         _log.info("NODE RELIABILITIES: {}".format(rels))
 
-        actual_rel = self.resource_manager.current_reliability(current_nodes, replication_times, value)
+        actual_rel = self.resource_manager.current_reliability(current_nodes, replication_times, self._failure_times)
         _log.debug("RELIABILITY: {}".format(actual_rel))
         rep_time = self.resource_manager._average_replication_time(replication_times)
         actors = []
         for actor in self.am.actors.values():
             if 'actions:src' in actor.name:
                 actors.append(actor)
-        rels = self._get_rels(replication_times, value)
+        rels = self._get_rels(replication_times, self._failure_times)
 
         failure_info = self.resource_manager.failure_info
         cpu_avgs = self.resource_manager.get_avg_usages()
