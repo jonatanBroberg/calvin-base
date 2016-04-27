@@ -327,7 +327,7 @@ class Node(object):
             rel = rm.get_reliability(node_id, replication_times, failure_times)
             uri = rm.node_uris.get(node_id)
             if uri:
-                mtbf = rm.reliability_calculator.get_mtbf(failure_times)
+                mtbf = rm.reliability_calculator.get_mtbf(failure_times[uri])
                 rels.append((uri, rel, 1 - rel, mtbf))
         return rels
 
