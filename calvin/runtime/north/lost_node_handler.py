@@ -90,7 +90,7 @@ class LostNodeHandler(object):
     def _register_lost_node(self, node_id):
         try:
             self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
-            #self.node.storage.add_failure(self.node.peer_uris.get(node_id), self._lost_nodes_times[node_id])
+            #self.node.storage.add_failure_time(self.node.peer_uris.get(node_id), self._lost_nodes_times[node_id])
         except Exception as e:
             _log.error("{}".format(e))
 
@@ -130,7 +130,12 @@ class LostNodeHandler(object):
             _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
             self.storage.get_node(node_id, self._delete_node)
             #self._register_lost_node(node_id)
-            self.node.storage.add_failure_time(self.node.peer_uris.get(node_id), self._lost_nodes_times[node_id])
+            uri = self.node.peer_uris.get(node_id)
+            if uri:
+                self.node.storage.add_failure_time(, self._lost_nodes_times[node_id])
+            else:
+                _log.warning('Could not store failure info of node {}, no uri'.format(node_id))
+                #Warning?
 
         for cb in self._callbacks[node_id]:
             _log.debug("Calling cb {} with status {}".format(cb, status))
