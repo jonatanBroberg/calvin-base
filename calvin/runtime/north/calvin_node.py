@@ -284,7 +284,7 @@ class Node(object):
             uri = self.peer_uris.get(node_id)
             uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
             if uri:
-                uris.add(uri)
+                uris.append(uri)
         uris = list(set(uris))
 
         for uri in uris:

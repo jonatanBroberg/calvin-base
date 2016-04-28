@@ -68,8 +68,9 @@ class ResourceManager(object):
     def get_avg_usages(self):
         usages = {}
         for node_id in self.usages.keys():
-            uri = self.node_uris[node_id]
-            usages[uri] = self._average_usage(node_id)
+            uri = self.node_uris.get(node_id)
+            if uri:
+                usages[uri] = self._average_usage(node_id)
         return usages
 
     def least_busy(self):
