@@ -97,10 +97,12 @@ class ResourceManager(object):
 
     def get_reliability(self, node_id, replication_times, failure_info):
         uri = self.node_uris.get(node_id)
-        if uri in failure_info:
-#            failure_info = self.failure_info[uri]
-            failure_info = failure_info[uri]
+        if uri:
             replication_time = self._average_replication_time(replication_times)
+            if uri in failure_info:
+                failure_info = failure_info[uri]
+            else:
+                failure_info = []
             return self.reliability_calculator.calculate_reliability(failure_info, replication_time)
         else:
             return DEFAULT_NODE_REALIABILITY
