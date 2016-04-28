@@ -33,7 +33,7 @@ class ReliabilityCalculator(object):
 
         if len(times) > 1:
             time_between_failures = [(j - i) for i, j in zip(times, times[1:])]
-            MTBF = 1000 * sum(time_between_failures) / len(time_between_failures)
+            MTBF = float(sum(time_between_failures)) / len(time_between_failures)
 
         _log.debug("Calculating mtbf. Failure info {}. mtbf {}".format(
             failure_times, MTBF))
