@@ -94,6 +94,7 @@ class Replicator(object):
                                                                                         start_time_millis=start_time_millis, cb=cb))
 
     def _get_replication_times(self, key, value, current_nodes, start_time_millis, cb):
+        _log.info("Storage return replication times {} for actor_type {}".format(value, self.actor_info['type']))
         self._replication_times = value
 
         uris = self.node.resource_manager.node_uris.values()
@@ -102,6 +103,7 @@ class Replicator(object):
         for uri in uris:
             self._failure_times[uri] = None
 
+        _log.info("Asking storage for failure times of {}".format(uris))
         for uri in uris:
             self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, current_nodes=current_nodes,
                                                                 start_time_millis=start_time_millis, cb=cb))
@@ -113,8 +115,9 @@ class Replicator(object):
         elif uri in self._failure_times:
             del self._failure_times[uri]
 
-        if all(v is not None for v in self._failure_times.values()):
-            _log.info('All failure times: {}'.format(self._failure_times))
+        #if all(v is not None for v in self._failure_times.values()):
+        if None in self._failure_times.values()):
+            _log.info("All failure times: {}".format(self._failure_times))
             cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_application_actors(self.actor_info['app_id'], cb)
 

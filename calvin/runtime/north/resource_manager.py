@@ -60,7 +60,6 @@ class ResourceManager(object):
         _log.debug("Registering lost node: {} - {}".format(node_id, uri))
         uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
         self.node_uris[node_id] = uri
-#        self._add_failure_info(uri, [(time.time(), node_id)])
 
     def _average_usage(self, node_id):
         return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)
