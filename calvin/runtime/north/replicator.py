@@ -99,7 +99,7 @@ class Replicator(object):
 
         uris = self.node.resource_manager.node_uris.values()
         #uris = self.node.peer_uris.values()
-        uris = list(uris)
+        uris = list(set(uris))
         for uri in uris:
             self._failure_times[uri] = None
 

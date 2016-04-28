@@ -278,12 +278,19 @@ class Node(object):
 
     def _print_stats_cb(self, key, value, nodes, required, current_nodes):
         self._failure_times = {}
+        uris = []
 
         for node_id in self.network.list_links():
-            uri = rm.node_uris.get(node_id)
+            uri = self.peer_uris.get(node_id)
+            uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
+            if uri:
+                uris.add(uri)
+        uris = list(set(uris))
+
+        for uri in uris:
             self._failure_times[uri] = None
 
-        for uri in self._failure_times:
+        for uri in uris:
             callback = CalvinCB(self._collect_failure_times, nodes=nodes, required=required, 
                                 current_nodes=current_nodes, replication_times=value)
             self.storage.get_failure_times(uri, callback)
