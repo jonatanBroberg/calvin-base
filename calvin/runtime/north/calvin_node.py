@@ -294,7 +294,7 @@ class Node(object):
         elif key in self._failure_times:
             del self._failure_times[key]
 
-        if not all(v is not None for v in self._failure_times.values()):
+        if None in self._failure_times.values():
             return
 
         rm = self.resource_manager

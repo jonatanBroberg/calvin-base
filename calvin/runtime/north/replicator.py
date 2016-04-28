@@ -115,8 +115,7 @@ class Replicator(object):
         elif uri in self._failure_times:
             del self._failure_times[uri]
 
-        #if all(v is not None for v in self._failure_times.values()):
-        if None in self._failure_times.values()):
+        if not None in self._failure_times.values():
             _log.info("All failure times: {}".format(self._failure_times))
             cb = CalvinCB(self._find_app_actors, current_nodes=current_nodes, start_time_millis=start_time_millis, cb=cb)
             self.node.storage.get_application_actors(self.actor_info['app_id'], cb)
