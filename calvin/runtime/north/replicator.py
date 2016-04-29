@@ -105,8 +105,9 @@ class Replicator(object):
 
         _log.info("Asking storage for failure times of {}".format(uris))
         for uri in uris:
-            self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, current_nodes=current_nodes,
-                                                                start_time_millis=start_time_millis, cb=cb))
+            if uri:
+                self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, current_nodes=current_nodes,
+                                                                    start_time_millis=start_time_millis, cb=cb))
 
     def _get_failure_times(self, key, value, current_nodes, start_time_millis, cb):
         uri = key
