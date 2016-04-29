@@ -640,7 +640,8 @@ class Storage(object):
         """Store a time for failure for node with uri uri"""
         _log.info("Storing failure time {} for uri {}".format(timestamp, uri))
         cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
-        self.append("failure-times-", key=uri, value=[timestamp], cb=cb) 
+        self.append("failure-times-", key=uri, value=[timestamp], cb=cb)
+        self.trigger_flush()
 
     def get_failure_times(self, uri, cb=None):
         """
