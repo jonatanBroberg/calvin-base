@@ -187,21 +187,21 @@ class Node(object):
             self._send_rm_info(peer_node_id)
 
     def _send_rm_info(self, peer_node_id):
-        # Send own times to new peers and retreive there times
+        # Send own info to new peers and retreive there info
         callback = CalvinCB(self._send_rm_info_cb)
-        [failure_info, usages] = self.resource_manager.sync_info()
+        usages = self.resource_manager.sync_info()
 
-        self.proto.send_rm_info(peer_node_id, failure_info, usages, callback)
+        self.proto.send_rm_info(peer_node_id, usages, callback)
 
     def _send_rm_info_cb(self, status, *args, **kwargs):
         # Receives other peers rm info
         if status.data:
-            self.resource_manager.sync_info(status.data[0], status.data[1])
+            self.resource_manager.sync_info(status.data[0])
 
-    def sync_rm_info(self, failure_info, usages, callback):
+    def sync_rm_info(self, usages, callback):
         # sync received info
-        [failure_info, usages] = self.resource_manager.sync_info(failure_info, usages)
-        callback(failure_info, usages, status=response.CalvinResponse(True))
+        usages = self.resource_manager.sync_info(usages)
+        callback(usages, status=response.CalvinResponse(True))
 
     def logging_callback(self, preamble=None, *args, **kwargs):
         _log.debug("\n%s# NODE: %s \n# %s %s %s \n%s" %
@@ -318,7 +318,6 @@ class Node(object):
                 actors.append(actor)
         rels = self._get_rels(replication_times, self._failure_times)
 
-        #failure_info = self.resource_manager.failure_info
         cpu_avgs = self.resource_manager.get_avg_usages()
 
         self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(

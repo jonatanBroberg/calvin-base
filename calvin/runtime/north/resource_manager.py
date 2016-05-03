@@ -25,7 +25,6 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
-        self.failure_info = defaultdict(lambda: [])                     #{node_id: [(time.time(), node_id)...}
         self.test_sync = 2
         self._lost_nodes = set()
 
@@ -58,9 +57,6 @@ class ResourceManager(object):
         self._lost_nodes.add(node_id)
         del self.usages[node_id]
         _log.debug("Registering lost node: {}".format(node_id))
-#        _log.debug("Registering lost node: {} - {}".format(node_id, uri))
-#        uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
-#        self.node_uris[node_id] = uri
 
     def _average_usage(self, node_id):
         return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)
@@ -146,17 +142,17 @@ class ResourceManager(object):
         _log.info("Reliability for nodes {} is {}".format(current_nodes, p))
         return p
 
-    def sync_info(self, failure_info=None, usages=None):
+    def sync_info(self, usages=None):
         if usages:
-            self.sync_usages(usages)
+            self._sync_usages(usages)
 
         usages = {}
         for (node_id, usage_list) in self.usages.iteritems():
             usages[node_id] = [usage for usage in usage_list]
 
-        return [self.failure_info, usages]
+        return usages
 
-    def sync_usages(self, usages):
+    def _sync_usages(self, usages):
         """
         Sync the usages for each node_id stored on another node.
         usages is a dict of lists but stored as a dict with deques
