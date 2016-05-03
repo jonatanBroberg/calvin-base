@@ -18,7 +18,7 @@ class LostNodeHandler(object):
         self._lost_nodes = set()
         self._lost_nodes_times = dict()
         self._lost_node_requests = set()
-        self._failed_requests = set()
+        self._failed_requests = defaultdict(set)
         self._finished_requests = dict()
         self._callbacks = defaultdict(set)
         self.resource_manager = resource_manager
@@ -110,7 +110,7 @@ class LostNodeHandler(object):
         """ Callback when we sent a request. If the request fails, send to new node """
         _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
         if not status:
-            self._failed_requests.add(prio_node)
+            self._failed_requests[node_id].add(prio_node)
             prio_node_uri = self.resource_manager.node_uris.get(prio_node)
             _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
             if node_id in self._lost_nodes:
@@ -148,7 +148,7 @@ class LostNodeHandler(object):
 
         if node_id in node_ids:
             node_ids.remove(node_id)
-        for n_id in self._failed_requests:
+        for n_id in self._failed_requests[node_id]:
             if n_id in node_ids:
                 node_ids.remove(n_id)
 
