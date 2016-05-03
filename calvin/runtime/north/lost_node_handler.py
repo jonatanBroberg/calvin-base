@@ -89,7 +89,6 @@ class LostNodeHandler(object):
 
     def _register_lost_node(self, node_id):
         try:
-            #self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
             self.resource_manager.lost_node(node_id)
         except Exception as e:
             _log.error("{}".format(e))

@@ -101,7 +101,6 @@ class Node(object):
         self.app_manager = appmanager.AppManager(self)
         self.resource_manager = ResourceManager()
 
-        self.peer_uris = {}
         self.app_monitor = AppMonitor(self, self.app_manager, self.storage)
         self.lost_node_handler = LostNodeHandler(self, self.resource_manager, self.pm, self.am, self.storage)
 
@@ -175,8 +174,6 @@ class Node(object):
         self.resource_manager.register_uri(peer_node_id, uri)
         if status:
             self._register_heartbeat_receiver(peer_node_id)
-
-        #self.peer_uris[peer_node_id] = uri
 
         if uri in peers:
             peers.remove(uri)
@@ -282,7 +279,6 @@ class Node(object):
         uris = []
 
         for node_id in self.network.list_links():
-            #uri = self.peer_uris.get(node_id)
             uri = self.resource_manager.get(node_id)
             uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
             if uri:

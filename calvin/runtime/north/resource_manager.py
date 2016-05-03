@@ -43,7 +43,6 @@ class ResourceManager(object):
             if not is_ip:
                 addr = socket.gethostbyname(addr)
 
-            _log.info("Adding uri {} to node_uris for node id {}".format("{}:{}".format(addr, port), node_id))
             self.node_uris[node_id] = "{}:{}".format(addr, port)
 
     def register(self, node_id, usage, uri):
