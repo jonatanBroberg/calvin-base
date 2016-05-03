@@ -1,7 +1,9 @@
 import datetime
+import json
 from collections import defaultdict
 
 uris = {
+    "10.11.12.1:5001": "gru",
     "10.11.12.50:5001": "dave1",
     "10.11.12.50:5004": "dave2",
     "10.11.12.51:5001": "kevin1",
@@ -35,6 +37,7 @@ print first
 
 node_reliabilities = defaultdict(list)
 current_node_counts = defaultdict(list)
+node_usages = defaultdict(list)
 
 while i < len(lines):
     line = lines[i]
@@ -70,6 +73,16 @@ while i < len(lines):
     reliability = float(data[3])
     replication_time = int(data[5].replace("]", ""))
     required = float(data[4])
+    usages = data[7].replace("[", "").replace("]", "").replace("': ", "': '").replace(", '", "', '").replace("}", "'}").replace("'", '"')
+    usages = json.loads(usages)
+
+    for uri in usages:
+        uri = uri.replace("u", "")
+        node_usages[uri].append((time, float(usages[uri])))
+        length = len(node_usages[uri])
+    for uri in node_reliabilities.keys():
+        if len(node_usages[uri]) < length:
+            node_usages[uri].append((time, float(0)))
 
     all_rels.append(reliability)
     diff = reliability - required
@@ -91,7 +104,7 @@ print timestamp
 
 node_rels = [["0"]]
 for uri in node_reliabilities:
-    node_rels[0].append(uri.replace("u", ""))
+    node_rels[0].append(uris[uri.replace("u", "")])
     for i, (time, rel) in enumerate(node_reliabilities[uri]):
         if i > len(node_rels) - 2:
             node_rels.append([str(time).replace(".", ",")])
@@ -118,4 +131,20 @@ for i, time in enumerate(sorted(current_node_counts.keys())):
 
 lines = [";".join(node_count) for node_count in node_counts]
 with open("node_counts.csv", "w") as f:
+    f.writelines("\n".join(lines))
+
+
+usages = [["0"]]
+for uri in node_reliabilities.keys():
+    usages[0].append(uris[uri.replace("u", "")])
+    for i, (time, rel) in enumerate(node_usages[uri]):
+        if i > len(usages) - 2:
+            usages.append([str(time).replace(".", ",")])
+        #print str(time), str(rel), str(rel).replace(".", ",")
+        usages[i + 1].append(str(rel).replace(".", ","))
+
+lines = [";".join(node_rel) for node_rel in usages]
+#print usages
+#print "\n".join(lines)
+with open("usages.csv", "w") as f:
     f.writelines("\n".join(lines))
