@@ -43,6 +43,7 @@ class ResourceManager(object):
             if not is_ip:
                 addr = socket.gethostbyname(addr)
 
+            _log.info("Adding uri {} to node_uris for node id {}".format("{}:{}".format(addr, port), node_id))
             self.node_uris[node_id] = "{}:{}".format(addr, port)
 
     def register(self, node_id, usage, uri):
@@ -52,14 +53,15 @@ class ResourceManager(object):
         if usage:
             self.usages[node_id].append(usage['cpu_percent'])
 
-    def lost_node(self, node_id, uri):
+    def lost_node(self, node_id):
         if node_id in self._lost_nodes:
             return
         self._lost_nodes.add(node_id)
         del self.usages[node_id]
-        _log.debug("Registering lost node: {} - {}".format(node_id, uri))
-        uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
-        self.node_uris[node_id] = uri
+        _log.debug("Registering lost node: {}".format(node_id))
+#        _log.debug("Registering lost node: {} - {}".format(node_id, uri))
+#        uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
+#        self.node_uris[node_id] = uri
 
     def _average_usage(self, node_id):
         return sum(self.usages[node_id]) / max(len(self.usages[node_id]), 1)

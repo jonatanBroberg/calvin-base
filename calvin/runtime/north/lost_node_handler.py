@@ -89,7 +89,8 @@ class LostNodeHandler(object):
 
     def _register_lost_node(self, node_id):
         try:
-            self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
+            #self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
+            self.resource_manager.lost_node(node_id)
         except Exception as e:
             _log.error("{}".format(e))
 
@@ -128,7 +129,7 @@ class LostNodeHandler(object):
         else:
             _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
             self.storage.get_node(node_id, self._delete_node)
-            uri = self.node.resource_manager.node_uris.get(node_id)
+            uri = self.resource_manager.node_uris.get(node_id)
             if uri:
                 self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])
             else:
@@ -160,7 +161,7 @@ class LostNodeHandler(object):
             return None
 
         highest = sorted(node_ids)[0]
-        _log.info("Highest prio node: {} - {}".format(highest, self.node.resource_manager.node_uris.get(highest)))
+        _log.info("Highest prio node: {} - {}".format(highest, self.resource_manager.node_uris.get(highest)))
         return highest
 
     def replicate_node_actors(self, node_id, cb):

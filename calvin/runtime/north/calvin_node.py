@@ -176,7 +176,8 @@ class Node(object):
         if status:
             self._register_heartbeat_receiver(peer_node_id)
 
-        self.peer_uris[peer_node_id] = uri
+        #self.peer_uris[peer_node_id] = uri
+
         if uri in peers:
             peers.remove(uri)
             peer_node_ids[uri] = (peer_node_id, status)
@@ -281,7 +282,8 @@ class Node(object):
         uris = []
 
         for node_id in self.network.list_links():
-            uri = self.peer_uris.get(node_id)
+            #uri = self.peer_uris.get(node_id)
+            uri = self.resource_manager.get(node_id)
             uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
             if uri:
                 uris.append(uri)
@@ -363,7 +365,7 @@ class Node(object):
             return        
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = usage.get('uri')
-        #uri = self.uri if node_id == self.id else self.peer_uris.get(node_id)
+
         self.resource_manager.register(node_id, usage, uri)
         self._register_heartbeat_receiver(node_id)
         callback(status=response.CalvinResponse(True))
