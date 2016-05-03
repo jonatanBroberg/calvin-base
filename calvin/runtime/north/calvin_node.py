@@ -279,7 +279,7 @@ class Node(object):
         uris = []
 
         for node_id in self.network.list_links():
-            uri = self.resource_manager.get(node_id)
+            uri = self.resource_manager.node_uris.get(node_id)
             uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
             if uri:
                 uris.append(uri)
