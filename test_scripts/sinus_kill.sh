@@ -1,6 +1,6 @@
 #rand=`python -c "import random; print random.randint(30, 90)"`
 rands=($(python -c "import numpy as np;
-mu=18.9; sigma=1.0;
+mu=23.9; sigma=1.0;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
     print n
@@ -30,7 +30,7 @@ while true; do
     now=`date +%s`
     time=`awk "BEGIN {print ($now - $start)}"`
 
-    rand=`awk "BEGIN {print $rand + 10 * sin(2 * $pi * $time / 120)}"`
+    rand=`awk "BEGIN {print $rand + 20 * sin(2 * $pi * $time / 300)}"`
     rand=`awk "BEGIN {print ($rand - $extra)}"`
 
     echo "sleep: $rand"
@@ -44,7 +44,8 @@ while true; do
 
     #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:$port"
     nodes_add="null"
-    while [[ $nodes_add == *"null"* ]];
+    regex="null|Read timed out"
+    while [[ "$nodes_add" =~ $regex ]];
     do
         #echo "adding node"
         #cscontrol http://gru.nefario:5002 nodes list

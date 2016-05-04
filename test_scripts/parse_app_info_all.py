@@ -46,24 +46,28 @@ while i < len(lines):
     time = (timestamp - first).total_seconds()
 
     data = line[34:]
-    data = map(lambda x: x.replace("[", ""), data.split("] ["))
+    data = map(lambda x: x.replace("[", "").replace("]", ""), data.split("] ["))
 
     node_rels = data[2].replace("[[", "").replace("]]", "")
     node_rels = map(lambda x: x.replace("(", "").replace("'", "").split(", "), node_rels.split("), ("))
     for node_rel in node_rels:
         uri = node_rel[0].replace("u", "")
-        node_reliabilities[uri].append((time, float(node_rel[1])))
+        if uri:
+            node_reliabilities[uri].append((time, float(node_rel[1])))
 
     replicas = int(data[0])
 
-
     current_nodes = data[1].replace("[[", "").replace("]]", "")
     current_nodes = map(lambda x: x.replace("(u'", "").replace("'", "").replace(")", "").split(", "), current_nodes.split("), ("))
-    current_nodes = [x[1] for x in current_nodes]
+    if replicas:
+        current_nodes = [x[1] for x in current_nodes]
+    else:
+        current_nodes = []
 
     current_node_counts[time] = defaultdict(int)
     for uri in current_nodes:
         uri = uri.replace("u", "").replace("]", "")
+
         current_node_counts[time][uri] = 1 # .append((time, 1))
     #for uri in node_reliabilities:
     #    uri = uri.replace("u", "").replace("]", "")
@@ -71,7 +75,7 @@ while i < len(lines):
     #        current_node_counts[uri].append((time, 0))
 
     reliability = float(data[3])
-    replication_time = int(data[5].replace("]", ""))
+    replication_time = float(data[5].replace("]", ""))
     required = float(data[4])
     usages = data[7].replace("[", "").replace("]", "").replace("': ", "': '").replace(", '", "', '").replace("}", "'}").replace("'", '"')
     usages = json.loads(usages)
@@ -103,6 +107,8 @@ print float(sum(all_rels[1:])) / len(all_rels[1:])
 print timestamp
 
 node_rels = [["0"]]
+if "None" in node_reliabilities:
+    del node_reliabilities["None"]
 for uri in node_reliabilities:
     node_rels[0].append(uris[uri.replace("u", "")])
     for i, (time, rel) in enumerate(node_reliabilities[uri]):
