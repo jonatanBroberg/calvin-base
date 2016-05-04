@@ -334,6 +334,9 @@ class Node(object):
             if uri in failure_times:
                 mtbf = rm.reliability_calculator.get_mtbf(failure_times[uri])
                 rels.append((uri, rel, 1 - rel, mtbf))
+            else:
+                mtbf = rm.reliability_calculator.get_mtbf([])
+                rels.append((uri, rel, 1 - rel, mtbf))
         return rels
 
     def report_resource_usage(self, usage):
