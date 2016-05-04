@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import os
+import time
+
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import dynops
 from calvin.utilities import calvinlogger
@@ -161,6 +163,7 @@ class AppManager(object):
             _log.error("Non existing application id (%s) specified" % application_id)
             return
         self.storage.add_application(self.applications[application_id])
+        self._node.app_monitor.check_app_reliability(application_id, time.time())
         if migrate:
             self.execute_requirements(application_id, cb if cb else self.req_done)
         elif cb:
