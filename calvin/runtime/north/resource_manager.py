@@ -27,6 +27,7 @@ class ResourceManager(object):
         self.node_uris = {}
         self.test_sync = 2
         self._lost_nodes = set()
+        self._rep_times = {}
 
     def register_uri(self, node_id, uri):
         _log.debug("Registering uri: {} - {}".format(node_id, uri))
@@ -105,7 +106,13 @@ class ResourceManager(object):
             return DEFAULT_NODE_REALIABILITY
 
     def replication_time(self, replication_times):
-        return self.reliability_calculator.replication_time(replication_times) + LOST_NODE_TIME
+        key = "".join([str(t) for t in replication_times])
+        if key in self._rep_times:
+            return self._rep_times[key]
+
+        value = self.reliability_calculator.replication_time(replication_times) + LOST_NODE_TIME
+        self._rep_times[key] = value
+        return value
 
     def get_preferred_nodes(self, node_ids):
         preferred = []
