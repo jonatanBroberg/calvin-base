@@ -1,5 +1,8 @@
 import math
 import time
+import numpy
+import scipy
+import scipy.stats
 
 from calvin.utilities.calvinlogger import get_logger
 
@@ -68,3 +71,23 @@ class ReliabilityCalculator(object):
         Average number of failures during time t:
         _lambda = (nbr of failures + 1)/(total_time) * 1000 * replication_time
         """
+
+    def replication_time(self, replication_times, confidence=0.99):
+        """Returns a value for which the confidence of the average value being below that value is equal to
+        the given confidence level
+
+        This assumes a normal distribution of the replication times
+        the 95th percentile is approximately two standard deviations above the mean
+        """
+        if not replication_times:
+            return DEFAULT_REPLICATION_TIME
+        return sum(replication_times) / len(replication_times)
+
+        _log.info("Replication times: {}".format(replication_times))
+        standard_dev = float(numpy.std(replication_times))
+        _log.info("Standard dev: {}".format(standard_dev))
+        average_std = scipy.stats.norm.ppf(confidence) * standard_dev / math.sqrt(len(replication_times))
+        _log.info("Confidence: {}. Average std: {}".format(scipy.stats.norm.ppf(confidence), average_std))
+        average = sum(replication_times) / len(replication_times)
+        _log.info("Average: {}: {}".format(average, average + average_std))
+        return average + average_std

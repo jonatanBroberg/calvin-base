@@ -311,7 +311,7 @@ class Node(object):
 
         actual_rel = self.resource_manager.current_reliability(current_nodes, replication_times, self._failure_times)
         _log.debug("RELIABILITY: {}".format(actual_rel))
-        rep_time = self.resource_manager._average_replication_time(replication_times)
+        rep_time = self.resource_manager.replication_time(replication_times)
         actors = []
         for actor in self.am.actors.values():
             if 'actions:src' in actor.name:

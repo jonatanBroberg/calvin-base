@@ -95,7 +95,7 @@ class ResourceManager(object):
     def get_reliability(self, node_id, replication_times, failure_info):
         uri = self.node_uris.get(node_id)
         if uri:
-            replication_time = self._average_replication_time(replication_times)
+            replication_time = self.replication_time(replication_times)
             if uri in failure_info:
                 failure_info = failure_info[uri]
             else:
@@ -104,18 +104,15 @@ class ResourceManager(object):
         else:
             return DEFAULT_NODE_REALIABILITY
 
+    def replication_time(self, replication_times):
+        return reliability_calculator.replication_time(replication_times) + LOST_NODE_TIME
+
     def get_preferred_nodes(self, node_ids):
         preferred = []
         for node_id in node_ids:
             if self._average_usage(node_id) < MAX_PREFERRED_USAGE:
                 preferred.append(node_id)
         return preferred
-
-    def _average_replication_time(self, replication_times):
-        if not replication_times:
-            return DEFAULT_REPLICATION_TIME
-        time = sum(replication_times) / max(len(replication_times), 1)
-        return time + LOST_NODE_TIME
 
     def _update_deque(self, new_values, old_values):
         for tup in new_values:
