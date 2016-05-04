@@ -105,7 +105,7 @@ class ResourceManager(object):
             return DEFAULT_NODE_REALIABILITY
 
     def replication_time(self, replication_times):
-        return reliability_calculator.replication_time(replication_times) + LOST_NODE_TIME
+        return self.reliability_calculator.replication_time(replication_times) + LOST_NODE_TIME
 
     def get_preferred_nodes(self, node_ids):
         preferred = []
