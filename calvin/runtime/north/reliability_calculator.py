@@ -33,7 +33,7 @@ class ReliabilityCalculator(object):
     def get_mtbf(self, failure_times):
         MTBF = DEFAULT_MTBF
         _log.debug("Get mtbf from {}".format(failure_times))
-        times = sorted(int(t) for t in failure_times)
+        times = sorted(t for t in failure_times)
 
         if len(times) > 1:
             time_between_failures = [(j - i) for i, j in zip(times, times[1:])]
@@ -45,7 +45,7 @@ class ReliabilityCalculator(object):
         return MTBF
 
     def failure_rate(self, failure_times, replication_time):
-        # Constant
+        _log.debug("Failure times: {}".format(failure_times))
         MTBF = self.get_mtbf(failure_times)
         fr = float(replication_time) / MTBF
         _log.debug("Failure rate: {}".format(fr))
@@ -72,22 +72,16 @@ class ReliabilityCalculator(object):
         _lambda = (nbr of failures + 1)/(total_time) * 1000 * replication_time
         """
 
-    def replication_time(self, replication_times, confidence=0.99):
-        """Returns a value for which the confidence of the average value being below that value is equal to
-        the given confidence level
+    def replication_time(self, replication_times, confidence=0.95):
+        """Returns the value for the 'confidence'-percentile.
 
-        This assumes a normal distribution of the replication times
-        the 95th percentile is approximately two standard deviations above the mean
+        Assumes a logistic distribution for the replication times.
         """
         if not replication_times:
             return DEFAULT_REPLICATION_TIME
-        return sum(replication_times) / len(replication_times)
 
-        _log.info("Replication times: {}".format(replication_times))
-        standard_dev = float(numpy.std(replication_times))
-        _log.info("Standard dev: {}".format(standard_dev))
-        average_std = scipy.stats.norm.ppf(confidence) * standard_dev / math.sqrt(len(replication_times))
-        _log.info("Confidence: {}. Average std: {}".format(scipy.stats.norm.ppf(confidence), average_std))
-        average = sum(replication_times) / len(replication_times)
-        _log.info("Average: {}: {}".format(average, average + average_std))
-        return average + average_std
+        _log.debug("Replication times: {}".format(replication_times))
+        loc, scale = scipy.stats.logistic.fit(replication_times)
+        value = scipy.stats.logistic.ppf(confidence, loc=loc, scale=scale)
+        _log.debug("Returning value: {} for confidence level {} and replication times {}".format(value, confidence, replication_times))
+        return value
