@@ -183,7 +183,7 @@ class Node(object):
             comb_status = max([s for _, s in peer_node_ids.values()])
             org_cb(peer_node_ids=peer_node_ids, status=comb_status)
 
-        if peer_node_id and not self.is_storage_node(peer_node_id) and not self.storage_node:
+        if peer_node_id and status:
             self._send_rm_info(peer_node_id)
 
     def _send_rm_info(self, peer_node_id):
