@@ -26,6 +26,7 @@ class AppMonitor(object):
             start_time = time.time()
             for app in self.app_manager.applications:
                 self.check_app_reliability(app, start_time)
+        self._monitor_count = self._monitor_count % 20
 
     def check_app_reliability(self, app_id, start_time):
         self.storage.get_application(app_id, cb=CalvinCB(self._check_app_reliability, start_time=start_time))
