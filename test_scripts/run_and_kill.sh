@@ -38,7 +38,8 @@ while true; do
 
     #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:$port"
     nodes_add="null"
-    while [[ $nodes_add == *"null"* ]];
+    regex="null|Read timed out"
+    while [[ "$nodes_add" =~ $regex ]];
     do
         #echo "adding node"
         #cscontrol http://gru.nefario:5002 nodes list
@@ -59,7 +60,7 @@ while true; do
 
     nodes=`cscontrol http://gru.nefario:5002 nodes list`
     n_nodes=$(grep -o " " <<< "$nodes" | wc -l)
-    while [ $n_nodes -lt 5 ]
+    while [ $n_nodes -lt 3 ]
     do
         echo "not enough nodes, sleeping..."
         echo $n_nodes

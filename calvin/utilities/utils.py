@@ -138,7 +138,7 @@ def get_nodes(rt, timeout=TIMEOUT, async=False):
 
 def peer_setup(rt, *peers, **kwargs):
     rt = get_RT(rt)
-    timeout = kwargs.get('timeout', TIMEOUT)
+    timeout = kwargs.get('timeout', 0.5)
     async = kwargs.get('async', False)
     if not isinstance(peers[0], type("")):
         peers = peers[0]
