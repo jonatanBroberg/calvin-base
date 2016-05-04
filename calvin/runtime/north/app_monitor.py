@@ -23,7 +23,7 @@ class AppMonitor(object):
         #self.print_actors()
         if self._monitor_count == 20:
             self._monitor_count = 0
-            start_time = int(round(time.time() * 1000))
+            start_time = time.time()
             for app in self.app_manager.applications:
                 self.check_app_reliability(app, start_time)
 
@@ -101,7 +101,7 @@ class AppMonitor(object):
                 return
             names.append(name)
             cb = CalvinCB(self._check_actors_reliability, actors=actors, app_info=app_info, names=names, index=index + 1, start_time=start_time)
-            replicator.replicate_lost_actor(cb=cb, start_time_millis=start_time)
+            replicator.replicate_lost_actor(cb=cb, start_time=start_time)
         else:
             if name in names:
                 _log.debug("Already checked reliability of actor: {}".format(name))

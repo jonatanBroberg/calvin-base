@@ -3,7 +3,8 @@ import time
 
 from calvin.utilities.calvinlogger import get_logger
 
-DEFAULT_MTBF = 10000
+DEFAULT_MTBF = 10  # seconds
+DEFAULT_REPLICATION_TIME = 2.0  # seconds
 
 _log = get_logger(__name__)
 
@@ -27,7 +28,7 @@ class ReliabilityCalculator(object):
         return math.exp(-_lambda)
 
     def get_mtbf(self, failure_times):
-        MTBF = DEFAULT_MTBF  #ms
+        MTBF = DEFAULT_MTBF
         _log.debug("Get mtbf from {}".format(failure_times))
         times = sorted(int(t) for t in failure_times)
 

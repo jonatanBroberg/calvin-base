@@ -38,7 +38,7 @@ class LostNodeHandler(object):
         self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id) #necessary?
 
-        lost_node_time = int(round(time.time() * 1000))
+        lost_node_time = time.time()
         self._lost_nodes_times[node_id] = lost_node_time
 
         self.pm.close_disconnected_ports(self.am.actors.values())
@@ -72,7 +72,7 @@ class LostNodeHandler(object):
         self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id)
 
-        lost_node_time = int(round(time.time() * 1000))
+        lost_node_time = time.time()
         self._lost_nodes_times[node_id] = lost_node_time
 
         self._handle_lost_node(node_id)

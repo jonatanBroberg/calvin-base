@@ -399,7 +399,7 @@ class Node(object):
         _log.analyze(self.id, "+", "Lost actor {}".format(lost_actor_id))
         self.am.delete_actor(lost_actor_id)
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
-        replicator.replicate_lost_actor(cb, int(round(time.time() * 1000)))
+        replicator.replicate_lost_actor(cb, time.time())
 
     def increase_heartbeats(self, node_ids):
         for node_id in node_ids:
