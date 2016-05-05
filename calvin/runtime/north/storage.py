@@ -636,18 +636,35 @@ class Storage(object):
         """
         self.get_concat(prefix="replication-time-", key=actor_type, cb=cb)
 
-    def add_failure_time(self, uri, timestamp, cb=None):
+    def add_failure_time(self, uri, node_id, timestamp, cb=None):
         """Store a time for failure for node with uri uri"""
-        _log.info("Storing failure time {} for uri {}".format(timestamp, uri))
+        _log.info("Checking if we should store failure time {} for uri {}".format(timestamp, uri))
+        cb = CalvinCB(self._add_failure_time, node_id=node_id, timestamp=timestamp, cb=cb)
+        self.get_concat(prefix="failure-node-ids-", key=uri, cb=cb)
+
+    def _add_failure_time(self, key, value, node_id, timestamp, cb):
+        if value and node_id in value:
+            _log.warning("Already stored failure time for node {} - {}".format(key, node_id))
+            timestamp = []
+        else:
+            _log.info("Failure time for {} not stored yet, storing".format(node_id))
+            timestamp = [timestamp]
+
+        cb = CalvinCB(func=self._add_uri_failure_time, uri=key, timestamp=timestamp, cb=cb)
         cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
-        self.append("failure-times-", key=uri, value=[timestamp], cb=cb)
+        self.append("failure-node-ids-", key=key, value=[node_id], cb=cb)
+
+    def _add_uri_failure_time(self, key, value, uri, timestamp, cb):
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+        _log.info("Storing failure time {} for uri {}".format(timestamp, uri))
+        self.append("failure-times-", key=uri, value=timestamp, cb=cb)
         self.trigger_flush()
 
     def get_failure_times(self, uri, cb=None):
         """
         Get failure times for actor_type
         """
-        self.get_concat(prefix="failure-times-", key=uri, cb=cb)        
+        self.get_concat(prefix="failure-times-", key=uri, cb=cb)
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """

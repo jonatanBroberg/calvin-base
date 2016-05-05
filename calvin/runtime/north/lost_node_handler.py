@@ -130,7 +130,7 @@ class LostNodeHandler(object):
             self.storage.get_node(node_id, self._delete_node)
             uri = self.resource_manager.node_uris.get(node_id)
             if uri:
-                self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])
+                self.node.storage.add_failure_time(uri, node_id, self._lost_nodes_times[node_id])
             else:
                 _log.warning("Could not store failure info of node {}, no uri".format(node_id))
                 #Warning?
