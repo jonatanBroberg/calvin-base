@@ -1,0 +1,18 @@
+TODO before releasing:
+
+- change to use pass the following as part of config:
+    + default MTBF
+    + default rep time (or create rep time as a function of (number of queues * queue size)
+
+- change to pass required reliability as deployment arguments
+
+- add more tests for 
+    - resource manager
+    - reliability calculator
+    - lost node handler
+    - replicator
+    - actor factory
+    - actor manager
+
+- use dynamic timeouts for replication request and lost node request
+
