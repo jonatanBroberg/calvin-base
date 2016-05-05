@@ -96,6 +96,7 @@ class Replicator(object):
     def _get_replication_times(self, key, value, current_nodes, start_time, cb):
         _log.info("Storage return replication times {} for actor_type {}".format(value, self.actor_info['type']))
         self._replication_times = value
+        self.replication_time = self.node.resource_manager.replication_time(self._replication_times)
 
         uris = self.node.resource_manager.node_uris.values()
         uris = list(set(uris))
@@ -231,7 +232,7 @@ class Replicator(object):
                     _log.info("Asking {} to replicate actor {} to node {}".format(
                         replica_value['node_id'], replica_id, to_node_id))
                     _log.info("Asking {} - {}".format(to_node_id, self.node.resource_manager.node_uris.get(to_node_id)))
-                    self.node.proto.actor_replication_request(replica_id, replica_value['node_id'], to_node_id, cb)
+                    self.node.proto.actor_replication_request(replica_id, replica_value['node_id'], to_node_id, self.replication_time, cb)
 
     def _find_node_to_replicate_to(self, current_nodes):
         available_nodes = self._find_available_nodes(current_nodes)
@@ -358,7 +359,7 @@ class Replicator(object):
                 _log.info("Asking {} to replicate actor {} to node {}".format(
                     lowest, replica_id, highest))
                 _log.info("Asking {} - {}".format(lowest, self.node.resource_manager.node_uris.get(lowest)))
-                self.node.proto.actor_replication_request(replica_id, lowest, highest, cb)
+                self.node.proto.actor_replication_request(replica_id, lowest, highest, self.replication_time, cb)
         else:
             _log.info("Removing unnecessary replicas")
             rel_without_lowest = self.node.resource_manager.current_reliability(current_nodes[:-1], self._replication_times, self._failure_times)
