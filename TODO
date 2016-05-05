@@ -16,3 +16,6 @@ TODO before releasing:
 
 - use dynamic timeouts for replication request and lost node request
 
+- add heartbeat port when creating the node
+
+- do not hard code LOST_NODE value, use timeout time in calvin node
