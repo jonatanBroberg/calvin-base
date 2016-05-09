@@ -53,7 +53,12 @@ while i < len(lines):
     for node_rel in node_rels:
         uri = node_rel[0].replace("u", "")
         if uri:
-            node_reliabilities[uri].append((time, float(node_rel[1])))
+            mtbf = node_rel[3].replace(")", "")
+            if mtbf == "10" and len(node_reliabilities[uri]) > 0:
+                prev = node_reliabilities[uri][-1][1]
+                node_reliabilities[uri].append((time, prev))
+            else:
+                node_reliabilities[uri].append((time, float(node_rel[1])))
 
     replicas = int(data[0])
 
