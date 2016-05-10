@@ -1017,7 +1017,7 @@ class CalvinControl(object):
             self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, node_id=node_id, replication_times=value,
                                                             handle=handle, connection=connection))
         else:
-            self._get_failure_times(None, [], node_id, value, handle, connection)            
+            self._get_failure_times(None, [], node_id, value, handle, connection)
 
     def _get_failure_times(self, key, value, node_id, replication_times, handle, connection):
         failure_times = []
@@ -1201,6 +1201,8 @@ class CalvinControl(object):
         """ Replicate actor response
         """
         actor_id = status.data.get('actor_id') if status.data else None
+        print "TIME rec request: ", status.data['rec_req_time']
+        print "TIME send reply: ", status.data['send_reply_time']
         if status:
             print "TIME: {}".format(time.time() - start)
             print status.data
