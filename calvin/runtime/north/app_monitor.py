@@ -22,11 +22,12 @@ class AppMonitor(object):
         if self.node.testing:
             return
         #self.print_actors()
-        if self._monitor_count == 4:
+        if self._monitor_count == 20:
             self._monitor_count = 0
-            start_time = int(round(time.time() * 1000))
+            start_time = time.time()
             for app in self.app_manager.applications:
                 self.check_app_reliability(app, start_time)
+        self._monitor_count = self._monitor_count % 20
 
     def check_app_reliability(self, app_id, start_time):
         return
@@ -96,10 +97,14 @@ class AppMonitor(object):
 
         name = calvinuuid.remove_uuid(value['name'])
         if value["replicate"] and name not in names:
-            replicator = Replicator(self.node, key, value, app_info['required_reliability'], do_delete=False)
+            try:
+                replicator = Replicator(self.node, key, value, app_info['required_reliability'], do_delete=False)
+            except Exception as e:
+                _log.warning("Failed to create replicator: {}".format(e))
+                return
             names.append(name)
             cb = CalvinCB(self._check_actors_reliability, actors=actors, app_info=app_info, names=names, index=index + 1, start_time=start_time)
-            replicator.replicate_lost_actor(cb=cb, start_time_millis=start_time)
+            replicator.replicate_lost_actor(cb=cb, start_time=start_time)
         else:
             if name in names:
                 _log.debug("Already checked reliability of actor: {}".format(name))

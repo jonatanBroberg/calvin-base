@@ -170,7 +170,6 @@ class CalvinProto(CalvinCBClass):
             'TUNNEL_DESTROY': [CalvinCB(self.tunnel_destroy_handler)],
             'TUNNEL_DATA': [CalvinCB(self.tunnel_data_handler)],
             'REPORT_USAGE': [CalvinCB(self.report_usage_handler)],
-            'REPORT_NEW_REPLICATION_TIME': [CalvinCB(self.report_new_replication_time_handler)],
             'SEND_RM_INFO': [CalvinCB(self.send_rm_info_handler)],
             'REPLY': [CalvinCB(self.reply_handler)]})
 
@@ -307,7 +306,7 @@ class CalvinProto(CalvinCBClass):
 
         _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
 
-        print "\nTIME, received request: {}".format(time.time() - payload['start_time'])
+        #print "\nTIME, received request: {}".format(time.time() - payload['start_time'])
 
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
@@ -319,7 +318,7 @@ class CalvinProto(CalvinCBClass):
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
 
-        print "\nTIME, send reply: {}".format(time.time() - payload['start_time'])
+        #print "\nTIME, send reply: {}".format(time.time() - payload['start_time'])
 
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode(), }
         try:
@@ -433,13 +432,13 @@ class CalvinProto(CalvinCBClass):
             self.node.network.link_request(to_rt_uuid, CalvinCB(self._actor_destroy,
                                                                 to_rt_uuid=to_rt_uuid,
                                                                 callback=callback,
-                                                                actor_id=actor_id))
+                                                                actor_id=actor_id), timeout=0.3)
 
     def _actor_destroy(self, to_rt_uuid, callback, actor_id, status, peer_node_id=None, uri=None):
         """ Got link? continue actor destruction """
         if status:
             msg = {'cmd': 'ACTOR_DESTROY', 'actor_id':actor_id}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.3)
         elif callback:
             callback(status=status)
 
@@ -676,7 +675,7 @@ class CalvinProto(CalvinCBClass):
 
     def port_connect_handler(self, payload):
         """ Request for port connection """
-        print 'port_connect_handler', datetime.now()
+        #print 'port_connect_handler', datetime.now()
 
         reply = self.node.pm.connection_request(payload)
         # Send reply
@@ -840,46 +839,18 @@ class CalvinProto(CalvinCBClass):
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
         self.network.links[payload['from_rt_uuid']].send(msg)
 
-    ### REPORT REPLICAITON TIME ###
-
-    def report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._report_replication_time, to_rt_uuid, actor_type, new_replication_time, callback)):
-            # Already have link just continue in _actor_new
-            self._report_replication_time(to_rt_uuid, actor_type, new_replication_time, callback, response.CalvinResponse(True))
-
-    def _report_replication_time(self, to_rt_uuid, actor_type, new_replication_time, callback, status):
-        """ Got link? continue report replication time """
-        if status:
-            msg = {'cmd': 'REPORT_NEW_REPLICATION_TIME',
-                    'actor_type': actor_type,
-                    'new_replication_time': new_replication_time}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg)
-        elif callback:
-            callback(status=status)
-
-    def report_new_replication_time_handler(self, payload):
-        """ Peer reported new replication time """
-        _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.register_new_replication_time(payload['actor_type'], payload['new_replication_time'],
-                                          callback=CalvinCB(self._report_new_replication_time_handler, payload))
-
-    def _report_new_replication_time_handler(self, payload, status, **kwargs):
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode()}
-        self.network.links[payload['from_rt_uuid']].send(msg)
-
     ### Synchronize resource manager information ###
 
-    def send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback):
-        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, replication_times, failure_info, callback)):
+    def send_rm_info(self, to_rt_uuid, usages, callback):
+        if self.node.network.link_request(to_rt_uuid, CalvinCB(self._send_rm_info, to_rt_uuid, usages, callback)):
             # Already have link just continue in _actor_new
-            self._send_rm_info(to_rt_uuid, replication_times, failure_info, callback, response.CalvinResponse(True))
+            self._send_rm_info(to_rt_uuid, usages, callback, response.CalvinResponse(True))
 
-    def _send_rm_info(self, to_rt_uuid, replication_times, failure_info, callback, status, *args, **kwargs):
+    def _send_rm_info(self, to_rt_uuid, usages, callback, status, *args, **kwargs):
         """ Got link? continue send rm info """
         if status:
             msg = {'cmd': 'SEND_RM_INFO',
-                    'replication_times': replication_times,
-                    'failure_info':failure_info}
+                    'usages':usages}
             try:
                 self.network.links[to_rt_uuid].send_with_reply(callback, msg)
             except KeyError as e:
@@ -891,11 +862,11 @@ class CalvinProto(CalvinCBClass):
     def send_rm_info_handler(self, payload):
         """ Peer reported new replication time """
         _log.analyze(self.rt_id, "+", payload, tb=True)
-        self.node.sync_rm_info(payload['replication_times'], payload['failure_info'], callback=CalvinCB(self._send_rm_info_handler, payload))
+        self.node.sync_rm_info(payload['usages'], callback=CalvinCB(self._send_rm_info_handler, payload))
 
-    def _send_rm_info_handler(self, payload, replication_times, failure_info, status, **kwargs):
+    def _send_rm_info_handler(self, payload, usages, status, **kwargs):
         value = status.encode()
-        value['data'] = [replication_times, failure_info]
+        value['data'] = [usages]
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': value}
         self.network.links[payload['from_rt_uuid']].send(msg)
 

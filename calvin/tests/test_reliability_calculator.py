@@ -11,32 +11,30 @@ class TestReliabilityCalculator(unittest.TestCase):
 	def setUp(self):
 		self.reliability_calculator = ReliabilityCalculator()
 		self.replication_time = 20
+		self.mtbf = 10000
 
 	def testReliabilityNoFailures(self):
 		failure_info = []
 
 		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
-		assert (reliability == math.exp(-float(self.replication_time)/30000))
+		assert (reliability == math.exp(-float(self.replication_time)/self.mtbf))
 
 	def testReliabilityOneFailure(self):
-		MTBF = 30
-		failure_info = [(time.time(), 0.2)]
+		failure_info = [time.time()]
 
 		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
-		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))
+		assert (reliability == math.exp(-float(self.replication_time)/self.mtbf))
 
 	def testReliabilityTwoFailures(self):
-		MTBF = 30
 		t = time.time()
-		failure_info = [(t, 0.2), (t + MTBF, 0.2)]
+		failure_info = [t, t + self.mtbf]
 
 		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
-		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))
+		assert (reliability == math.exp(-float(self.replication_time)/self.mtbf))
 
 	def testReliabilityThreeFailures(self):
-		MTBF = 30
 		t = time.time()
-		failure_info = [(t, 0.2), (t + 1.5*MTBF, 0.2), (t + 2*MTBF, 0.5)]
+		failure_info = [t, t+1.5*self.mtbf, t+2*self.mtbf]
 
 		reliability = self.reliability_calculator.calculate_reliability(failure_info, self.replication_time)
-		assert (reliability == math.exp(-float(self.replication_time)/(1000*MTBF)))
+		assert (reliability == math.exp(-float(self.replication_time)/self.mtbf))

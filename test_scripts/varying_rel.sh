@@ -1,6 +1,17 @@
 #rand=`python -c "import random; print random.randint(30, 90)"`
+
+r=$2
+if [ -z "$r" ]; then
+    r="7.5"
+fi
+s=$3
+if [ -z "$s" ]; then
+    s="0.0"
+fi
+r=`awk "BEGIN {print ($r - $s - 1.4)}"`
+
 rands=($(python -c "import numpy as np;
-mu=18.9; sigma=1.0;
+mu=$r; sigma=1.0;
 s = np.random.normal(mu, sigma, 1000)
 for n in s:
         print n
@@ -15,6 +26,7 @@ port=$((5000+$n))
 controlport=$(($port+1))
 
 host=`ip route get 8.8.8.8 | awk '{print $NF; exit}'`
+echo "HOST: $host"
 
 extra=0
 
@@ -38,8 +50,7 @@ while true; do
 
     #echo "cscontrol http://gru.nefario:5002 nodes add calvinip://$host:$port"
     nodes_add="null"
-    regex="null|Read timed out"
-    while [[ "$nodes_add" =~ $regex ]];
+    while [[ $nodes_add == *"null"* ]];
     do
         #echo "adding node"
         #cscontrol http://gru.nefario:5002 nodes list
@@ -60,7 +71,7 @@ while true; do
 
     nodes=`cscontrol http://gru.nefario:5002 nodes list`
     n_nodes=$(grep -o " " <<< "$nodes" | wc -l)
-    while [ $n_nodes -lt 3 ]
+    while [ $n_nodes -lt 5 ]
     do
         echo "not enough nodes, sleeping..."
         echo $n_nodes
@@ -70,5 +81,7 @@ while true; do
         extra=`awk "BEGIN {print ($extra + 0.2)}"`
     done
     pkill -9 -P $PID
-    sleep 0.2
+    sleep 0.5
+    echo "SLEEPING: $s"
+    sleep $s
 done

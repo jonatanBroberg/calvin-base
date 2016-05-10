@@ -15,9 +15,10 @@ class LostNodeHandler(object):
 
     def __init__(self, node, resource_manager, port_manager, actor_manager, storage):
         self.node = node
-        self._lost_nodes = dict()
+        self._lost_nodes = set()
+        self._lost_nodes_times = dict()
         self._lost_node_requests = set()
-        self._failed_requests = set()
+        self._failed_requests = defaultdict(set)
         self._finished_requests = dict()
         self._callbacks = defaultdict(set)
         self.resource_manager = resource_manager
@@ -34,10 +35,11 @@ class LostNodeHandler(object):
             _log.debug("We are already handling lost node {}".format(node_id))
             return
 
-        self._lost_node_requests.add(node_id)
+        self._lost_nodes.add(node_id)
+        self._lost_node_requests.add(node_id) #necessary?
 
-        lost_node_time = int(round(time.time() * 1000))
-        self._lost_nodes[node_id] = lost_node_time
+        lost_node_time = time.time()
+        self._lost_nodes_times[node_id] = lost_node_time
 
         self.pm.close_disconnected_ports(self.am.actors.values())
 
@@ -67,10 +69,11 @@ class LostNodeHandler(object):
         self._delete_replica_nodes(node_id)
         self.pm.close_disconnected_ports(self.am.actors.values())
 
+        self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id)
 
-        lost_node_time = int(round(time.time() * 1000))
-        self._lost_nodes[node_id] = lost_node_time
+        lost_node_time = time.time()
+        self._lost_nodes_times[node_id] = lost_node_time
 
         self._handle_lost_node(node_id)
 
@@ -86,7 +89,7 @@ class LostNodeHandler(object):
 
     def _register_lost_node(self, node_id):
         try:
-            self.resource_manager.lost_node(node_id, self.node.peer_uris.get(node_id))
+            self.resource_manager.lost_node(node_id)
         except Exception as e:
             _log.error("{}".format(e))
 
@@ -107,11 +110,11 @@ class LostNodeHandler(object):
         """ Callback when we sent a request. If the request fails, send to new node """
         _log.debug("Lost node CB for lost node {}: {}".format(node_id, status))
         if not status:
-            self._failed_requests.add(prio_node)
+            self._failed_requests[node_id].add(prio_node)
             prio_node_uri = self.resource_manager.node_uris.get(prio_node)
             _log.warning("Node {} {} failed to handle lost node {}: {}".format(prio_node, prio_node_uri, node_id, status))
             if node_id in self._lost_nodes:
-                del self._lost_nodes[node_id]
+                self._lost_nodes.remove(node_id)
             self.handle_lost_node(node_id)
         else:
             _log.debug("Node {} successfully handled lost node {} - {}".format(prio_node, node_id, status))
@@ -125,6 +128,12 @@ class LostNodeHandler(object):
         else:
             _log.debug("We successfully handled lost node {} - {} - {}".format(node_id, self.node.id, status))
             self.storage.get_node(node_id, self._delete_node)
+            uri = self.resource_manager.node_uris.get(node_id)
+            if uri:
+                self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])
+            else:
+                _log.warning("Could not store failure info of node {}, no uri".format(node_id))
+                #Warning?
 
         for cb in self._callbacks[node_id]:
             _log.debug("Calling cb {} with status {}".format(cb, status))
@@ -139,7 +148,7 @@ class LostNodeHandler(object):
 
         if node_id in node_ids:
             node_ids.remove(node_id)
-        for n_id in self._failed_requests:
+        for n_id in self._failed_requests[node_id]:
             if n_id in node_ids:
                 node_ids.remove(n_id)
 
@@ -151,12 +160,12 @@ class LostNodeHandler(object):
             return None
 
         highest = sorted(node_ids)[0]
-        _log.info("Highest prio node: {} - {}".format(highest, self.node.resource_manager.node_uris.get(highest)))
+        _log.info("Highest prio node: {} - {}".format(highest, self.resource_manager.node_uris.get(highest)))
         return highest
 
     def replicate_node_actors(self, node_id, cb):
         _log.debug("Fetching actors for lost node: {}".format(node_id))
-        start_time = self._lost_nodes[node_id]
+        start_time = self._lost_nodes_times[node_id]
         try:
             self.storage.get_node_actors(node_id, cb=CalvinCB(self._replicate_node_actors,
                                                               node_id=node_id,

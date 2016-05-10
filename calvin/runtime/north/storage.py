@@ -586,6 +586,7 @@ class Storage(object):
         _log.info("Adding actor {} to node actors for node {}".format(actor_id, node_id))
         cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
         self.append("node-actors-", key=node_id, value=[actor_id], cb=cb)
+        self.trigger_flush()
 
     def get_actor(self, actor_id, cb=None):
         """
@@ -623,6 +624,30 @@ class Storage(object):
         name = calvinuuid.remove_uuid(actor_name)
         _log.debug("Deleting node {} from app {} replica nodes of actor {}".format(node_id, app_id, name))
         self.remove("replica-nodes-", key=app_id + ":" + name, value=[node_id], cb=cb)
+
+    def new_replication_time(self, actor_type, replication_time, cb=None):
+        _log.info("Storing replication time {} of actor type {}".format(replication_time, actor_type))
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+        self.append("replication-time-", key=actor_type, value=[replication_time], cb=cb)
+
+    def get_replication_times(self, actor_type, cb=None):
+        """
+        Get replication times for actor_type
+        """
+        self.get_concat(prefix="replication-time-", key=actor_type, cb=cb)
+
+    def add_failure_time(self, uri, timestamp, cb=None):
+        """Store a time for failure for node with uri uri"""
+        _log.info("Storing failure time {} for uri {}".format(timestamp, uri))
+        cb = CalvinCB(func=self.append_cb, org_key=None, org_value=None, org_cb=cb)
+        self.append("failure-times-", key=uri, value=[timestamp], cb=cb)
+        self.trigger_flush()
+
+    def get_failure_times(self, uri, cb=None):
+        """
+        Get failure times for actor_type
+        """
+        self.get_concat(prefix="failure-times-", key=uri, cb=cb)        
 
     def add_port(self, port, node_id, actor_id=None, direction=None, cb=None):
         """

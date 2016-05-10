@@ -18,6 +18,7 @@ import re
 import time
 import json
 import random
+import socket
 from random import randint
 from calvin.Tools import cscompiler as compiler
 from calvin.runtime.north.appmanager import Deployer
@@ -942,9 +943,22 @@ class CalvinControl(object):
 
     def handle_peer_setup(self, handle, connection, match, data, hdr):
         _log.analyze(self.node.id, "+", data)
+        for i in range(len(data['peers'])):
+            peer_port = data['peers'][i].replace("calvinip://", "").split(":")
+            is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", peer_port[0])
+            if not is_ip:
+                peer = socket.gethostbyname(peer_port[0])
+                peer = "calvinip://{}:{}".format(peer, peer_port[1])
+                data['peers'][i] = peer
+
+        for node_id in self.node.network.list_links():
+            if node_id != self.node.id:
+                cb = CalvinCB(self.node.logging_callback)
+                self.node.proto.peer_setup(node_id, data['peers'], callback=cb)
         self.node.peersetup(data['peers'], cb=CalvinCB(self.handle_peer_setup_cb, handle, connection))
 
     def handle_peer_setup_cb(self, handle, connection, status=None, peer_node_ids=None):
+        _log.info("Handle peer setup cb: {} - {}".format(status, peer_node_ids))
         _log.analyze(self.node.id, "+", status.encode())
         if not peer_node_ids:
             data = {}
@@ -994,7 +1008,23 @@ class CalvinControl(object):
     def handle_get_reliability(self, handle, connection, match, data, hdr):
         """ Ge reliability of node
         """
-        reliability = self.node.resource_manager.get_reliability(match.group(1), match.group(2))
+        self.node.storage.get_replication_times(match.group(2), cb=CalvinCB(self._get_replication_times, node_id=match.group(1),
+                                                                        handle=handle, connection=connection))
+
+    def _get_replication_times(self, key, value, node_id, handle, connection):
+        uri = self.node.resource_manager.node_uris[node_id]
+        if uri:
+            self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, node_id=node_id, replication_times=value,
+                                                            handle=handle, connection=connection))
+        else:
+            self._get_failure_times(None, [], node_id, value, handle, connection)            
+
+    def _get_failure_times(self, key, value, node_id, replication_times, handle, connection):
+        failure_times = []
+        if value:
+            failure_times = value
+
+        reliability = self.node.resource_manager.get_reliability(node_id, replication_times, failure_times)
         self.send_response(handle, connection, json.dumps(reliability))
 
     def handle_get_application_actors(self, handle, connection, match, data, hdr):
@@ -1161,7 +1191,7 @@ class CalvinControl(object):
             peer_node_id = self.node.resource_manager.least_busy()
 
         _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
-        print "REPLICATE"
+        #print "REPLICATE"
         import time
         start = time.time()
         self.node.am.replicate(match.group(1), peer_node_id, start,
@@ -1173,7 +1203,7 @@ class CalvinControl(object):
         actor_id = status.data.get('actor_id') if status.data else None
         if status:
             print "TIME: {}".format(time.time() - start)
-            print status.data
+            #print status.data
         else:
             print "FAILED: {}".format(time.time() - start), status
         self.send_response(handle, connection,

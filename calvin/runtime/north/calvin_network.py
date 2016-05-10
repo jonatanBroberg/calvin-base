@@ -115,6 +115,7 @@ class CalvinLink(object):
         msg['from_rt_uuid'] = self.rt_id
         msg['to_rt_uuid'] = self.peer_id
         _log.analyze(self.rt_id, "SEND", msg)
+        """
         if replicate:
             print datetime.now()
             print "MESSAGE SIZE: {}".format(sys.getsizeof(json.dumps(msg)))
@@ -123,6 +124,7 @@ class CalvinLink(object):
             print datetime.now()
             print "PORT CONNECT: {}".format(sys.getsizeof(json.dumps(msg)))
             print datetime.now()
+        """
         self.transport.send(msg)
 
     def close(self):
