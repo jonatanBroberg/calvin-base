@@ -1,0 +1,6 @@
+find rep_times/* -type f -print0 | xargs -0 sed -i '/^$/d'
+find rep_times/* -type f -print0 | xargs -0 sed -i '/./!d' 
+find rep_times/* -type f -print0 | xargs -0 sed -i '/[0-9],\|\.[0-9][0-9]*/!d'
+find rep_times/* -type f -print0 | xargs -0 sed -i '/send_reply_time/d'
+find rep_times/* -type f -print0 | xargs -0 sed -i 's/TIME.*:\s*//g' 
+find rep_times/* -type f -print0 | xargs -0 sed -i 's/\./,/g'

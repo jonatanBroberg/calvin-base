@@ -306,7 +306,9 @@ class CalvinProto(CalvinCBClass):
 
         _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
 
-        print "TIME, received request: ", (time.time() - payload['start_time'])
+        rec_req = time.time() - payload['start_time']
+        print "TIME, received request: ", rec_req
+        payload['rec_req_time'] = rec_req
 
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
@@ -317,8 +319,15 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
-        print "TIME, send reply: ", (time.time() - payload['start_time'])
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode(), }
+        send_rep = time.time() - payload['start_time']
+        status.data['rec_req_time'] = payload['rec_req_time']
+        status.data['send_reply_time'] = send_rep
+        value = status.encode()
+        msg = {
+            'cmd': 'REPLY',
+            'msg_uuid': payload['msg_uuid'],
+            'value': value,
+        }
         try:
             self.network.links[payload['from_rt_uuid']].send(msg)
         except:

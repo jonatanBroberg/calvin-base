@@ -30,6 +30,8 @@ class SizeActor(Actor):
     """
     @manage(['dump', 'padding'])
     def init(self, size, dump=False):
+        if size >= 3000:
+            size = size - 2816
         self.dump = dump
         self.padding = " " * size
 
