@@ -106,6 +106,9 @@ class ResourceManager(object):
             return DEFAULT_NODE_REALIABILITY
 
     def replication_time(self, replication_times):
+        if not replication_times:
+            return DEFAULT_REPLICATION_TIME
+
         key = "".join([str(t) for t in replication_times])
         if key in self._rep_times:
             return self._rep_times[key]

@@ -1191,7 +1191,7 @@ class CalvinControl(object):
             peer_node_id = self.node.resource_manager.least_busy()
 
         _log.debug("Replicating {} to {}".format(match.group(1), peer_node_id))
-        #print "REPLICATE"
+        print "REPLICATE"
         import time
         start = time.time()
         self.node.am.replicate(match.group(1), peer_node_id, start,
@@ -1203,7 +1203,7 @@ class CalvinControl(object):
         actor_id = status.data.get('actor_id') if status.data else None
         if status:
             print "TIME: {}".format(time.time() - start)
-            #print status.data
+            print status.data
         else:
             print "FAILED: {}".format(time.time() - start), status
         self.send_response(handle, connection,

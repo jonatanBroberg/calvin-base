@@ -280,8 +280,8 @@ class CalvinProto(CalvinCBClass):
                 self._actor_replication(to_rt_uuid, callback, actor_type, state, prev_connections, args, app_id, start_time,
                                         response.CalvinResponse(True))
 
-    def _actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, actor_args, app_id, start_time, status,
-                           *args, **kwargs):
+    def _actor_replication(self, to_rt_uuid, callback, actor_type, state, prev_connections, actor_args, app_id, start_time,
+                           status, *args, **kwargs):
         """ Got link? continue actor replication """
         prev_connections['inports'] = [dict(conn) for conn in prev_connections['inports']]
         prev_connections['outports'] = [dict(conn) for conn in prev_connections['outports']]
@@ -294,7 +294,7 @@ class CalvinProto(CalvinCBClass):
                        'app_id': app_id
                    },
                    'args': actor_args,
-                   'start_time':start_time}
+                   'start_time': start_time}
             self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5, replicate=True)
         elif callback:
             callback(status=status)
@@ -306,7 +306,7 @@ class CalvinProto(CalvinCBClass):
 
         _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
 
-        #print "\nTIME, received request: {}".format(time.time() - payload['start_time'])
+        print "TIME, received request: ", (time.time() - payload['start_time'])
 
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
@@ -317,9 +317,7 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
-
-        #print "\nTIME, send reply: {}".format(time.time() - payload['start_time'])
-
+        print "TIME, send reply: ", (time.time() - payload['start_time'])
         msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': status.encode(), }
         try:
             self.network.links[payload['from_rt_uuid']].send(msg)
@@ -327,7 +325,7 @@ class CalvinProto(CalvinCBClass):
             _log.warning("Failed to send replication reply")
             pass
 
-    def actor_replication_request(self, actor_id, from_node_id, to_node_id, callback):
+    def actor_replication_request(self, actor_id, from_node_id, to_node_id, replication_time, callback):
         """
         Sends a replication request that actor actor_id should be replicated from
         from_node_id to to_node_id
@@ -337,21 +335,24 @@ class CalvinProto(CalvinCBClass):
                                                                  actor_id=actor_id,
                                                                  from_node_id=from_node_id,
                                                                  to_node_id=to_node_id,
-                                                                 callback=callback), timeout=0.3):
+                                                                 replication_time=replication_time,
+                                                                 callback=callback), timeout=0.2):
             # Already have link just continue in _actor_replication
-                self._actor_replication_request(actor_id, from_node_id, to_node_id, callback, status=response.CalvinResponse(True))
+                self._actor_replication_request(actor_id, from_node_id, to_node_id, replication_time,
+                                                callback, status=response.CalvinResponse(True))
 
-    def _actor_replication_request(self, actor_id, from_node_id, to_node_id, callback, status, *args, **kwargs):
+    def _actor_replication_request(self, actor_id, from_node_id, to_node_id, replication_time, callback, status, *args, **kwargs):
         """ Got link? continue actor replication request """
         _log.debug("Sending actor replication request of 'actor {} to node {}' from node {} to node {}".format(
             actor_id, to_node_id, self.node.id, from_node_id))
+        replication_time = replication_time if replication_time else 1.0
         if status:
             msg = {'cmd': 'ACTOR_REPLICATION_REQUEST',
                    'actor_id': actor_id,
                    'from_node_id': from_node_id,
                    'to_node_id': to_node_id}
             try:
-                self.network.links[from_node_id].send_with_reply(callback, msg, timeout=2.0)
+                self.network.links[from_node_id].send_with_reply(callback, msg, timeout=1.5*replication_time)
             except KeyError as e:
                 _log.error("Failed to send actor replication request to: {} - {}".format(from_node_id, e))
                 if callback:
@@ -769,7 +770,7 @@ class CalvinProto(CalvinCBClass):
                 node_id, to_rt_uuid, self.node.resource_manager.node_uris.get(to_rt_uuid), callback))
             msg = {'cmd': 'LOST_NODE',
                    'node_id': node_id}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.3)
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5)
         elif callback:
             _log.error("Failed to send LOST_NODE of node {} to {} - {}".format(node_id, to_rt_uuid, self.node.resource_manager.node_uris.get(to_rt_uuid)))
             callback(status=status)

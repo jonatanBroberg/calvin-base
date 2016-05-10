@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import os
+import time
+
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import dynops
 from calvin.utilities import calvinlogger

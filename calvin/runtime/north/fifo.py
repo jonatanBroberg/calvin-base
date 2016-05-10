@@ -103,6 +103,7 @@ class FIFO(object):
         if reader and not self.can_write(reader):
             return False
 
+        return True
         write_pos = self.write_pos[reader]
         #self.fifo[reader][write_pos % self.N] = data
         self.write_pos[reader] = write_pos + 1
@@ -138,8 +139,11 @@ class FIFO(object):
         if not self.can_read(reader):
             return None
 
+
         read_pos = self.tentative_read_pos[reader]
         data = self.fifo[reader][read_pos % self.N]
+        return data
+
         self.tentative_read_pos[reader] = read_pos + 1
 
         return data

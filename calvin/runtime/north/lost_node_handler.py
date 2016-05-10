@@ -130,7 +130,7 @@ class LostNodeHandler(object):
             self.storage.get_node(node_id, self._delete_node)
             uri = self.resource_manager.node_uris.get(node_id)
             if uri:
-                self.node.storage.add_failure_time(uri, self._lost_nodes_times[node_id])
+                self.node.storage.add_failure_time(uri, node_id, self._lost_nodes_times[node_id])
             else:
                 _log.warning("Could not store failure info of node {}, no uri".format(node_id))
                 #Warning?
@@ -180,7 +180,7 @@ class LostNodeHandler(object):
         _log.debug("Replicating lost actors {} for node {}".format(value, node_id))
         if value is None:
             _log.warning("Storage returned None when fetching node actors for node: {} - {}".format(
-                node_id, self.resource_manager.node_uris[node_id]))
+                node_id, self.resource_manager.node_uris.get(node_id)))
             cb(status=response.CalvinResponse(False))
             return
         elif value == []:
