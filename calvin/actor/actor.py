@@ -675,7 +675,8 @@ class Actor(object):
 
         The name must not contain '-', this will break the web interface
         """
-        args = self._get_managed()
+        #args = self._get_managed()
+        args = {}
 
         args['name'] = calvinuuid.remove_uuid(self.name) + calvinuuid.uuid("REPLICA")
         args['id'] = calvinuuid.uuid("ACTOR")
