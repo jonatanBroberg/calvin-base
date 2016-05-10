@@ -34,7 +34,7 @@ class Print(Actor):
 
     @condition(action_input=['token'])
     def action(self, token):
-        #print str(token).strip()
+        print str(token).strip()
         return ActionResult()
 
     action_priority = (action, )

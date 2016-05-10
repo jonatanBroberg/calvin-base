@@ -105,7 +105,7 @@ class FIFO(object):
 
         return True
         write_pos = self.write_pos[reader]
-        #self.fifo[reader][write_pos % self.N] = data
+        self.fifo[reader][write_pos % self.N] = data
         self.write_pos[reader] = write_pos + 1
         return True
 

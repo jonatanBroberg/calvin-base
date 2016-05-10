@@ -336,7 +336,7 @@ class ActorManager(object):
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
 
-        print "TIME, fetch state: ", (time.time() - start_time)
+        #print "TIME, fetch state: ", (time.time() - start_time)
 
         self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id, start_time)
 
