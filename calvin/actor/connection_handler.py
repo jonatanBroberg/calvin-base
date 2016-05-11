@@ -98,7 +98,7 @@ class ConnectionHandler(object):
         Reconnecting the ports can be done using a connection_list
         of tuples (node_id i.e. our id, port_id, peer_node_id, peer_port_id)
         """
-        _log.info("Connecting actor {}, connection_list {}".format(actor.name, connection_list))
+        _log.debug("Connecting actor {}, connection_list {}".format(actor.name, connection_list))
         peer_port_ids = [c[3] for c in connection_list]
 
         for node_id, port_id, peer_node_id, peer_port_id in connection_list:
