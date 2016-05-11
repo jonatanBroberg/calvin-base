@@ -294,7 +294,7 @@ class CalvinProto(CalvinCBClass):
                    },
                    'args': actor_args,
                    'start_time': start_time}
-            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5, replicate=True)
+            self.network.links[to_rt_uuid].send_with_reply(callback, msg, timeout=0.5, replicate=True, timestamp=start_time)
         elif callback:
             callback(status=status)
 
@@ -305,9 +305,9 @@ class CalvinProto(CalvinCBClass):
 
         _log.analyze(self.rt_id, "+", "Handle replication request {}".format(payload))
 
-        rec_req = time.time() - payload['start_time']
-        print "TIME, received request: ", rec_req
-        payload['rec_req_time'] = rec_req
+        #rec_req = time.time() - payload['start_time']
+        #print "TIME, received request: ", rec_req
+        #payload['rec_req_time'] = rec_req
 
         self.node.am.new_replica(payload['state']['actor_type'],
                                  payload['args'],
@@ -318,9 +318,9 @@ class CalvinProto(CalvinCBClass):
 
     def _actor_replication_handler(self, payload, status, *args, **kwargs):
         """ Potentially created actor, reply to requesting node """
-        send_rep = time.time() - payload['start_time']
-        status.data['rec_req_time'] = payload['rec_req_time']
-        status.data['send_reply_time'] = send_rep
+        status.data['create_actor_time'] = time.time() - payload['start_time']
+        status.data['rec_req_time'] = payload['rec_req_time'] - payload['start_time']
+        status.data['decode_time'] = payload['decode_time'] - payload['start_time']
         value = status.encode()
         msg = {
             'cmd': 'REPLY',

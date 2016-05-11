@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import calvinlogger
 from calvin.utilities import calvinuuid
@@ -64,13 +66,16 @@ class CalvinTransport(base_transport.BaseTransport):
     def is_connected(self):
         return self._transport.is_connected()
 
-    def send(self, payload, timeout=None, coder=None):
+    def send(self, payload, timeout=None, coder=None, timestamp=None):
         tcoder = coder or self._coder
         try:
             _log.debug('send_message %s => %s "%s"' % (self._rt_id, self._remote_rt_id, payload))
             self._callback_execute('send_message', self, payload)
             # Send
             raw_payload = tcoder.encode(payload)
+
+            if timestamp:
+                print "TIME encode: ", (time.time() - timestamp)
 
             _log.debug('raw_send_message %s => %s "%s"' % (self._rt_id, self._remote_rt_id, raw_payload))
             self._callback_execute('raw_send_message', self, raw_payload)
@@ -165,6 +170,7 @@ class CalvinTransport(base_transport.BaseTransport):
 
     def _data_received(self, data):
         self._callback_execute('raw_data_received', self, data)
+        t1 = time.time()
         if self._remote_rt_id is None:
             if self._incoming:
                 self._handle_join(data)
@@ -180,6 +186,15 @@ class CalvinTransport(base_transport.BaseTransport):
             data_obj = self._coder.decode(data)
         except:
             _log.exception("Message decode failed")
+        t2 = time.time()
+        try:
+            if data_obj['cmd'] == "ACTOR_REPLICATE":
+                rec_req = t1 - data_obj['start_time']
+                data_obj['rec_req_time'] = t1
+                data_obj['decode_time'] = t2
+        except Exception as e:
+            print e
+            pass
         self._callback_execute('data_received', self, data_obj)
 
 

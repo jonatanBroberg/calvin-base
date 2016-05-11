@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.runtime.south import endpoint
@@ -334,8 +332,6 @@ class ActorManager(object):
         args = actor.replication_args()
         app = self.node.app_manager.get_actor_app(actor_id)
         app_id = app.id if app else state['app_id']
-
-        print "TIME, fetch state: ", (time.time() - start_time)
 
         self.node.proto.actor_replication(node_id, callback, actor_type, state, prev_connections, args, app_id, start_time)
 
