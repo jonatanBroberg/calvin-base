@@ -67,7 +67,7 @@ class TwistedCalvinServer(base_transport.CalvinServerBase):
 
 
 class StringProtocol(CalvinCBClass, Int32StringReceiver):
-    def __init__(self, callbacks, max_length=99999999999):
+    def __init__(self, callbacks, max_length=9999999999999):
         super(StringProtocol, self).__init__(callbacks)
         self._callback_execute('set_proto', self)
         self.MAX_LENGTH = max_length
