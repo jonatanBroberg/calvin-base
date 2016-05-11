@@ -19,7 +19,7 @@ import sys
 import json
 import glob
 import importlib
-from datetime import datetime
+import time
 
 from calvin.utilities import calvinuuid
 from calvin.utilities.calvin_callback import CalvinCB
@@ -89,7 +89,7 @@ class CalvinLink(object):
             # We ignore errors
             return
 
-    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT, replicate=False, port_connect=False):
+    def send_with_reply(self, callback, msg, timeout=DEFAULT_TIMEOUT, replicate=False, timestamp=None):
         """ Adds a message id to the message and send it,
             also registers the callback for the reply.
         """
@@ -102,9 +102,9 @@ class CalvinLink(object):
         self.replies[msg_id] = callback
         self.replies_timeout[msg_id] = async.DelayedCall(timeout, CalvinCB(self.reply_timeout, msg_id))
         msg['msg_uuid'] = msg_id
-        self.send(msg, replicate=replicate, port_connect=port_connect)
+        self.send(msg, replicate=replicate, timestamp=timestamp)
 
-    def send(self, msg, timeout=DEFAULT_TIMEOUT, replicate=False, port_connect=False):
+    def send(self, msg, timeout=DEFAULT_TIMEOUT, replicate=False, timestamp=None):
         """ Adds the from and to node ids to the message and
             sends the message using the transport.
 
@@ -115,14 +115,18 @@ class CalvinLink(object):
         msg['from_rt_uuid'] = self.rt_id
         msg['to_rt_uuid'] = self.peer_id
         _log.analyze(self.rt_id, "SEND", msg)
+        t1 = time.time()
         if replicate:
             msg_size = sys.getsizeof(json.dumps(msg))
             state_size = sys.getsizeof(json.dumps(msg['state']))
             print "MESSAGE SIZE: {}".format(msg_size)
             print "STATE SIZE: {}".format(state_size)
             print "DIFF: {}".format(msg_size - state_size)
+        t2 = time.time()
+        if timestamp:
+            timestamp = timestamp - (t2 - t1)
 
-        self.transport.send(msg)
+        self.transport.send(msg, timestamp=timestamp)
 
     def close(self):
         """ Disconnect the transport and hence the link object won't work anymore """
