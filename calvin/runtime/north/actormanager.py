@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from calvin.utilities import dynops
 from calvin.runtime.south.plugins.async import async
 from calvin.runtime.south import endpoint
@@ -158,7 +159,6 @@ class ActorManager(object):
         self.node.metering.remove_actor_info(actor.id)
         a = self.actors[actor.id]
         a.will_end()
-        self.node.pm.remove_ports_of_actor(a)
 
         # @TOOD - insert callback here
         self.node.storage.delete_actor(actor.id)
@@ -175,7 +175,7 @@ class ActorManager(object):
         if app:
             app.remove_actor(actor.id)
 
-        return a
+        self.node.pm.remove_ports_of_actor(a)
 
     # DEPRECATED: Enabling of an actor is dependent on wether it's connected or not
     def enable(self, actor_id):
