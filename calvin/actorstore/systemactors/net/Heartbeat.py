@@ -51,10 +51,12 @@ class Heartbeat(Actor):
         self.port = port
         self.node = node
         self.delay = delay
-        self.timer = None
+        self.in_timer = None
+        self.out_timer = None
         self.sender = None
         self.listener = None
         self.nodes = set()
+        self.lost_nodes = set()
         self.setup()
 
     def connect(self):
@@ -77,20 +79,23 @@ class Heartbeat(Actor):
         self.use('calvinsys.network.serverhandler', shorthand='server')
         self.use('calvinsys.native.python-re', shorthand='regexp')
         self.use('calvinsys.events.timer', shorthand='timer')
-        self.timer = self['timer'].repeat(self.delay)
+        self.in_timer = self['timer'].repeat(self.delay)
+        self.out_timer = self['timer'].repeat(self.delay)
         self.connect()
 
     def register(self, node_id):
-        self.nodes.add(node_id)
+        if node_id not in self.lost_nodes:
+            self.nodes.add(node_id)
 
     def deregister(self, node_id):
+        self.lost_nodes.add(node_id)
         if node_id in self.nodes:
             self.nodes.remove(node_id)
 
     @condition(action_output=['out'])
-    @guard(lambda self: self.sender and self.timer.triggered)
+    @guard(lambda self: self.sender and self.nodes and self.out_timer.triggered)
     def send(self):
-        self.timer.ack()
+        self.out_timer.ack()
         node_ids = []
         links = set(self.node.network.list_links())
         for node_id in self.nodes:
@@ -114,13 +119,13 @@ class Heartbeat(Actor):
         return ActionResult(production=(node_ids, ))
 
     @condition(action_input=['in'])
-    def dummy(self, node_ids):
-        self.node.increase_heartbeats(node_ids)
+    def dummy(self, token):
         return ActionResult(production=())
 
     @condition(action_output=['out'])
-    @guard(lambda self: self.listener and self.listener.have_data())
+    @guard(lambda self: self.listener and self.in_timer.triggered)
     def receive(self):
+        self.in_timer.ack()
         while self.listener.have_data():
             data = self.listener.data_get()
             _log.debug("Received heartbeat from node {}".format(data['data']))
@@ -128,11 +133,11 @@ class Heartbeat(Actor):
             node_id = data['node_id']
             uri = data['uri']
 
-            self.node.resource_manager.register(node_id, {}, uri)
-            self.nodes.add(node_id)
             self.node.clear_outgoing_heartbeat(data)
+            self.node.resource_manager.register(node_id, {}, uri)
+            self.register(node_id)
 
-        return ActionResult(production=('',))
+        return ActionResult(production=("",))
 
     # URI parsing - 0: protocol, 1: host, 2: port
     URI_REGEXP = r'([^:]+)://([^/:]*):([0-9]+)'
@@ -153,5 +158,5 @@ class Heartbeat(Actor):
             self.port = None
         return status
 
-    action_priority = (receive, send, dummy)
+    action_priority = (send, receive, dummy)
     requires = ['calvinsys.network.socketclienthandler', 'calvinsys.native.python-re', 'calvinsys.native.python-json']

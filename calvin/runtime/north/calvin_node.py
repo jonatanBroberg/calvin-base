@@ -23,7 +23,6 @@ import trace
 import logging
 import socket
 import time
-from datetime import datetime
 
 from calvin.calvinsys import Sys as CalvinSys
 
@@ -380,7 +379,6 @@ class Node(object):
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
-        print "LOST NODE: {}\n{}".format(node_id, datetime.now())
         self.print_stats(lost_node_id=node_id)
 
         if node_id in self.network.links:
@@ -405,17 +403,6 @@ class Node(object):
         replicator = Replicator(self, lost_actor_id, lost_actor_info, required_reliability)
         replicator.replicate_lost_actor(cb, time.time())
 
-    def increase_heartbeats(self, node_ids):
-        for node_id in node_ids:
-            #if node_id not in self.outgoing_heartbeats:
-            #    uri = self.resource_manager.node_uris.get(node_id)
-            #    _log.debug("Have not received heartbeat from {} - {} yet".format(node_id, uri))
-            #    # wait until we get first response
-            #    return
-
-            timeout_call = async.DelayedCall(HEARTBEAT_TIMEOUT, CalvinCB(self._heartbeat_timeout, node_id=node_id))
-            self.outgoing_heartbeats[node_id].append(timeout_call)
-
     def _heartbeat_timeout(self, node_id):
         self._clear_heartbeat_timeouts(node_id)
         self.heartbeat_actor.deregister(node_id)
@@ -423,7 +410,10 @@ class Node(object):
 
     def clear_outgoing_heartbeat(self, data):
         if "node_id" in data:
-            self._clear_heartbeat_timeouts(data['node_id'])
+            node_id = data['node_id']
+            self._clear_heartbeat_timeouts(node_id)
+            timeout_call = async.DelayedCall(HEARTBEAT_TIMEOUT, CalvinCB(self._heartbeat_timeout, node_id=node_id))
+            self.outgoing_heartbeats[node_id].append(timeout_call)
             self.resource_manager.register_uri(data['node_id'], data['uri'])
 
     def _clear_heartbeat_timeouts(self, node_id):
