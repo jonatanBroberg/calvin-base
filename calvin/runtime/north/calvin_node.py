@@ -173,6 +173,7 @@ class Node(object):
         _log.debug("Peersetup collect cb: {} - {} - {} - {} - {}".format(status, uri, peer_node_id, peer_node_ids, peers))
         self.resource_manager.register_uri(peer_node_id, uri)
         if status:
+            self.resource_manager.register_uri(peer_node_id, uri)
             self._register_heartbeat_receiver(peer_node_id)
 
         if uri in peers:
