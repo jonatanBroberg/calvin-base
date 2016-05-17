@@ -51,8 +51,9 @@ from calvin.runtime.north.resource_manager import ResourceManager
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
-HEARTBEAT_TIMEOUT = 0.5
-HEARTBEAT_DELAY = 0.20
+DEFAULT_HEARTBEAT_TIMEOUT = 0.5
+DEFAULT_HEARTBEAT_DELAY = 0.20
+DEFAULT_HEARTBEAT_PORT_DIFF = 5000
 
 
 def addr_from_uri(uri):
@@ -89,6 +90,15 @@ class Node(object):
         self.async_msg_ids = {}
         self._calvinsys = CalvinSys(self)
 
+        hb_timeout = _conf.get('global', 'heartbeat_timeout') or DEFAULT_HEARTBEAT_TIMEOUT
+        self.heartbeat_timeout = float(hb_timeout)
+        hb_delay = _conf.get('global', 'heartbeat_delay') or DEFAULT_HEARTBEAT_DELAY
+        self.heartbeat_delay = float(hb_delay)
+        self.heartbeat_addr = self._clean_addr()
+        self.heartbeat_port = _conf.get('global', 'heartbeat_port') or int(self._clean_uri().split(":")[1]) + DEFAULT_HEARTBEAT_PORT_DIFF
+        rr_delay = _conf.get('global', 'resource_reporter_delay') or 0.25
+        self.resource_reporter_delay = rr_delay
+
         # Default will multicast and listen on all interfaces
         # TODO: be able to specify the interfaces
         # @TODO: Store capabilities
@@ -121,6 +131,17 @@ class Node(object):
         #    return False
 
         return self.storage.proxy == self.network.links[node_id].transport.get_uri()
+
+    def _clean_uri(self):
+        return self.control_uri.replace("http://", "")
+
+    def _clean_addr(self):
+        uri = self._clean_uri()
+        if uri == "localhost":
+            addr = socket.gethostbyname(uri.split(":")[0])
+        else:
+            addr = uri.split(":")[0]
+        return addr
 
     def insert_local_reply(self):
         msg_id = calvinuuid.uuid("LMSG")
@@ -250,100 +271,10 @@ class Node(object):
     def testing(self):
         return "CALVIN_TESTING" in os.environ and os.environ["CALVIN_TESTING"]
 
-    def info(self, s):
-        _log.info("[{}] {}".format(self.hostname, s))
-
-    def print_stats(self, lost_node_id=None):
-        if self.storage_node:
-            return
-
-        for app in self.app_manager.applications.values():
-            cb = CalvinCB(self._print_stats, app_id=app.id, lost_node_id=lost_node_id, required=app.required_reliability)
-            self.storage.get_replica_nodes(app.id, 'actions:src', cb)
-
-    def _print_stats(self, key, value, app_id, lost_node_id, required):
-        if value is None:
-            return
-
-        if lost_node_id in value:
-            value.remove(lost_node_id)
-
-        nodes = [(node_id, self.resource_manager.node_uris.get(node_id)) for node_id in value]
-        _log.debug("CURRENT NODES: {} {}".format(len(nodes), nodes))
-
-        callback = CalvinCB(self._print_stats_cb, nodes=nodes, required=required, current_nodes=value)
-        self.storage.get_replication_times('std.CountTimer', callback)
-
-    def _print_stats_cb(self, key, value, nodes, required, current_nodes):
-        self._failure_times = {}
-        uris = []
-
-        for node_id in self.network.list_links():
-            uri = self.resource_manager.node_uris.get(node_id)
-            uri = uri.replace("calvinip://", "").replace("http://", "") if uri else uri
-            if uri:
-                uris.append(uri)
-        uris = list(set(uris))
-
-        for uri in uris:
-            self._failure_times[uri] = None
-
-        for uri in uris:
-            callback = CalvinCB(self._collect_failure_times, nodes=nodes, required=required, 
-                                current_nodes=current_nodes, replication_times=value)
-            self.storage.get_failure_times(uri, callback)
-
-    def _collect_failure_times(self, key, value, nodes, required, current_nodes, replication_times):
-        if value:
-            self._failure_times[key] = value
-        elif key in self._failure_times:
-            del self._failure_times[key]
-
-        if None in self._failure_times.values():
-            return
-
-        rm = self.resource_manager
-        rels = []
-        for node_id in self.network.list_links():
-            rel = rm.get_reliability(node_id, replication_times, self._failure_times)
-            rels.append((rm.node_uris.get(node_id), rel, 1 - rel))
-        _log.info("NODE RELIABILITIES: {}".format(rels))
-
-        actual_rel = self.resource_manager.current_reliability(current_nodes, replication_times, self._failure_times)
-        _log.debug("RELIABILITY: {}".format(actual_rel))
-        rep_time = self.resource_manager.replication_time(replication_times)
-        actors = []
-        for actor in self.am.actors.values():
-            if 'actions:src' in actor.name:
-                actors.append(actor)
-        rels = self._get_rels(replication_times, self._failure_times)
-
-        cpu_avgs = self.resource_manager.get_avg_usages()
-
-        self.info("APP_INFO: [{}] [{}] [{}] [{}] [{}] [{}] [{}] [{}]".format(
-            len(nodes), nodes, rels, actual_rel, required, rep_time, self._failure_times, str(cpu_avgs)))
-
-    def _get_rels(self, replication_times, failure_times):
-        all_nodes = self.network.list_links()
-        rm = self.resource_manager
-        rels = []
-        _log.debug("all nodes: {}".format(all_nodes))
-        for node_id in all_nodes:
-            rel = rm.get_reliability(node_id, replication_times, failure_times)
-            uri = rm.node_uris.get(node_id)
-            if uri in failure_times:
-                mtbf = rm.reliability_calculator.get_mtbf(failure_times[uri])
-                rels.append((uri, rel, 1 - rel, mtbf))
-            else:
-                mtbf = rm.reliability_calculator.get_mtbf([])
-                rels.append((uri, rel, 1 - rel, mtbf))
-        return rels
-
     def report_resource_usage(self, usage):
         _log.debug("Reporting resource usage for node {}: {}".format(self.id, usage))
         self.resource_manager.register(self.id, usage, self.uri)
 
-        self.print_stats()
         usage['uri'] = self.uri
         for peer_id in self.network.list_links():
             callback = CalvinCB(self._report_resource_usage_cb, peer_id)
@@ -360,7 +291,7 @@ class Node(object):
     def register_resource_usage(self, node_id, usage, callback):
         if self.storage_node:
             callback(status=response.CalvinResponse(True))
-            return        
+            return
         _log.debug("Registering resource usage for node {}: {}".format(node_id, usage))
         uri = usage.get('uri')
 
@@ -378,8 +309,6 @@ class Node(object):
         if self.storage_node:
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
-
-        self.print_stats(lost_node_id=node_id)
 
         if node_id in self.network.links:
             link = self.network.links[node_id]
@@ -412,7 +341,7 @@ class Node(object):
         if "node_id" in data:
             node_id = data['node_id']
             self._clear_heartbeat_timeouts(node_id)
-            timeout_call = async.DelayedCall(HEARTBEAT_TIMEOUT, CalvinCB(self._heartbeat_timeout, node_id=node_id))
+            timeout_call = async.DelayedCall(self.heartbeat_timeout, CalvinCB(self._heartbeat_timeout, node_id=node_id))
             self.outgoing_heartbeats[node_id].append(timeout_call)
             self.resource_manager.register_uri(data['node_id'], data['uri'])
 
@@ -454,7 +383,7 @@ class Node(object):
             self._start_resource_reporter()
 
     def _start_resource_reporter(self):
-        actor_id = self.new("sys.NodeResourceReporter", {'node': self, 'delay': 0.25}, callback=self._start_rr)
+        self.new("sys.NodeResourceReporter", {'node': self, 'delay': self.resource_reporter_delay}, callback=self._start_rr)
 
     def _start_rr(self, status, actor_id):
         if not status:
@@ -475,14 +404,11 @@ class Node(object):
     def _start_heartbeat_system(self):
         if self.testing:
             return
-        uri = self.control_uri.replace("http://", "")
-        if uri == "localhost":
-            addr = socket.gethostbyname(uri.split(":")[0])
-        else:
-            addr = uri.split(":")[0]
-        port = int(uri.split(":")[1]) + 5000
 
-        self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': HEARTBEAT_DELAY}, callback=self._start_hb)
+        port = self.heartbeat_port
+        addr = self.heartbeat_addr
+
+        self.new("net.Heartbeat", {'node': self, 'address': addr, 'port': port, 'delay': self.heartbeat_delay}, callback=self._start_hb)
 
     def _start_hb(self, status, actor_id):
         if not status:

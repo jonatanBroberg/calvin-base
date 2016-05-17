@@ -1299,9 +1299,8 @@ class CalvinControl(object):
                 errors = ""
                 warnings = ""
             _log.analyze(self.node.id, "+ COMPILED", {'app_info': app_info, 'errors': errors, 'warnings': warnings})
-            d = Deployer(deployable=app_info, deploy_info=data["deploy_info"] if "deploy_info" in data else None,
-                         node=self.node, name=data["name"] if "name" in data else None,
-                         verify=data["check"] if "check" in data else True,
+            d = Deployer(deployable=app_info, deploy_info=data.get("deploy_info"),
+                         node=self.node, name=data.get("name"), verify=data.get("check"),
                          cb=CalvinCB(self.handle_deploy_cb, handle, connection))
             _log.analyze(self.node.id, "+ Deployer instanciated", {})
             d.deploy()

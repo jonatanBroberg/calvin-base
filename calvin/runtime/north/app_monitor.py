@@ -4,7 +4,6 @@ from calvin.runtime.north.replicator import Replicator
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities import calvinuuid
-from calvin.runtime.south import endpoint
 
 _log = get_logger(__name__)
 
@@ -18,9 +17,7 @@ class AppMonitor(object):
 
     def check_reliabilities(self):
         self._monitor_count += 1
-        if self.node.testing:
-            return
-        #self.print_actors()
+
         if self._monitor_count == 20:
             self._monitor_count = 0
             start_time = time.time()
@@ -30,41 +27,6 @@ class AppMonitor(object):
 
     def check_app_reliability(self, app_id, start_time):
         self.storage.get_application(app_id, cb=CalvinCB(self._check_app_reliability, start_time=start_time))
-
-    def print_actors(self):
-        return
-        total = []
-
-        for actor in self.node.am.actors.values():
-            if "src" in actor.name or "snk" in actor.name:
-                total.append("ACTOR: {} - {}".format(actor.name, actor.id))
-                for name in actor.inports:
-                    port = actor.inports[name]
-                    total.append("PORT: {} - {}".format(port.name, port.id))
-                    total.append("FIFO: {}".format(port.fifo))
-                    for ep in port.endpoints:
-                        if isinstance(ep, endpoint.TunnelOutEndpoint):
-                            total.append("ENDPOINT: tunnel {}, peer port id {}, peer node id {}, sequencenbrs_acked: {}, fifo key: {}".format(
-                                ep.tunnel, ep.peer_port_id, ep.peer_node_id, ep.sequencenbrs_acked, ep.fifo_key))
-                        elif isinstance(ep, endpoint.TunnelInEndpoint):
-                            total.append("ENDPOINT: tunnel {}, peer port id {}, peer node id {}, fifo key {}".format(
-                                ep.tunnel, ep.peer_port_id, ep.peer_node_id, ep.fifo_key))
-                for name in actor.outports:
-                    port = actor.outports[name]
-                    total.append("PORT: {} - {}".format(port.name, port.id))
-                    total.append("FIFO: {}".format(port.fifo))
-                    for ep in port.endpoints:
-                        if isinstance(ep, endpoint.TunnelOutEndpoint):
-                            total.append("ENDPOINT: tunnel {}, peer port id {}, peer node id {}, sequencenbrs_acked: {}, fifo key: {}".format(
-                                ep.tunnel, ep.peer_port_id, ep.peer_node_id, ep.sequencenbrs_acked, ep.fifo_key))
-                        elif isinstance(ep, endpoint.TunnelInEndpoint):
-                            total.append("ENDPOINT: tunnel {}, peer port id {}, peer node id {}, fifo key {}".format(
-                                ep.tunnel, ep.peer_port_id, ep.peer_node_id, ep.fifo_key))
-
-        if total:
-            _log.warning("NODES: {}".format(self.node.resource_manager.node_uris))
-            _log.warning("ACTOR INFO")
-            _log.warning("\n".join(total))
 
     def _check_app_reliability(self, key, value, start_time):
         if not value:

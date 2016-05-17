@@ -15,23 +15,24 @@
 # limitations under the License.
 
 import os
-import time
 
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities import dynops
 from calvin.utilities import calvinlogger
-_log = calvinlogger.get_logger(__name__)
 from calvin.runtime.north.plugins.requirements import req_operations
 import calvin.utilities.calvinresponse as response
 from calvin.utilities import calvinuuid
 from calvin.actorstore.store import ActorStore, GlobalStore
 from calvin.runtime.south.plugins.async import async
 
+_log = calvinlogger.get_logger(__name__)
+
+
 class Application(object):
 
     """ Application class """
 
-    def __init__(self, id, name, origin_node_id, actor_manager, actors=None, deploy_info=None):
+    def __init__(self, id, name, origin_node_id, actor_manager, actors=None, deploy_info=None, required_reliability=0.0):
         self.id = id
         self.name = name or id
         self.ns = os.path.splitext(os.path.basename(self.name))[0]
@@ -46,7 +47,10 @@ class Application(object):
         self.components = {}
         self.deploy_info = deploy_info
         self._collect_placement_cb = None
-        self.required_reliability = 0.98
+        self.required_reliability = float(required_reliability)
+        #float(deploy_info.get('required_reliability', 0)) if deploy_info else 0.0
+        _log.error("\n"*5)
+        _log.error(self.required_reliability)
 
     def add_actor(self, actor_id):
         # Save actor_id and mapping to name while the actor is still on this node
@@ -141,9 +145,10 @@ class AppManager(object):
         self.storage = node.storage
         self.applications = {}
 
-    def new(self, name):
+    def new(self, name, required_reliability):
         application_id = calvinuuid.uuid("APP")
-        self.applications[application_id] = Application(application_id, name, self._node.id, self._node.am)
+        self.applications[application_id] = Application(application_id, name, self._node.id, self._node.am,
+                                                        required_reliability=required_reliability)
         self._node.control.log_application_new(application_id, name)
         return application_id
 
@@ -528,7 +533,7 @@ class AppManager(object):
                 cb(status=response.CalvinResponse(response.NOT_FOUND))
             return
         app = Application(app_id, value['name'], value['origin_node_id'],
-                                              self._node.am, actors=value['actors_name_map'], deploy_info=deploy_info)
+                          self._node.am, actors=value['actors_name_map'], deploy_info=deploy_info)
         app.group_components()
         app._migrated_actors = {a: None for a in app.actors}
         for actor_id, actor_name in app.actors.iteritems():
@@ -585,16 +590,17 @@ class Deployer(object):
         self.cb = cb
         self._deploy_cont_done = False
         self._instantiations = {}
+        required_reliability = float(self.deployable.get("required_reliability", 0))
         if name:
             self.name = name
-            self.app_id = self.node.app_manager.new(self.name)
+            self.app_id = self.node.app_manager.new(self.name, required_reliability)
             self.ns = os.path.splitext(os.path.basename(self.name))[0]
         elif "name" in self.deployable:
             self.name = self.deployable["name"]
-            self.app_id = self.node.app_manager.new(self.name)
+            self.app_id = self.node.app_manager.new(self.name, required_reliability)
             self.ns = os.path.splitext(os.path.basename(self.name))[0]
         else:
-            self.app_id = self.node.app_manager.new(None)
+            self.app_id = self.node.app_manager.new(None, required_reliability)
             self.name = self.app_id
             self.ns = ""
         self.group_components()

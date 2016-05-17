@@ -1099,6 +1099,7 @@ class TestActorReplication(CalvinTestBase):
         """
 
         app_info, errors, warnings = compiler.compile(script, "simple")
+        app_info['required_reliability'] = 0.98
         d = deployer.Deployer(self.runtime, app_info)
         app_id = d.deploy()
         self.deployer = d
@@ -1434,33 +1435,6 @@ class TestActorReplication(CalvinTestBase):
         actual = filter(lambda x: x not in unique_elements, actual)
         self.assert_list_prefix(expected, sorted(actual))
 
-    # May or may not fail. Fails if rt is least busy.
-    def testReplicateWithoutNodeIdSelectsLeastBusyNode(self):
-        """Testing outport remote to local migration"""
-        rt = self.runtime
-
-        src = utils.new_actor(rt, 'std.CountTimer', 'src')
-        ity = utils.new_actor_wargs(rt, 'std.Identity', 'ity', dump=True)
-        snk = utils.new_actor_wargs(rt, 'io.StandardOut', 'snk', store_tokens=1)
-        self.actors.update({snk:rt, src:rt, ity:rt})
-
-        utils.connect(rt, snk, 'token', rt.id, ity, 'token')
-        utils.connect(rt, ity, 'token', rt.id, src, 'integer')
-
-        time.sleep(5)
-        replica = utils.replicate(rt, ity, None)
-        self.actors[replica] = rt
-        time.sleep(0.2)
-
-        new_node = None
-        runtimes = [rt]
-        runtimes.extend(self.runtimes)
-        for runtime in runtimes:
-            if replica in utils.get_actors(runtime):
-                new_node = runtime
-
-        assert new_node
-
     def testReplicateSinkAndSource(self):
         """Testing outport remote to local migration"""
         rt = self.runtime
@@ -1525,6 +1499,8 @@ class TestLosingActors(CalvinTestBase):
         self.snk_type = "io.StandardOut"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
+        app_info['required_reliability'] = 0.98
+        print app_info
         d = deployer.Deployer(self.rt1, app_info)
         app_id = d.deploy()
         self.deployer = d
@@ -1809,6 +1785,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_snk_replicas(app_id, expected)
 
+
 @pytest.mark.essential
 @pytest.mark.slow
 class TestDynamicReliability(CalvinTestBase):
@@ -1831,6 +1808,7 @@ class TestDynamicReliability(CalvinTestBase):
         self.src_type = "std.CountTimer"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
+        app_info['required_reliability'] = 0.98
         d = deployer.Deployer(self.rt1, app_info)
         app_id = d.deploy()
         self.deployer = d
@@ -1855,26 +1833,26 @@ class TestDynamicReliability(CalvinTestBase):
 
     def testCheckReliabilityOneActor(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
-        time.sleep(5)
+        time.sleep(8)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
     def testCheckReliabilityTwoActors(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1, replicate_src=1)
-        time.sleep(5)
+        time.sleep(8)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
         self._check_reliability(app_id, 'simple:src', self.src_type)
 
     def testDropInReliability(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
-        time.sleep(5)
+        time.sleep(8)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         time.sleep(5)
         utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 1)
-        time.sleep(5)
+        time.sleep(8)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
@@ -2063,6 +2041,7 @@ class TestDyingRuntimes(CalvinTestBase):
         """
 
         app_info, errors, warnings = compiler.compile(script, "simple")
+        app_info['required_reliability'] = 0.98
         d = deployer.Deployer(self.runtime, app_info)
         app_id = d.deploy()
         self.deployer = d

@@ -59,7 +59,6 @@ class Replicator(object):
             self.node.network.link_request(node_id, timeout=0.1)
         if self.actor_info['replicate']:
             _log.info("Replicating lost actor: {}".format(self.actor_info))
-            #time.sleep(1)
             cb = CalvinCB(self._find_replica_nodes_cb, start_time=start_time, cb=cb)
             self.node.storage.get_replica_nodes(self.actor_info['app_id'], self.actor_info['name'], cb)
         else:
