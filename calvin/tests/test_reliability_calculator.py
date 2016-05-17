@@ -37,3 +37,11 @@ class TestReliabilityCalculator(unittest.TestCase):
 
         reliability = self.rc.calculate_reliability(failure_info, self.rc.default_replication_time)
         assert (reliability == math.exp(-float(self.rc.default_replication_time) / self.rc.default_mtbf))
+
+    def testReplicationTimeConfidence(self):
+        rep_times = [10, 10, 20]
+        rep_time = self.rc.replication_time(rep_times)
+        rep_time
+        assert int(rep_time) == 21
+        assert self.rc.replication_time(rep_times, 0.99) > rep_time
+        assert self.rc.replication_time(rep_times, 1.0) == float('inf')
