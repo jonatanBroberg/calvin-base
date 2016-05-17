@@ -15,9 +15,13 @@
 # limitations under the License.
 
 import unittest
-import mock
+import json
+
+from mock import Mock
+
 from calvin.runtime.north.actormanager import ActorManager
 from calvin.runtime.north import metering
+from calvin.runtime.south.endpoint import LocalInEndpoint
 import calvin.utilities.calvinresponse as response
 
 
@@ -44,6 +48,23 @@ class StorageMock(object):
     def delete_actor(self, actor_id, cb=None):
         if cb:
             cb(actor_id, True)
+    def delete_actor_from_node(self, node_id, actor_id):
+        pass
+
+
+class ConnectionHandler(object):
+    def setup_replica_connections(self, actor, state, prev_connections, callback):
+        for name, port in actor.inports.iteritems():
+            port.endpoints.append(LocalInEndpoint(port, port))
+        for name, port in actor.outports.iteritems():
+            port.endpoints.append(LocalInEndpoint(port, port))
+
+        if callback:
+            callback(status=response.CalvinResponse(True))
+
+    def setup_connections(self, actor, prev_connections, connection_list, callback):
+        if callback:
+            callback(status=response.CalvinResponse(True))
 
 
 class DummyNode:
@@ -52,9 +73,9 @@ class DummyNode:
         self.id = id(self)
         self.pm = DummyPortManager()
         self.storage = StorageMock()
-        self.control = mock.Mock()
+        self.control = Mock()
         self.metering = metering.set_metering(metering.Metering(self))
-        self.app_manager = mock.Mock()
+        self.app_manager = Mock()
 
     def calvinsys(self):
         return None
@@ -65,6 +86,7 @@ class ActorManagerTests(unittest.TestCase):
     def setUp(self):
         n = DummyNode()
         self.am = ActorManager(node=n)
+        self.am.connection_handler = ConnectionHandler()
         n.am = self.am
 
     def tearDown(self):
@@ -125,8 +147,13 @@ class ActorManagerTests(unittest.TestCase):
         prev_connections['port_names'] = a.port_names()
 
         args = a.replication_args()
-        b = self.am.new_replica(a_type, args, state, prev_connections, None, None)
+        args['name'] = 'new_name'
+        self.am.new_replica(a_type, args, state, dict(prev_connections), None, None)
         self.assertEqual(len(self.am.actors), 2)
+
+        ids = set(self.am.actors.keys())
+        b_id = (ids | set([a.id])).pop()
+        b = self.am.actors[b_id]
 
         self.assertEqual(a.tokens, [1, 2, 3])
         self.assertEqual(a.store_tokens, 1)
@@ -138,7 +165,6 @@ class ActorManagerTests(unittest.TestCase):
 
         # Assert new name is assigned
         self.assertNotEqual(b.name, a.name)
-        assert b.name.startswith(a.name)
 
         # Assert actor database is consistent
         self.assertTrue(self.am.actors[a_id])
