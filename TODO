@@ -21,3 +21,13 @@ TODO before releasing:
 [ ] do not hard code LOST_NODE value, use timeout time in calvin node
 
 [ ] replace URI handling by object CalvinURI
+
+[ ] write reliability guide
+
+[ ] add docstrings for
+    [ ] resource manager
+    [ ] reliability calculator
+    [ ] lost node handler
+    [ ] replicator
+    [ ] actor factory
+    [ ] actor manager
