@@ -1,23 +1,23 @@
 TODO before releasing:
 
-- change to use pass the following as part of config:
+[X] change to use pass the following as part of config:
     + default MTBF
     + default rep time (or create rep time as a function of (number of queues * queue size)
 
-- change to pass required reliability as deployment arguments
+[X] change to pass required reliability as deployment arguments
 
-- add more tests for 
-    - resource manager
-    - reliability calculator
-    - lost node handler
-    - replicator
-    - actor factory
-    - actor manager
+[ ] add more tests for 
+    [ ] resource manager
+    [ ] reliability calculator
+    [ ] lost node handler
+    [ ] replicator
+    [ ] actor factory
+    [ ] actor manager
 
-- use dynamic timeouts for replication request and lost node request
+[ ] use dynamic timeouts for replication request and lost node request
 
-- add heartbeat port when creating the node
+[ ] add heartbeat port when creating the node
 
-- do not hard code LOST_NODE value, use timeout time in calvin node
+[ ] do not hard code LOST_NODE value, use timeout time in calvin node
 
-- replace URI handling by object CalvinURI
+[ ] replace URI handling by object CalvinURI
