@@ -48,9 +48,6 @@ class Application(object):
         self.deploy_info = deploy_info
         self._collect_placement_cb = None
         self.required_reliability = float(required_reliability)
-        #float(deploy_info.get('required_reliability', 0)) if deploy_info else 0.0
-        _log.error("\n"*5)
-        _log.error(self.required_reliability)
 
     def add_actor(self, actor_id):
         # Save actor_id and mapping to name while the actor is still on this node
