@@ -1096,6 +1096,11 @@ class CalvinControl(object):
             self.send_response(handle, connection, None, calvinresponse.NOT_FOUND)
             return
 
+        ports = value['outports'] + value['inports']
+        for port in ports:
+            port_id = port['id']
+            self.node.pm.disconnect(actor_id=lost_actor_id, port_name=port['name'], port_id=port_id)
+
         cb = CalvinCB(func=self._handle_lost_actor_app_info, lost_actor_id=lost_actor_id,
                       lost_actor_info=value, handle=handle, connection=connection)
         self.node.storage.get_application(value['app_id'], cb=cb)
