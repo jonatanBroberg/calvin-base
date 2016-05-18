@@ -1133,12 +1133,15 @@ class CalvinControl(object):
     def _handle_del_actor_other_node(self, key, value, handle, connection):
         """ Find where the actor is running
         """
-        try:
-            self.node.proto.actor_destroy(to_rt_uuid=value['node_id'], callback=None, actor_id=key)
-            self.send_response(handle, connection, None, status=calvinresponse.OK)
-        except:
-            _log.exception('Can not delete actor')
+        if not value:
+            _log.warning("Did not find actor {} to delete, storage returned {}".format(key, value))
             self.send_response(handle, connection, None, status=calvinresponse.NOT_FOUND)
+        else:
+            cb = CalvinCB(self._handle_del_actor_other_node_cb, handle=handle, connection=connection)
+            self.node.proto.actor_destroy(to_rt_uuid=value['node_id'], callback=cb, actor_id=key)
+
+    def _handle_del_actor_other_node_cb(self, status, handle, connection):
+        self.send_response(handle, connection, None, status=status.status)
 
     def handle_get_actor_report(self, handle, connection, match, data, hdr):
         """ Get report from actor
