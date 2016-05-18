@@ -12,8 +12,12 @@ _conf = calvinconfig.get()
 class ReliabilityCalculator(object):
 
     def __init__(self):
-        self.default_mtbf = _conf.get('global', 'default_mtbf') or 10  # seconds
-        self.default_replication_time = _conf.get('global', 'default_replication_time') or 2.0  # seconds
+        mtbf = _conf.get('global', 'default_mtbf') or 10  # seconds
+        self.default_mtbf = float(mtbf)
+        rep_time = _conf.get('global', 'default_replication_time') or 2.0  # seconds
+        self.default_replication_time = float(rep_time)
+        _log.info("Reliability calculator using default mtbf {} and default replication time {}".format(
+            self.default_mtbf, self.default_replication_time))
 
     def calculate_reliability(self, failure_times, replication_time):
         """
