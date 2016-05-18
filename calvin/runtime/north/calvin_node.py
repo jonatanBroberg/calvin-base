@@ -97,7 +97,7 @@ class Node(object):
         self.heartbeat_addr = self._clean_addr()
         self.heartbeat_port = _conf.get('global', 'heartbeat_port') or int(self._clean_uri().split(":")[1]) + DEFAULT_HEARTBEAT_PORT_DIFF
         rr_delay = _conf.get('global', 'resource_reporter_delay') or 0.25
-        self.resource_reporter_delay = rr_delay
+        self.resource_reporter_delay = float(rr_delay)
 
         # Default will multicast and listen on all interfaces
         # TODO: be able to specify the interfaces
@@ -389,7 +389,7 @@ class Node(object):
         if not status:
             _log.error("Failed to start resource reporter")
             return
-        _log.info("Successfully started resource reporter")
+        _log.info("Successfully started resource reporter with delay {}".format(self.resource_reporter_delay))
         actor = self.am.actors[actor_id]
         if not actor.inports or not actor.outports:
             _log.warning("Could not set up ResourceReporter: {}".format(actor))
@@ -414,7 +414,7 @@ class Node(object):
         if not status:
             _log.error("Failed to start heartbeat system: ".format(status))
             return
-        _log.info("Successfully started heartbeat actor")
+        _log.info("Successfully started heartbeat actor with timeout {} and delay {}".format(self.heartbeat_timeout, self.heartbeat_delay))
         actor = self.am.actors[actor_id]
         in_port = actor.inports['in']
         out_port = actor.outports['out']
