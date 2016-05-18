@@ -1491,8 +1491,8 @@ class TestLosingActors(CalvinTestBase):
 
     def _start_app(self, replicate_src=0, replicate_snk=0):
         script = """
-        src : std.CountTimer(replicate=""" +str(replicate_src)+ """)
-        snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
+        src : std.CountTimer(replicate=""" + str(replicate_src) + """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """
         self.src_type = "std.CountTimer"
@@ -1551,18 +1551,27 @@ class TestLosingActors(CalvinTestBase):
 
         counts = Counter(actual_snk)
         unique_elements = [val for val, cnt in counts.iteritems() if cnt < len(actual_replicas)]
-        print '\nunique_elements', unique_elements
+        doubles = [val for val, cnt in counts.iteritems() if cnt > len(actual_replicas) + 1]
+        print "replicas: ", len(actual_replicas)
+        print "unique: ", unique_elements
+        print "doubles: ", doubles
+        print "actual snk: ", actual_snk
+        print "expected: ", expected
+
         assert len(unique_elements) > 0
+        assert len(doubles) < 3
+
+        for d in doubles:
+            actual_snk.remove(d)
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
         filtered_expected_replicas = []
         for expected_replica in actual_replicas:
             filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
-        print 'filtered_expected_replicas', filtered_expected_replicas
 
         filtered_expected_total = [x for x in filtered_expected]
-        for i in range(len(actual_replicas)-1):
+        for i in range(len(actual_replicas) - 1):
             filtered_expected_total += filtered_expected
         self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual_snk))
         for filtered_expected_replica in filtered_expected_replicas:
@@ -2010,7 +2019,18 @@ class TestDyingRuntimes(CalvinTestBase):
 
         counts = Counter(actual_snk)
         unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        doubles = [val for val, cnt in counts.iteritems() if cnt > len(actual_replicas) + 1]
+        print "replicas: ", len(actual_replicas)
+        print "unique: ", unique_elements
+        print "doubles: ", doubles
+        print "actual snk: ", actual_snk
+        print "expected: ", expected
+
         assert len(unique_elements) > 0
+        assert len(doubles) < 3
+
+        for d in doubles:
+            actual_snk.remove(d)
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
@@ -2332,7 +2352,18 @@ class TestOptimization(CalvinTestBase):
 
         counts = Counter(actual_snk)
         unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        doubles = [val for val, cnt in counts.iteritems() if cnt > len(actual_replicas) + 1]
+        print "replicas: ", len(actual_replicas)
+        print "unique: ", unique_elements
+        print "doubles: ", doubles
+        print "actual snk: ", actual_snk
+        print "expected: ", expected
+
         assert len(unique_elements) > 0
+        assert len(doubles) < 3
+
+        for d in doubles:
+            actual_snk.remove(d)
 
         filtered_expected = filter(lambda x: x not in unique_elements, expected)
         filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
