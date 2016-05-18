@@ -706,9 +706,12 @@ class CalvinProto(CalvinCBClass):
 
     def _port_disconnect_handler(self, payload, status=None, peer_node_id=None, uri=None):
         # Send reply
-        reply = self.node.pm.disconnection_request(payload)
-        msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
-        self.network.links[payload['from_rt_uuid']].send(msg)
+        if status:
+            reply = self.node.pm.disconnection_request(payload)
+            msg = {'cmd': 'REPLY', 'msg_uuid': payload['msg_uuid'], 'value': reply.encode()}
+            self.network.links[payload['from_rt_uuid']].send(msg)
+        else:
+            _log.warning("Failed to send reply: {}".format(status))
 
     #### NODES ####
 
