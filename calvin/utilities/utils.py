@@ -31,7 +31,7 @@ from calvin.utilities.calvinlogger import get_logger
 _log = get_logger(__name__)
 
 #default timeout
-TIMEOUT=5
+TIMEOUT = 5
 
 def get_local_ip():
     import socket
@@ -138,7 +138,7 @@ def get_nodes(rt, timeout=TIMEOUT, async=False):
 
 def peer_setup(rt, *peers, **kwargs):
     rt = get_RT(rt)
-    timeout = kwargs.get('timeout', 0.5)
+    timeout = kwargs.get('timeout', 1)
     async = kwargs.get('async', False)
     if not isinstance(peers[0], type("")):
         peers = peers[0]
@@ -291,11 +291,11 @@ def get_reliability(rt, node_id, actor_type, timeout=TIMEOUT, async=False):
     return check_response(r)
 
 
-#Only for testing
-def simulate_node_failure(rt, node_id, uri, nbr_of_failures, timeout=TIMEOUT, async=False):
+def simulate_node_failure(rt, node_id, nbr_of_failures, timeout=TIMEOUT, async=False):
+    """Only used for testing purposes"""
     rt = get_RT(rt)
     req = session if async else requests
-    r = req.post(rt.control_uri + '/failed_node/' + node_id + '/nbr/{}/uri/'.format(nbr_of_failures) + uri[0], timeout=timeout)
+    r = req.post(rt.control_uri + '/failed_node/' + node_id + '/nbr/{}/'.format(nbr_of_failures), timeout=timeout)
     return check_response(r)
 
 

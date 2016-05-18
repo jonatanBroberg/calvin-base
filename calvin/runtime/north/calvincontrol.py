@@ -17,7 +17,6 @@
 import re
 import time
 import json
-import random
 import socket
 from random import randint
 from calvin.Tools import cscompiler as compiler
@@ -332,7 +331,7 @@ control_api_doc += \
     Response status code: OK or NOT_FOUND
     Response: none
 """
-re_post_simulate_node_failure = re.compile(r"POST /failed_node/(NODE_" + uuid_re + "|" + uuid_re + ")/nbr/([0-9]+?)/uri/(.*)\sHTTP/1")
+re_post_simulate_node_failure = re.compile(r"POST /failed_node/(NODE_" + uuid_re + "|" + uuid_re + ")/nbr/([0-9]+?)/\sHTTP/1")
 
 
 # control_api_doc += \
@@ -1017,7 +1016,7 @@ class CalvinControl(object):
             self.node.storage.get_failure_times(uri, cb=CalvinCB(self._get_failure_times, node_id=node_id, replication_times=value,
                                                             handle=handle, connection=connection))
         else:
-            self._get_failure_times(None, [], node_id, value, handle, connection)            
+            self._get_failure_times(None, [], node_id, value, handle, connection)
 
     def _get_failure_times(self, key, value, node_id, replication_times, handle, connection):
         failure_times = []
@@ -1212,9 +1211,15 @@ class CalvinControl(object):
     def handle_simulate_node_failure(self, handle, connection, match, data, hdr):
         """ Only for testing """
         try:
-            self.node.resource_manager.update_node_failure(match.group(1), match.group(2), match.group(3))
+            node_id = match.group(1)
+            nbr = match.group(2)
+            uri = self.node.resource_manager.node_uris.get(node_id)
+            now = time.time()
+            for i in range(int(nbr)):
+                self.node.storage.add_failure_time(uri, node_id, now + i)
             status = calvinresponse.OK
-        except:
+        except Exception as e:
+            _log.error("Failed to simulate node failure: {}".format(e))
             status = calvinresponse.NOT_FOUND
         self.send_response(handle, connection, None, status)
 

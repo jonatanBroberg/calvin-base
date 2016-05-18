@@ -18,7 +18,7 @@ import socket
 import json
 import copy
 
-from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
+from calvin.actor.actor import Actor, ActionResult, manage, condition
 
 
 class VideoEncoder(Actor):
@@ -75,7 +75,5 @@ class VideoEncoder(Actor):
 
     action_priority = (encode, )
     requires =  ['calvinsys.media.encoder']
-
-    # Assumes file contains "A\nB\nC\nD\nE\nF\nG\nH\nI"
 
     test_set = []

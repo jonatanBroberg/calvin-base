@@ -1823,7 +1823,7 @@ class TestDynamicReliability(CalvinTestBase):
     def _get_reliability(self, app_id, actor_name, actor_type):
         reliabilities = []
         for node_id in utils.get_replica_nodes(self.rt1, app_id, actor_name):
-            reliabilities.append(1-utils.get_reliability(self.rt1, node_id, actor_type))
+            reliabilities.append(1 - utils.get_reliability(self.rt1, node_id, actor_type))
         return 1 - reduce(operator.mul, reliabilities, 1)
 
     def _check_reliability(self, app_id, name, actor_type):
@@ -1833,26 +1833,26 @@ class TestDynamicReliability(CalvinTestBase):
 
     def testCheckReliabilityOneActor(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
-        time.sleep(8)
+        time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
     def testCheckReliabilityTwoActors(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1, replicate_src=1)
-        time.sleep(8)
+        time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
         self._check_reliability(app_id, 'simple:src', self.src_type)
 
     def testDropInReliability(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
-        time.sleep(8)
+        time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
         time.sleep(5)
-        utils.simulate_node_failure(self.rt1, self.rt1.id, self.rt1.uri, 1)
-        time.sleep(8)
+        utils.simulate_node_failure(self.rt1, self.rt1.id, 1)
+        time.sleep(5)
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
@@ -2178,6 +2178,230 @@ class TestDyingRuntimes(CalvinTestBase):
         assert self.dying_rt.id not in utils.get_nodes(self.runtime)
         assert self.dying_rt.id not in utils.get_nodes(self.runtime2)
         assert self.dying_rt.id not in utils.get_nodes(self.runtime3)
+
+
+@pytest.mark.essential
+@pytest.mark.slow
+class TestOptimization(CalvinTestBase):
+
+    def setUp(self):
+        global ip_addr
+        os.environ["CALVIN_TESTING"] = ""
+        self.ip_addr = ip_addr
+        self.runtime = runtime
+        self.runtime2 = runtimes[0]
+        self.runtime3 = runtimes[1]
+
+        csruntime(ip_addr, port=5028, controlport=5029, attr={}, storage=True)
+        time.sleep(0.2)
+        self.storage_runtime = utils.RT("http://%s:5029" % self.ip_addr)
+
+        conf = copy.deepcopy(_conf)
+        conf.set('global', 'storage_proxy', "calvinip://%s:5028" % self.ip_addr)
+        conf.set('global', 'storage_start', "1")
+        conf.save("/tmp/calvin5030.conf")
+
+        csruntime(ip_addr, port=5032, controlport=5033, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.2)
+        self.runtime = utils.RT("http://%s:5033" % self.ip_addr)
+
+        csruntime(ip_addr, port=5034, controlport=5035, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.2)
+        self.runtime2 = utils.RT("http://%s:5035" % self.ip_addr)
+
+        csruntime(ip_addr, port=5036, controlport=5037, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.2)
+        self.runtime3 = utils.RT("http://%s:5037" % self.ip_addr)
+
+        self.runtimes = [self.runtime, self.runtime2, self.runtime3]
+
+        ids = {}
+        for rt in self.runtimes:
+            for i in range(5):
+                try:
+                    rt_id = utils.get_node_id(rt)
+                    ids[rt] = rt_id
+                    break
+                except:
+                    time.sleep(0.2)
+        for key in ids:
+            if not ids[key]:
+                self._kill_all()
+                assert False
+            key.id = ids[key]
+
+        utils.peer_setup(self.runtime, ["calvinip://%s:5034" % ip_addr])
+        utils.peer_setup(self.runtime, ["calvinip://%s:5036" % ip_addr])
+        utils.peer_setup(self.runtime2, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.runtime2, ["calvinip://%s:5036" % ip_addr])
+        utils.peer_setup(self.runtime3, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.runtime3, ["calvinip://%s:5034" % ip_addr])
+
+        time.sleep(0.2)
+
+    def tearDown(self):
+        self._kill_all()
+        os.environ["CALVIN_TESTING"] = "1"
+
+    def _simulate_failures(self):
+        for rt in self.runtimes:
+            utils.simulate_node_failure(rt, rt.id, 1)
+
+        time.sleep(5)
+        for rt in self.runtimes:
+            utils.simulate_node_failure(rt, rt.id, 1)
+
+    def _add_reliable(self):
+        csruntime(self.ip_addr, port=5030, controlport=5031, attr={},
+                  configfile="/tmp/calvin5030.conf")
+        time.sleep(0.2)
+        self.reliable_rt = utils.RT("http://%s:5031" % self.ip_addr)
+        for i in range(5):
+            try:
+                rt_id = utils.get_node_id(self.reliable_rt)
+                self.reliable_rt.id = rt_id
+                break
+            except:
+                time.sleep(0.2)
+
+        self.runtimes.append(self.reliable_rt)
+
+        utils.peer_setup(self.reliable_rt, ["calvinip://%s:5032" % ip_addr])
+        utils.peer_setup(self.reliable_rt, ["calvinip://%s:5034" % ip_addr])
+        utils.peer_setup(self.reliable_rt, ["calvinip://%s:5036" % ip_addr])
+
+    def _kill_all(self):
+        os.system("pkill -9 -f 'csruntime -n %s -p 5028'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5030'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5032'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5034'" % (self.ip_addr,))
+        os.system("pkill -9 -f 'csruntime -n %s -p 5036'" % (self.ip_addr,))
+
+    def _check_reliability(self, rt, app_id, actors_before, actor_name, actor_type=None):
+        new_actors = utils.get_application_actors(rt, app_id)
+        new_replicas = [actor_id for actor_id in new_actors if actor_id not in actors_before]
+        actor_runtimes = self._check_app_reliability(rt, new_actors, app_id, actor_name)
+
+        actual_replicas = []
+        for actor_id, rt in actor_runtimes.iteritems():
+            if actor_id in new_replicas:
+                if "src" in actor_name:
+                    actual_replicas.append(expected_tokens(rt, actor_id, actor_type))
+                else:
+                    actual_replicas.append(actual_tokens(rt, actor_id))
+
+        return actual_replicas
+
+    def _check_app_reliability(self, rt, new_actors, app_id, actor_name):
+        reliabilities = []
+        runtimes = self.runtimes
+        runtimes.append(self.runtime)
+        actor_runtimes = {}
+        for actor in new_actors:
+            a = utils.get_actor(rt, actor)
+            if a:
+                name = calvinuuid.remove_uuid(a['name'])
+                if name == actor_name:
+                    reliabilities.append(1 - utils.get_reliability(rt, a['node_id'], a['type']))
+                for rt in runtimes:
+                    if a['node_id'] == rt.id:
+                        actor_runtimes[actor] = rt
+
+        app = utils.get_application(rt, app_id)
+        reliability = (1 - reduce(operator.mul, reliabilities, 1))
+        assert reliability > app['required_reliability']
+
+        return actor_runtimes
+
+    def _check_dead_node(self, rt, dead_rt, dead_replica):
+        self.assertIsNone(utils.get_actor(rt, dead_replica))
+        self.assertIsNone(utils.get_node(rt, dead_rt.id))
+        assert dead_rt.id not in utils.get_nodes(rt)
+
+    def _check_values(self, rt1, rt2, snk, src, src_type, expected_before, snk_before, replica_before, actual_replicas):
+        actual_snk = actual_tokens(rt1, snk)
+        expected = expected_tokens(rt2, src, src_type)
+        assert len(expected) > len(expected_before)
+        assert len(actual_snk) > len(snk_before + replica_before)
+        for actuals in actual_replicas:
+            assert len(actuals) > 0
+            assert len(actuals) > len(replica_before)
+
+        counts = Counter(actual_snk)
+        unique_elements = [val for val, cnt in counts.iteritems() if cnt <= len(actual_replicas)]
+        assert len(unique_elements) > 0
+
+        filtered_expected = filter(lambda x: x not in unique_elements, expected)
+        filtered_actual_snk = filter(lambda x: x not in unique_elements, actual_snk)
+        filtered_expected_replicas = []
+        for expected_replica in actual_replicas:
+            filtered_expected_replicas.append(filter(lambda x: x not in unique_elements, expected_replica))
+
+        filtered_expected_total = [x for x in filtered_expected]
+        for i in range(len(actual_replicas)):
+            filtered_expected_total += filtered_expected
+        self.assert_list_prefix(sorted(filtered_expected_total), sorted(filtered_actual_snk))
+        for filtered_expected_replica in filtered_expected_replicas:
+            self.assert_list_prefix(sorted(filtered_expected), sorted(filtered_expected_replica))
+
+    def _check_actuals(self, expected, actual_replicas, actual_replica_before):
+        for actual_replica in actual_replicas:
+            assert len(actual_replica) > len(actual_replica_before)
+            self.assert_list_prefix(expected, actual_replica)
+
+    def _start_app(self, replicate_snk=0, replicate_src=0):
+        script = """
+        src : std.CountTimer(replicate=""" + str(replicate_src) + """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
+        src.integer > snk.token
+        """
+
+        app_info, errors, warnings = compiler.compile(script, "simple")
+        app_info['required_reliability'] = 0.95
+        d = deployer.Deployer(self.runtime, app_info)
+        app_id = d.deploy()
+        self.deployer = d
+        time.sleep(0.2)
+
+        src = d.actor_map['simple:src']
+        snk = d.actor_map['simple:snk']
+        return (d, app_id, src, snk)
+
+    def testLoseSnkActorWithLocalSource(self):
+        d, app_id, src, snk = self._start_app(replicate_snk=1)
+
+        replica = utils.replicate(self.runtime, snk, self.runtime2.id)
+        time.sleep(0.1)
+        replica = utils.replicate(self.runtime, snk, self.runtime3.id)
+        time.sleep(0.2)
+
+        expected_before = expected_tokens(self.runtime, src, 'std.CountTimer')
+        actual_snk_before = actual_tokens(self.runtime, snk)
+        actual_replica_before = actual_tokens(self.runtime2, replica)
+
+        actors_before = utils.get_application_actors(self.runtime, app_id)
+
+        self._simulate_failures()
+        self._add_reliable()
+        time.sleep(5)
+
+        actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:snk')
+
+        expected = expected_tokens(self.runtime, src, 'std.CountTimer')
+        actual = actual_tokens(self.runtime, snk)
+
+        assert len(expected) > len(expected_before)
+        assert len(actual) > len(actual_snk_before)
+        assert len(actual) > len(actual_replica_before)
+
+        self.assert_list_prefix(expected, actual)
+
+        self._check_actuals(expected, actual_replicas, actual_replica_before)
+        actors_after = utils.get_application_actors(self.runtime, app_id)
+        assert len(actors_before) > len(actors_after)
 
 
 @pytest.mark.essential

@@ -1167,9 +1167,9 @@ class TestDeployment3NodesProxyStorage(unittest.TestCase):
         time.sleep(0.2)
 
         snk = d.actor_map['simple:snk']
-        utils.migrate(rt, snk, rt2_id)
+        utils.migrate(rt, snk, peer.id)
         time.sleep(0.2)
-        replica = utils.replicate(peer, snk, rt2_id)
+        replica = utils.replicate(peer, snk, rt.id)
         time.sleep(0.2)
 
         actors = utils.get_application_actors(rt, app_id)
