@@ -19,3 +19,5 @@ TODO before releasing:
 - add heartbeat port when creating the node
 
 - do not hard code LOST_NODE value, use timeout time in calvin node
+
+- replace URI handling by object CalvinURI
