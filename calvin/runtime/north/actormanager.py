@@ -270,6 +270,7 @@ class ActorManager(object):
 
     def migrate(self, actor_id, node_id, callback=None):
         """ Migrate an actor actor_id to peer node node_id """
+        _log.info("Migrate actor {} to node {}".format(actor_id, node_id))
         if actor_id not in self.actors:
             _log.warning("Trying to migrate non-local actor {}, aborting".format(actor_id))
             # Can only migrate actors from our node

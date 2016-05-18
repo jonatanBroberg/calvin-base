@@ -48,6 +48,7 @@ class Application(object):
         self.deploy_info = deploy_info
         self._collect_placement_cb = None
         self.required_reliability = float(required_reliability)
+        _log.info("Required reliability: {}".format(self.required_reliability))
 
     def add_actor(self, actor_id):
         # Save actor_id and mapping to name while the actor is still on this node
@@ -455,14 +456,12 @@ class AppManager(object):
         node_ids = set([])
         for possible_nodes in app.actor_placement.values():
             node_ids |= possible_nodes
-        node_ids = list(node_ids)
-        node_ids = [n for n in node_ids if not isinstance(n, dynops.InfiniteElement)]
+        node_ids = [node_id for node_id in node_ids if isinstance(node_id, basestring)]
         for actor_id, possible_nodes in app.actor_placement.iteritems():
             if any([isinstance(n, dynops.InfiniteElement) for n in possible_nodes]):
                 app.actor_placement[actor_id] = node_ids
         _log.analyze(self._node.id, "+ ACTOR MATRIX", {'actor_ids': actor_ids, 'actor_matrix': actor_matrix,
                                             'node_ids': node_ids, 'placement': app.actor_placement}, tb=True)
-
         # Weight the actors possible placement with their connectivity matrix
         weighted_actor_placement = {}
         for actor_id in actor_ids:
@@ -481,7 +480,7 @@ class AppManager(object):
 
         for actor_id, node_id in weighted_actor_placement.iteritems():
             # TODO could add callback to try another possible node if the migration fails
-            _log.debug("Actor deployment %s \t-> %s" % (app.actors[actor_id], node_id))
+            _log.info("Actor deployment %s \t-> %s" % (app.actors[actor_id], node_id))
             self._node.am.migrate(actor_id, node_id)
 
         app._org_cb(status=status, placement=weighted_actor_placement)
@@ -579,7 +578,7 @@ class Deployer(object):
     def __init__(self, deployable, node, name=None, deploy_info=None, verify=True, cb=None):
         super(Deployer, self).__init__()
         self.deployable = deployable
-        self.deploy_info = deploy_info
+        self.deploy_info = deploy_info if deploy_info else {}
         self.actor_map = {}
         self.actor_connections = {}
         self.node = node
@@ -587,7 +586,7 @@ class Deployer(object):
         self.cb = cb
         self._deploy_cont_done = False
         self._instantiations = {}
-        required_reliability = float(self.deployable.get("required_reliability", 0))
+        required_reliability = float(self.deploy_info.pop("required_reliability", 0))
         if name:
             self.name = name
             self.app_id = self.node.app_manager.new(self.name, required_reliability)

@@ -1099,8 +1099,7 @@ class TestActorReplication(CalvinTestBase):
         """
 
         app_info, errors, warnings = compiler.compile(script, "simple")
-        app_info['required_reliability'] = 0.98
-        d = deployer.Deployer(self.runtime, app_info)
+        d = deployer.Deployer(self.runtime, app_info, deploy_info={"required_reliability": 0.95})
         app_id = d.deploy()
         self.deployer = d
         time.sleep(0.2)
@@ -1499,9 +1498,7 @@ class TestLosingActors(CalvinTestBase):
         self.snk_type = "io.StandardOut"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
-        app_info['required_reliability'] = 0.98
-        print app_info
-        d = deployer.Deployer(self.rt1, app_info)
+        d = deployer.Deployer(self.rt1, app_info, deploy_info={"required_reliability": 0.98})
         app_id = d.deploy()
         self.deployer = d
         time.sleep(0.2)
@@ -1603,7 +1600,7 @@ class TestLosingActors(CalvinTestBase):
             self.actors.update({a_id: self.rt1})
 
         utils.lost_actor(self.rt1, snk)
-        time.sleep(0.2)
+        time.sleep(0.6)
 
         actors_after = utils.get_application_actors(self.rt1, app_id)
 
@@ -1642,7 +1639,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, replica)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt2, replica))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
@@ -1666,7 +1663,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, replica)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt2, replica))
 
         self._check_reliability(app_id, 'simple:src', self.src_type)
@@ -1687,7 +1684,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, replica)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt2, replica))
 
         self._check_reliability(app_id, 'simple:src', self.src_type)
@@ -1706,7 +1703,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
@@ -1730,7 +1727,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt2, snk2))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
@@ -1754,7 +1751,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt2, snk2)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt1, snk2))
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
@@ -1783,7 +1780,7 @@ class TestLosingActors(CalvinTestBase):
         time.sleep(0.2)
 
         utils.lost_actor(self.rt3, snk3)
-        time.sleep(0.2)
+        time.sleep(0.6)
         self.assertIsNone(utils.get_actor(self.rt2, snk2))
         self.assertIsNone(utils.get_actor(self.rt3, snk3))
 
@@ -1817,8 +1814,7 @@ class TestDynamicReliability(CalvinTestBase):
         self.src_type = "std.CountTimer"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
-        app_info['required_reliability'] = 0.98
-        d = deployer.Deployer(self.rt1, app_info)
+        d = deployer.Deployer(self.rt1, app_info, deploy_info={"required_reliability": 0.98})
         app_id = d.deploy()
         self.deployer = d
         time.sleep(0.2)
@@ -2061,8 +2057,7 @@ class TestDyingRuntimes(CalvinTestBase):
         """
 
         app_info, errors, warnings = compiler.compile(script, "simple")
-        app_info['required_reliability'] = 0.98
-        d = deployer.Deployer(self.runtime, app_info)
+        d = deployer.Deployer(self.runtime, app_info, deploy_info={"required_reliability": 0.98})
         app_id = d.deploy()
         self.deployer = d
         time.sleep(0.2)
@@ -2391,8 +2386,7 @@ class TestOptimization(CalvinTestBase):
         """
 
         app_info, errors, warnings = compiler.compile(script, "simple")
-        app_info['required_reliability'] = 0.95
-        d = deployer.Deployer(self.runtime, app_info)
+        d = deployer.Deployer(self.runtime, app_info, deploy_info={"required_reliability": 0.95})
         app_id = d.deploy()
         self.deployer = d
         time.sleep(0.2)
