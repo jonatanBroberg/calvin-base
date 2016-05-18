@@ -1551,7 +1551,7 @@ class TestLosingActors(CalvinTestBase):
 
         counts = Counter(actual_snk)
         unique_elements = [val for val, cnt in counts.iteritems() if cnt < len(actual_replicas)]
-        doubles = [val for val, cnt in counts.iteritems() if cnt > len(actual_replicas) + 1]
+        doubles = [val for val, cnt in counts.iteritems() if cnt > len(actual_replicas)]
         print "replicas: ", len(actual_replicas)
         print "unique: ", unique_elements
         print "doubles: ", doubles
