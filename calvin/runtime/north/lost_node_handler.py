@@ -41,7 +41,7 @@ class LostNodeHandler(object):
         lost_node_time = time.time()
         self._lost_nodes_times[node_id] = lost_node_time
 
-        self.pm.close_disconnected_ports(self.am.actors.values())
+        self.pm.close_disconnected_ports(self.am.actors.values(), node_id)
 
         highest_prio_node = self._highest_prio_node(node_id)
         if highest_prio_node == self.node.id:
@@ -67,7 +67,7 @@ class LostNodeHandler(object):
             return
 
         self._delete_replica_nodes(node_id)
-        self.pm.close_disconnected_ports(self.am.actors.values())
+        self.pm.close_disconnected_ports(self.am.actors.values(), node_id)
 
         self._lost_nodes.add(node_id)
         self._lost_node_requests.add(node_id)
@@ -82,7 +82,7 @@ class LostNodeHandler(object):
         if not self.storage.started:
             self.storage.start()
 
-        self.pm.close_disconnected_ports(self.am.actors.values())
+        self.pm.close_disconnected_ports(self.am.actors.values(), node_id)
 
         cb = CalvinCB(self._lost_node_cb, node_id=node_id)
         self.replicate_node_actors(node_id, cb=cb)
