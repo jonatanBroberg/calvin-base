@@ -4,8 +4,10 @@ from calvin.runtime.north.replicator import Replicator
 from calvin.utilities.calvin_callback import CalvinCB
 from calvin.utilities.calvinlogger import get_logger
 from calvin.utilities import calvinuuid
+from calvin.utilities import calvinconfig
 
 _log = get_logger(__name__)
+_conf = calvinconfig.get()
 
 
 class AppMonitor(object):
@@ -14,16 +16,17 @@ class AppMonitor(object):
         self._monitor_count = 0
         self.app_manager = app_manager
         self.storage = storage
+        freq = _conf.get('global', 'app_monitor_frequency')
+        self._frequency = int(freq)
 
     def check_reliabilities(self):
         self._monitor_count += 1
 
-        if self._monitor_count == 20:
+        if self._monitor_count == self._frequency:
             self._monitor_count = 0
             start_time = time.time()
             for app in self.app_manager.applications:
                 self.check_app_reliability(app, start_time)
-        self._monitor_count = self._monitor_count % 20
 
     def check_app_reliability(self, app_id, start_time):
         self.storage.get_application(app_id, cb=CalvinCB(self._check_app_reliability, start_time=start_time))
