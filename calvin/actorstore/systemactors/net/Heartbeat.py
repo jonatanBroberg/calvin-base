@@ -123,6 +123,7 @@ class Heartbeat(Actor):
     @condition(action_output=['out'])
     @guard(lambda self: self.listener and self.listener.have_data())
     def receive(self):
+        nodes = set()
         while self.listener.have_data():
             data = self.listener.data_get()
             _log.debug("Received heartbeat from node {}".format(data['data']))
@@ -133,8 +134,9 @@ class Heartbeat(Actor):
             self.node.clear_outgoing_heartbeat(data)
             self.node.resource_manager.register(node_id, {}, uri)
             self.register(node_id)
+            nodes.add(node_id)
 
-        return ActionResult(production=("",))
+        return ActionResult(production=(nodes,))
 
     # URI parsing - 0: protocol, 1: host, 2: port
     URI_REGEXP = r'([^:]+)://([^/:]*):([0-9]+)'

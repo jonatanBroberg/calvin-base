@@ -310,6 +310,12 @@ class Node(object):
             _log.debug("{} Is storage node, ignoring lost node".format(self.id))
             return
 
+        result = self.heartbeat_actor.receive()
+        nodes = set()
+        if result and result.production:
+            if node_id in result.production[0]:
+                return
+
         if node_id in self.network.links:
             link = self.network.links[node_id]
             self.network.peer_disconnected(link, node_id, "Heartbeat timeout")
