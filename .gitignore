@@ -23,5 +23,6 @@ build/
 *_REMOTE_*
 *.sh
 !test_scripts/*.sh
+test_scripts/*
 *.log
 *.csv
