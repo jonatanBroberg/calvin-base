@@ -9,6 +9,8 @@ from calvin.utilities import calvinconfig
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
+DEFAULT_MONITOR_FREQUENCY = 10
+
 
 class AppMonitor(object):
     def __init__(self, node, app_manager, storage):
@@ -16,7 +18,7 @@ class AppMonitor(object):
         self._monitor_count = 0
         self.app_manager = app_manager
         self.storage = storage
-        freq = _conf.get('global', 'app_monitor_frequency')
+        freq = _conf.get('global', 'app_monitor_frequency') or DEFAULT_MONITOR_FREQUENCY
         self._frequency = int(freq)
 
     def check_reliabilities(self):
