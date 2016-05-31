@@ -21,8 +21,5 @@ build/
 *_BASE_*
 *_LOCAL_*
 *_REMOTE_*
-*.sh
-!test_scripts/*.sh
-test_scripts/*
 *.log
 *.csv
