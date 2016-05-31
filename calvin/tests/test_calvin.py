@@ -1556,7 +1556,7 @@ class TestLosingActors(CalvinTestBase):
         print "expected: ", expected
 
         assert len(unique_elements) > 0
-        assert len(doubles) < 3
+        assert len(doubles) < 5
 
         for d in doubles:
             actual_snk.remove(d)
@@ -2025,7 +2025,7 @@ class TestDyingRuntimes(CalvinTestBase):
         print "expected: ", expected
 
         assert len(unique_elements) > 0
-        assert len(doubles) < 3
+        assert len(doubles) < 5
 
         for d in doubles:
             actual_snk.remove(d)
@@ -2357,7 +2357,7 @@ class TestOptimization(CalvinTestBase):
         print "expected: ", expected
 
         assert len(unique_elements) > 0
-        assert len(doubles) < 3
+        assert len(doubles) < 5
 
         for d in doubles:
             actual_snk.remove(d)
