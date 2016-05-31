@@ -149,6 +149,16 @@ Where the necessary information (runtime id, actor id) can be gathered using the
 
 for more information. Note that the control uri is mandatory even for most of the help commands.
 
+
+### Replication
+
+To create an identical copy of an existing actor, it can be replicate to another runtime
+
+    $ cscontrol http://<first runtime address>:<controlport> actor replicate <actor id> <other runtime id>
+
+For this to work, the actor must have an "replicate" attribute. See the actor std.CountTimer for an example.
+Further info is available in fault_tolerance/README.md
+
 ### Testing
 
 If necessary, install the extra packages needed for testing
