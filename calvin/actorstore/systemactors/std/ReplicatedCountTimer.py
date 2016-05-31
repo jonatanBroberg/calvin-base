@@ -16,6 +16,9 @@
 
 import sys
 from calvin.actor.actor import Actor, ActionResult, manage, condition, guard
+from calvin.utilities.calvinlogger import get_logger
+
+_log = get_logger(__name__)
 
 
 class ReplicatedCountTimer(Actor):
@@ -28,11 +31,12 @@ class ReplicatedCountTimer(Actor):
     """
 
     @manage(exclude=['timer'])
-    def init(self, sleep=0.1, steps=sys.maxint, replicate=False):
+    def init(self, sleep=0.1, steps=sys.maxint, replicate=False, quiet=True):
         self.count = 0
         self.sleep = sleep
         self.steps = steps
         self._replicate = replicate
+        self.quiet = quiet
         self.setup()
 
     @property
@@ -77,6 +81,8 @@ class ReplicatedCountTimer(Actor):
         else:
             self.timer = self['timer'].once(self.sleep)
         self.count += 1
+        if not self.quiet:
+            _log.info("Count: {}".format(self.count))
         return ActionResult(production=(self.count, ))
 
     # The counting action, handle periodic timer events hence no need to setup repeatedly
@@ -87,6 +93,8 @@ class ReplicatedCountTimer(Actor):
     def step_periodic(self):
         self.timer.ack()
         self.count += 1
+        if not self.quiet:
+            _log.info("Count: {}".format(self.count))
         return ActionResult(production=(self.count, ))
 
     # The stopping action, need guard with raised() since the actor might be
