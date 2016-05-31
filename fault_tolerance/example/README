@@ -1,0 +1,24 @@
+To run the example:
+
+1. Make sure your working directory is CALVIN_PATH/fault_tolerance/example
+
+2. Create storage runtime
+mv calvin.conf calvin.conf.bak
+csruntime --host localhost --port 4999 --controlport 5000 --keep-alive -s
+
+3. Create runtimes in different terminals
+mv calvin.conf.bak calvin.conf
+csruntime --host localhost --port 5001 --controlport 5002 --keep-alive
+csruntime --host localhost --port 5003 --controlport 5004 --keep-alive
+csruntime --host localhost --port 5005 --controlport 5006 --keep-alive
+csruntime --host localhost --port 5007 --controlport 5008 --keep-alive
+csruntime --host localhost --port 5009 --controlport 5010 --keep-alive
+
+4. Join the nodes
+cscontrol http://localhost:5002 nodes add calvinip://localhost:5003 calvinip://localhost:5005 calvinip://localhost:5007 calvinip://localhost:5009
+
+5. Deploy application
+cscontrol http://localhost:5002 deploy fault_tolerance.calvin --reqs args
+
+6. Kill one of the runtimes holding a replica (one of the runtimes printing 'Count: x' to the log.
+   Watch a new replica being created on another runtime.

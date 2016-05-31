@@ -1,0 +1,3 @@
+src:std.ReplicatedCountTimer(sleep=0.5, replicate=1, quiet=0)
+snk:io.Print()
+src.integer > snk.token
