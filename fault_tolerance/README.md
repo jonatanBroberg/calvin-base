@@ -9,9 +9,9 @@ to continue, and result being produced, despite the event of failure.
 
 ## Fan-in Fan-out connectivity model
 
-When replicating an actor, the will be new ports and new port endpoints created.
+When replicating an actor, there will be new ports and new port endpoints created.
 
-For example, if we have three actors A and B1 and C:<br />
+For example, if we have three actors A, B1 and C:<br />
 A - - > B1 --> C
 and then replicate B1, thereby creating a new identical copy, B2, we will have:<br />
          --> B1 -- <br />
