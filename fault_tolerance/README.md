@@ -14,11 +14,11 @@ When replicating an actor, the will be new ports and new port endpoints created.
 For example, if we have three actors A and B1 and C:
 A - - > B1 --> C
 and then replicate B1, thereby creating a new identical copy, B2, we will have:
-         --> B1 --
-       /           \
-A -- <               --> C
-       \           /
-         --> B2 --
+         --> B1 -- <br />
+       /           \ <br />
+A -- <               --> C <br />
+       \           / <br />
+         --> B2 -- <br />
 
 
 ## Example
@@ -32,13 +32,13 @@ mean-time-between-failure to calculate their reliability, and
 the default task scheduler sorts the nodes by reliability.
 
 An example of the calvin.conf file:
-{
-    "global": {
-        "reliability_calculator": "ReliabilityCalculator",
-        "task_scheduler": "ReliabilityScheduler",
-        "default_mtbf": "20",
-        "default_replication_time": "1.0",
-    }
+{<br />
+    "global": {<br />
+        "reliability_calculator": "ReliabilityCalculator",<br />
+        "task_scheduler": "ReliabilityScheduler",<br />
+        "default_mtbf": "20",<br />
+        "default_replication_time": "1.0",<br />
+    }<br />
 }
 The values "reliability_calcultor" and "task_scheduler" can be changed to other
 classes which then shoukd be created in calvin/runtime/north and implement
