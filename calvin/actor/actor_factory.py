@@ -12,7 +12,7 @@ class ActorFactory(object):
     def __init__(self, node):
         self.node = node
 
-    def create_actor(self, actor_type, state=None, args={}, signature=None, app_id=None, callback=None):
+    def create_actor(self, actor_type, state=None, args={}, signature=None, app_id=None, master_nodes=[], callback=None):
         try:
             if state:
                 a = self._create_from_state(actor_type, state, app_id)
@@ -26,6 +26,7 @@ class ActorFactory(object):
 
         # Store the actor signature to enable GlobalStore lookup
         a.signature_set(signature)
+        a.set_master_nodes(master_nodes)
         callback = CalvinCB(self._create_actor, actor=a, callback=callback)
         self.node.storage.add_actor(a, self.node.id, app_id, cb=callback)
         return a.id

@@ -1,1 +1,4 @@
-{"required_reliability": "0.999"}
+{
+    "required_reliability": "0.999",
+    "master_nodes": ["calvinip://localhost:5001"]
+}

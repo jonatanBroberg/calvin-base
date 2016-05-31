@@ -32,7 +32,8 @@ class Application(object):
 
     """ Application class """
 
-    def __init__(self, id, name, origin_node_id, actor_manager, actors=None, deploy_info=None, required_reliability=0.0):
+    def __init__(self, id, name, origin_node_id, actor_manager, actors=None, deploy_info=None,
+                 required_reliability=0.0, master_nodes=[]):
         self.id = id
         self.name = name or id
         self.ns = os.path.splitext(os.path.basename(self.name))[0]
@@ -49,6 +50,8 @@ class Application(object):
         self._collect_placement_cb = None
         self.required_reliability = float(required_reliability)
         _log.info("Required reliability: {}".format(self.required_reliability))
+        self.master_nodes = master_nodes
+        _log.info("Master nodes: {}".format(master_nodes))
 
     def add_actor(self, actor_id):
         # Save actor_id and mapping to name while the actor is still on this node
@@ -143,10 +146,10 @@ class AppManager(object):
         self.storage = node.storage
         self.applications = {}
 
-    def new(self, name, required_reliability):
+    def new(self, name, required_reliability, master_nodes):
         application_id = calvinuuid.uuid("APP")
         self.applications[application_id] = Application(application_id, name, self._node.id, self._node.am,
-                                                        required_reliability=required_reliability)
+                                                        required_reliability=required_reliability, master_nodes=master_nodes)
         self._node.control.log_application_new(application_id, name)
         return application_id
 
@@ -587,16 +590,21 @@ class Deployer(object):
         self._deploy_cont_done = False
         self._instantiations = {}
         required_reliability = float(self.deploy_info.pop("required_reliability", 0))
+        master_nodes = self.deploy_info.pop("master_nodes", [])
+        master_node_ids = [self.node.resource_manager.get_id(uri) for uri in master_nodes]
+        if None in master_node_ids:
+            raise Exception("Master nodes {} must have been joined with first.".format(master_nodes))
+        self.master_nodes = master_node_ids
         if name:
             self.name = name
-            self.app_id = self.node.app_manager.new(self.name, required_reliability)
+            self.app_id = self.node.app_manager.new(self.name, required_reliability, self.master_nodes)
             self.ns = os.path.splitext(os.path.basename(self.name))[0]
         elif "name" in self.deployable:
             self.name = self.deployable["name"]
-            self.app_id = self.node.app_manager.new(self.name, required_reliability)
+            self.app_id = self.node.app_manager.new(self.name, required_reliability, self.master_nodes)
             self.ns = os.path.splitext(os.path.basename(self.name))[0]
         else:
-            self.app_id = self.node.app_manager.new(None, required_reliability)
+            self.app_id = self.node.app_manager.new(None, required_reliability, self.master_nodes)
             self.name = self.app_id
             self.ns = ""
         self.group_components()
@@ -653,7 +661,7 @@ class Deployer(object):
                             actor_type=actor_type, req=req)
         try:
             self.node.am.new(actor_type=actor_type, args=args, signature=signature,
-                             app_id=self.app_id, callback=callback)
+                             app_id=self.app_id, callback=callback, master_nodes=self.master_nodes)
         except:
             raise Exception("Could not instantiate actor of type: %s" % actor_type)
             self._deploy_cont()

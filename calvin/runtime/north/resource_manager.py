@@ -25,6 +25,7 @@ class ResourceManager(object):
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
         self.reliability_calculator = ReliabilityCalculator()
         self.node_uris = {}
+        self.node_ids = {}
         self.test_sync = 2
         self._lost_nodes = set()
         self._rep_times = {}
@@ -43,7 +44,20 @@ class ResourceManager(object):
             if not is_ip:
                 addr = socket.gethostbyname(addr)
 
-            self.node_uris[node_id] = "{}:{}".format(addr, port)
+            uri = "{}:{}".format(addr, port)
+            self.node_uris[node_id] = uri
+            self.node_ids[uri] = node_id
+
+    def get_id(self, uri):
+        uri = uri.replace("calvinip://", "").replace("http://", "")
+        addr = uri.split(":")[0]
+        port = int(uri.split(":")[1])
+
+        is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", addr)
+        if not is_ip:
+            addr = socket.gethostbyname(addr)
+
+        return self.node_ids.get("{}:{}".format(addr, port))
 
     def register(self, node_id, usage, uri):
         _log.debug("Registering resource usage for node {}: {} with uri {}".format(node_id, usage, uri))

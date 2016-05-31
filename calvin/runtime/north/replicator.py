@@ -15,7 +15,7 @@ class Replicator(object):
         self.node = node
         self.actor_id = actor_id
         self.actor_info = actor_info
-        self.master_node = actor_info['master_node']
+        self.master_nodes = set(actor_info['master_nodes'])
         self.required_reliability = required_reliability
         self.new_replicas = {}
         self.lost_node = lost_node
@@ -47,8 +47,8 @@ class Replicator(object):
         _log.debug("Failed: {}".format(self.failed_requests))
         not_allowed.add(self.lost_node)
         _log.debug("Lost node: {}".format(self.lost_node))
-        not_allowed.add(self.master_node)
-        _log.debug("Master node: {}".format(self.master_node))
+        not_allowed |= self.master_nodes
+        _log.debug("Master nodes: {}".format(self.master_nodes))
         not_allowed = set(filter(None, not_allowed))
 
         _log.debug("Not allowed: {}".format(not_allowed))
@@ -169,14 +169,14 @@ class Replicator(object):
     def _valid_node(self, current_nodes, node_id):
         links = set(self.node.network.list_links())
         _log.debug("Checking if {} is a valid node. Links {}. Master {}. Current {}".format(
-            node_id, links, self.master_node, current_nodes))
+            node_id, links, self.master_nodes, current_nodes))
         if not node_id:
             return False
 
         if node_id != self.node.id and node_id not in links:
             _log.debug("{} not in network links".format(node_id))
             return False
-        if node_id == self.master_node:
+        if node_id == self.master_nodes:
             _log.debug("{} is master node".format(node_id))
             return False
         if node_id in current_nodes:
@@ -211,7 +211,7 @@ class Replicator(object):
             to_node_id = self._find_node_to_replicate_to(current_nodes)
 
             connected = set(self.node.network.list_links())
-            if self.node.id != self.master_node:
+            if self.node.id != self.master_nodes:
                 connected.add(self.node.id)
 
             if not to_node_id or to_node_id not in connected:

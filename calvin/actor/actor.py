@@ -330,19 +330,19 @@ class Actor(object):
 
     # What are the arguments, really?
     def __init__(self, actor_type, name='', allow_invalid_transitions=True, disable_transition_checks=False,
-                 disable_state_checks=False, actor_id=None, app_id="", master_node=None):
+                 disable_state_checks=False, actor_id=None, app_id=""):
         """Should _not_ be overridden in subclasses."""
         super(Actor, self).__init__()
         self._type = actor_type
         self.name = name  # optional: human_readable_name
         self.id = actor_id or calvinuuid.uuid("ACTOR")
-        self.master_node = master_node
+        self.master_nodes = []
         _log.debug("New actor id: %s, supplied actor id %s" % (self.id, actor_id))
         self.app_id = app_id
         self._deployment_requirements = []
         self._signature = None
         self._component_members = set([self.id])  # We are only part of component if this is extended
-        self._managed = set(('id', 'name', '_deployment_requirements', '_signature', 'master_node'))
+        self._managed = set(('id', 'name', '_deployment_requirements', '_signature', 'master_nodes'))
         self._calvinsys = None
         self._using = {}
         self.control = calvincontrol.get_calvincontrol()
@@ -370,6 +370,9 @@ class Actor(object):
     @verify_status([STATUS.LOADED])
     def setup_complete(self):
         self.fsm.transition_to(Actor.STATUS.READY)
+
+    def set_master_nodes(self, nodes):
+        self.master_nodes = nodes
 
     def init(self):
         raise Exception("Implementing 'init()' is mandatory.")
@@ -564,7 +567,7 @@ class Actor(object):
                 state[key] = obj
 
         state['app_id'] = self.app_id
-        state['master_node'] = self.master_node
+        state['master_nodes'] = self.master_nodes
 
         return state
 

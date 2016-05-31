@@ -46,7 +46,7 @@ class ActorManager(object):
         self.connection_handler = connection_handler if connection_handler else ConnectionHandler(node)
 
     def new(self, actor_type, args, state=None, prev_connections=None, connection_list=None, callback=None,
-            signature=None, app_id=None):
+            signature=None, app_id=None, master_nodes=[]):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -61,9 +61,9 @@ class ActorManager(object):
         """
         _log.debug("class: %s args: %s state: %s, signature: %s" % (actor_type, args, state, signature))
         callback = CalvinCB(self._after_new, prev_connections=prev_connections, connection_list=connection_list, callback=callback)
-        return self._new(actor_type, args, state, signature, app_id, callback=callback)
+        return self._new(actor_type, args, state, signature, app_id, master_nodes, callback=callback)
 
-    def _new(self, actor_type, args, state=None, signature=None, app_id=None, callback=None):
+    def _new(self, actor_type, args, state=None, signature=None, app_id=None, master_nodes=[], callback=None):
         """
         Instantiate an actor of type 'actor_type'. Parameters are passed in 'args',
         'name' is an optional parameter in 'args', specifying a human readable name.
@@ -107,7 +107,7 @@ class ActorManager(object):
                 return
 
         callback = CalvinCB(self._after_new_replica, state=state, prev_connections=prev_connections, callback=callback)
-        self._new(actor_type, args, state, app_id=app_id, callback=callback)
+        self._new(actor_type, args, state, app_id=app_id, master_nodes=state['master_nodes'], callback=callback)
 
     def _after_new_replica(self, actor, status, state, prev_connections, callback=None):
         if not status:
