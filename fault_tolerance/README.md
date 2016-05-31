@@ -24,3 +24,26 @@ A -- <               --> C
 ## Example
 
 See example/README for an example.
+
+## Replacing ReliabilityCalculator and TaskScheduler
+
+The default reliability calculator uses the runtimes
+mean-time-between-failure to calculate their reliability, and
+the default task scheduler sorts the nodes by reliability.
+
+An example of the calvin.conf file:
+{
+    "global": {
+        "reliability_calculator": "ReliabilityCalculator",
+        "task_scheduler": "ReliabilityScheduler",
+        "default_mtbf": "20",
+        "default_replication_time": "1.0",
+    }
+}
+The values "reliability_calcultor" and "task_scheduler" can be changed to other
+classes which then shoukd be created in calvin/runtime/north and implement
+functions "get_reliability" and "sort" respectively. See the default classes for
+examples.
+
+The default reliability calculator uses the values "default_mtbf" and "default_replication_time"
+before such times has been registered and stored in the storage.

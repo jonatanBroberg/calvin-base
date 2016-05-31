@@ -1,14 +1,16 @@
 import sys
-import time
 import operator
 import socket
 import re
 
 from collections import defaultdict, deque
-from calvin.runtime.north.reliability_calculator import ReliabilityCalculator
+from calvin.runtime.north.reliability_calculator_factory import get_reliability_calculator
+from calvin.runtime.north.task_scheduler_factory import get_task_scheduler
 
+from calvin.utilities import calvinconfig
 from calvin.utilities.calvinlogger import get_logger
 
+_conf = calvinconfig.get()
 _log = get_logger(__name__)
 
 DEFAULT_HISTORY_SIZE = 20
@@ -23,7 +25,11 @@ class ResourceManager(object):
     def __init__(self, history_size=DEFAULT_HISTORY_SIZE):
         self.history_size = history_size
         self.usages = defaultdict(lambda: deque(maxlen=self.history_size))
-        self.reliability_calculator = ReliabilityCalculator()
+        rc = _conf.get('global', 'reliability_calculator')
+        self.reliability_calculator = get_reliability_calculator(rc)
+        ts = _conf.get('global', 'task_scheduler')
+        self.task_scheduler = get_task_scheduler(ts, self)
+        _log.info("Starting resource manager using reliability calculator {} and task scheduler {}".format(rc, ts))
         self.node_uris = {}
         self.node_ids = {}
         self.test_sync = 2
@@ -144,11 +150,7 @@ class ResourceManager(object):
                 old_values.append(tup)
 
     def sort_nodes_reliability(self, node_ids, replication_times, failure_info):
-        """Sorts after reliability"""
-        node_ids = [(node_id, self.get_reliability(node_id, replication_times, failure_info)) for node_id in node_ids]
-        node_ids.sort(key=lambda x: (x[1], x[0]), reverse=True)
-        _log.debug("Sorting nodes {} after reliability {}".format([x[0] for x in node_ids], [x[1] for x in node_ids]))
-        return [x[0] for x in node_ids]
+        return self.task_scheduler.sort(node_ids, replication_times, failure_info)
 
     def current_reliability(self, current_nodes, replication_times, failure_info):
         current_nodes = list(set(current_nodes))
