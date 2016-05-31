@@ -1490,7 +1490,7 @@ class TestLosingActors(CalvinTestBase):
 
     def _start_app(self, replicate_src=0, replicate_snk=0):
         script = """
-        src : std.CountTimer(replicate=""" + str(replicate_src) + """)
+        src : std.ReplicatedCountTimer(replicate=""" + str(replicate_src) + """)
         snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """
@@ -1806,8 +1806,8 @@ class TestDynamicReliability(CalvinTestBase):
 
     def _start_app(self, replicate_src=0, replicate_snk=0):
         script = """
-        src : std.CountTimer(replicate=""" +str(replicate_src)+ """)
-        snk : io.StandardOut(store_tokens=1, replicate=""" +str(replicate_snk)+ """)
+        src : std.ReplicatedCountTimer(replicate=""" + str(replicate_src) + """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """
         self.snk_type = "io.StandardOut"
@@ -2051,8 +2051,8 @@ class TestDyingRuntimes(CalvinTestBase):
 
     def _start_app(self, replicate_snk=0, replicate_src=0):
         script = """
-        src : std.CountTimer(replicate="""+str(replicate_src)+""")
-        snk : io.StandardOut(store_tokens=1, replicate="""+str(replicate_snk)+""")
+        src : std.ReplicatedCountTimer(replicate=""" + str(replicate_src) + """)
+        snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """
 
@@ -2380,7 +2380,7 @@ class TestOptimization(CalvinTestBase):
 
     def _start_app(self, replicate_snk=0, replicate_src=0):
         script = """
-        src : std.CountTimer(replicate=""" + str(replicate_src) + """)
+        src : std.ReplicatedCountTimer(replicate=""" + str(replicate_src) + """)
         snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """

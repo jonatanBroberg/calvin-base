@@ -1,4 +1,4 @@
-src:std.CountTimer(sleep=0.5, replicate=1)
+src:std.CountTimer(sleep=0.5)
 snk:io.Print()
 src.integer > snk.token
 
