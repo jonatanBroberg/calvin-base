@@ -156,7 +156,7 @@ To create an identical copy of an existing actor, it can be replicate to another
 
     $ cscontrol http://<first runtime address>:<controlport> actor replicate <actor id> <other runtime id>
 
-For this to work, the actor must have an "replicate" attribute. See the actor std.CountTimer for an example.
+For this to work, the actor must have an "replicate" attribute. See the actor std.ReplicatedCountTimer for an example.
 Further info is available in fault_tolerance/README.md
 
 ### Testing
