@@ -26,6 +26,9 @@ def expected_tokens(rt, actor_id, src_actor_type):
     if src_actor_type == 'std.CountTimer':
         return expected_counter(tokens)
 
+    if src_actor_type == 'std.ReplicatedCountTimer':
+        return expected_counter(tokens)
+
     if src_actor_type == 'std.Sum':
         return expected_sum(tokens)
 

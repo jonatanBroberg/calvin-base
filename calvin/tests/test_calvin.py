@@ -1494,7 +1494,7 @@ class TestLosingActors(CalvinTestBase):
         snk : io.StandardOut(store_tokens=1, replicate=""" + str(replicate_snk) + """)
         src.integer > snk.token
         """
-        self.src_type = "std.CountTimer"
+        self.src_type = "std.ReplicatedCountTimer"
         self.snk_type = "io.StandardOut"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
@@ -1633,7 +1633,7 @@ class TestLosingActors(CalvinTestBase):
         replica = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, replica)
         time.sleep(0.2)
@@ -1644,7 +1644,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         assert len(expected) > len(expected_before)
 
         self._check_snk_replicas(app_id, expected)
@@ -1655,9 +1655,9 @@ class TestLosingActors(CalvinTestBase):
         replica = utils.replicate(self.rt1, src, self.rt2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         actual_snk_before = actual_tokens(self.rt1, snk)
-        expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
+        expected_replica_before = expected_tokens(self.rt2, replica, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, replica)
         time.sleep(0.2)
@@ -1668,7 +1668,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:src', self.src_type)
 
-        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
+        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.ReplicatedCountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSrcOneReplica(self):
         (d, app_id, src, snk) = self._start_app(replicate_src=1)
@@ -1676,9 +1676,9 @@ class TestLosingActors(CalvinTestBase):
         replica = utils.replicate(self.rt1, src, self.rt2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         actual_snk_before = actual_tokens(self.rt1, snk)
-        expected_replica_before = expected_tokens(self.rt2, replica, 'std.CountTimer')
+        expected_replica_before = expected_tokens(self.rt2, replica, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, replica)
         time.sleep(0.2)
@@ -1689,7 +1689,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:src', self.src_type)
 
-        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.CountTimer', expected_before, actual_snk_before, expected_replica_before)
+        self._check_src_replicas(app_id, snk, self.rt1, src, self.rt1, 'std.ReplicatedCountTimer', expected_before, actual_snk_before, expected_replica_before)
 
     def testLoseRemoteSnkOneReplica(self):
         (d, app_id, src, snk) = self._start_app(replicate_snk=1)
@@ -1697,7 +1697,7 @@ class TestLosingActors(CalvinTestBase):
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, snk2)
         time.sleep(0.2)
@@ -1708,7 +1708,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         assert len(expected) > len(expected_before)
 
         self._check_snk_replicas(app_id, expected)
@@ -1718,10 +1718,9 @@ class TestLosingActors(CalvinTestBase):
 
         snk2 = utils.replicate(self.rt1, snk, self.rt2.id)
         time.sleep(0.2)
-        snk3 = utils.replicate(self.rt2, snk2, self.rt3.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, snk2)
         time.sleep(0.2)
@@ -1732,7 +1731,10 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
+        print "EX HERE"
+        print expected
+        print expected_before
         assert len(expected) > len(expected_before)
 
         self._check_snk_replicas(app_id, expected)
@@ -1745,7 +1747,7 @@ class TestLosingActors(CalvinTestBase):
         snk3 = utils.replicate(self.rt2, snk2, self.rt3.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, snk2)
         time.sleep(0.2)
@@ -1756,7 +1758,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         assert len(expected) > len(expected_before)
 
         self._check_snk_replicas(app_id, expected)
@@ -1769,7 +1771,7 @@ class TestLosingActors(CalvinTestBase):
         snk3 = utils.replicate(self.rt1, snk, self.rt3.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
 
         utils.disable(self.rt2, snk2)
         time.sleep(0.2)
@@ -1786,7 +1788,7 @@ class TestLosingActors(CalvinTestBase):
 
         self._check_reliability(app_id, 'simple:snk', self.snk_type)
 
-        expected = expected_tokens(self.rt1, src, 'std.CountTimer')
+        expected = expected_tokens(self.rt1, src, 'std.ReplicatedCountTimer')
         assert len(expected) > len(expected_before)
 
         self._check_snk_replicas(app_id, expected)
@@ -1811,7 +1813,7 @@ class TestDynamicReliability(CalvinTestBase):
         src.integer > snk.token
         """
         self.snk_type = "io.StandardOut"
-        self.src_type = "std.CountTimer"
+        self.src_type = "std.ReplicatedCountTimer"
 
         app_info, errors, warnings = compiler.compile(script, "simple")
         d = deployer.Deployer(self.rt1, app_info, deploy_info={"required_reliability": 0.98})
@@ -2072,7 +2074,7 @@ class TestDyingRuntimes(CalvinTestBase):
         replica = utils.replicate(self.runtime, snk, self.dying_rt.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.runtime, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.runtime, src, 'std.ReplicatedCountTimer')
         actual_snk_before = actual_tokens(self.runtime, snk)
         actual_replica_before = actual_tokens(self.dying_rt, replica)
 
@@ -2084,7 +2086,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
 
-        expected = expected_tokens(self.runtime, src, 'std.CountTimer')
+        expected = expected_tokens(self.runtime, src, 'std.ReplicatedCountTimer')
         actual = actual_tokens(self.runtime, snk)
 
         assert len(expected) > len(expected_before)
@@ -2102,7 +2104,7 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.migrate(self.runtime, src, self.runtime2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.runtime2, src, 'std.ReplicatedCountTimer')
         actual_snk_before = actual_tokens(self.runtime, snk)
         actual_replica_before = actual_tokens(self.dying_rt, replica)
 
@@ -2114,7 +2116,7 @@ class TestDyingRuntimes(CalvinTestBase):
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
 
-        expected = expected_tokens(self.runtime2, src, 'std.CountTimer')
+        expected = expected_tokens(self.runtime2, src, 'std.ReplicatedCountTimer')
         actual = actual_tokens(self.runtime, snk)
 
         assert len(expected) > len(expected_before)
@@ -2131,19 +2133,19 @@ class TestDyingRuntimes(CalvinTestBase):
         replica = utils.replicate(self.runtime, src, self.dying_rt.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.runtime, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.runtime, src, 'std.ReplicatedCountTimer')
         snk_before = actual_tokens(self.runtime, snk)
-        replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
+        replica_before = expected_tokens(self.dying_rt, replica, 'std.ReplicatedCountTimer')
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
         time.sleep(1.3)
 
-        actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.CountTimer')
+        actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.ReplicatedCountTimer')
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
 
-        self._check_values(self.runtime, self.runtime, snk, src, 'std.CountTimer',
+        self._check_values(self.runtime, self.runtime, snk, src, 'std.ReplicatedCountTimer',
                            expected_before, snk_before, replica_before, actual_replicas)
 
     def testLoseSrcActorWithRemoteSink(self):
@@ -2153,19 +2155,19 @@ class TestDyingRuntimes(CalvinTestBase):
         utils.migrate(self.runtime, src, self.runtime2.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.runtime2, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.runtime2, src, 'std.ReplicatedCountTimer')
         snk_before = actual_tokens(self.runtime, snk)
-        replica_before = expected_tokens(self.dying_rt, replica, 'std.CountTimer')
+        replica_before = expected_tokens(self.dying_rt, replica, 'std.ReplicatedCountTimer')
 
         actors_before = utils.get_application_actors(self.runtime, app_id)
         self._kill_dying()
         time.sleep(1.3)
 
-        actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.CountTimer')
+        actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:src', 'std.ReplicatedCountTimer')
 
         self._check_dead_node(self.runtime, self.dying_rt, replica)
 
-        self._check_values(self.runtime, self.runtime2, snk, src, 'std.CountTimer',
+        self._check_values(self.runtime, self.runtime2, snk, src, 'std.ReplicatedCountTimer',
                            expected_before, snk_before, replica_before, actual_replicas)
 
     def testLoseReplicaNoReplication(self):
@@ -2403,7 +2405,7 @@ class TestOptimization(CalvinTestBase):
         replica = utils.replicate(self.runtime, snk, self.runtime3.id)
         time.sleep(0.2)
 
-        expected_before = expected_tokens(self.runtime, src, 'std.CountTimer')
+        expected_before = expected_tokens(self.runtime, src, 'std.ReplicatedCountTimer')
         actual_snk_before = actual_tokens(self.runtime, snk)
         actual_replica_before = actual_tokens(self.runtime2, replica)
 
@@ -2415,7 +2417,7 @@ class TestOptimization(CalvinTestBase):
 
         actual_replicas = self._check_reliability(self.runtime, app_id, actors_before, 'simple:snk')
 
-        expected = expected_tokens(self.runtime, src, 'std.CountTimer')
+        expected = expected_tokens(self.runtime, src, 'std.ReplicatedCountTimer')
         actual = actual_tokens(self.runtime, snk)
 
         assert len(expected) > len(expected_before)
