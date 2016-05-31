@@ -9,7 +9,7 @@ from calvin.utilities import calvinconfig
 _log = get_logger(__name__)
 _conf = calvinconfig.get()
 
-DEFAULT_MONITOR_FREQUENCY = 10
+DEFAULT_MONITOR_FREQUENCY = 20
 
 
 class AppMonitor(object):
